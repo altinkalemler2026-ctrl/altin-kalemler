@@ -1,148 +1,94 @@
-"use client"
+import { redirect } from "next/navigation"
+import { createClient } from "@/lib/supabase/server"
 
-import { FormEvent, useState } from "react"
-import Link from "next/link"
-import { createClient } from "@/lib/supabase/client"
+export default async function DashboardPage() {
+  const supabase = await createClient()
 
-export default function ResetPasswordPage() {
-  const [password, setPassword] = useState("")
-  const [passwordAgain, setPasswordAgain] = useState("")
-  const [error, setError] = useState("")
-  const [success, setSuccess] = useState("")
-  const [loading, setLoading] = useState(false)
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  if (userError || !user) {
+    redirect("/login")
+  }
 
-    setError("")
-    setSuccess("")
+  const { data: profile, error: profileError } = await supabase
+    .from("student_profiles")
+    .select("nickname, grade_level")
+    .eq("id", user.id)
+    .single()
 
-    if (!password || !passwordAgain) {
-      setError("Lütfen tüm alanları doldurun.")
-      return
-    }
+  if (profileError || !profile) {
+    return (
+      <main className="mx-auto w-full max-w-3xl p-6">
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-red-700">
+          Öğrenci profili bulunamadı.
+        </div>
+      </main>
+    )
+  }
 
-    if (password.length < 8) {
-      setError("Şifre en az 8 karakter olmalıdır.")
-      return
-    }
+  async function logout() {
+    "use server"
 
-    if (password !== passwordAgain) {
-      setError("Şifreler birbiriyle aynı değil.")
-      return
-    }
+    const supabase = await createClient()
+    await supabase.auth.signOut()
 
-    setLoading(true)
-
-    const supabase = createClient()
-
-    const { error: updateError } = await supabase.auth.updateUser({
-      password,
-    })
-
-    if (updateError) {
-      setError(
-        "Şifre güncellenemedi. Sıfırlama bağlantısını yeniden kullanmayı deneyin."
-      )
-      setLoading(false)
-      return
-    }
-
-    setSuccess("Şifreniz başarıyla güncellendi.")
-    setPassword("")
-    setPasswordAgain("")
-    setLoading(false)
+    redirect("/login")
   }
 
   return (
-    <main className="w-full max-w-md">
-      <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
-        <div className="mb-6 text-center">
-          <h1 className="text-2xl font-bold text-gray-900">
-            Yeni Şifre Belirle
-          </h1>
+    <main className="mx-auto w-full max-w-5xl p-6">
+      <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-500">
+              Altın Kalemler
+            </p>
 
-          <p className="mt-2 text-sm text-gray-600">
-            Hesabınız için yeni bir şifre oluşturun.
-          </p>
+            <h1 className="mt-2 text-3xl font-bold text-gray-900">
+              Hoş geldin, {profile.nickname}
+            </h1>
+
+            <p className="mt-2 text-gray-600">
+              {profile.grade_level}. sınıf öğrenci panelindesin.
+            </p>
+          </div>
+
+          <form action={logout}>
+            <button
+              type="submit"
+              className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+            >
+              Çıkış Yap
+            </button>
+          </form>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label
-              htmlFor="password"
-              className="mb-1.5 block text-sm font-medium text-gray-700"
-            >
-              Yeni şifre
-            </label>
-
-            <input
-              id="password"
-              type="password"
-              autoComplete="new-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none transition focus:border-gray-500"
-              placeholder="En az 8 karakter"
-            />
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="rounded-2xl border border-gray-200 p-5">
+            <h2 className="font-semibold text-gray-900">Konu Çalış</h2>
+            <p className="mt-2 text-sm text-gray-600">
+              Ders ve konu seçerek soru çöz.
+            </p>
           </div>
 
-          <div>
-            <label
-              htmlFor="passwordAgain"
-              className="mb-1.5 block text-sm font-medium text-gray-700"
-            >
-              Yeni şifre tekrar
-            </label>
-
-            <input
-              id="passwordAgain"
-              type="password"
-              autoComplete="new-password"
-              value={passwordAgain}
-              onChange={(event) => setPasswordAgain(event.target.value)}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none transition focus:border-gray-500"
-              placeholder="Şifrenizi tekrar yazın"
-            />
+          <div className="rounded-2xl border border-gray-200 p-5">
+            <h2 className="font-semibold text-gray-900">Yarışmalar</h2>
+            <p className="mt-2 text-sm text-gray-600">
+              Rakiplerle bilgi yarışmalarına katıl.
+            </p>
           </div>
 
-          {error && (
-            <div
-              role="alert"
-              className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700"
-            >
-              {error}
-            </div>
-          )}
-
-          {success && (
-            <div
-              role="status"
-              className="rounded-xl bg-green-50 px-4 py-3 text-sm text-green-700"
-            >
-              {success}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-xl bg-gray-900 px-4 py-3 font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {loading ? "Güncelleniyor..." : "Şifreyi Güncelle"}
-          </button>
-        </form>
-
-        <p className="mt-6 text-center text-sm text-gray-600">
-          Giriş sayfasına dönmek için{" "}
-          <Link
-            href="/login"
-            className="font-semibold text-gray-900 underline-offset-4 hover:underline"
-          >
-            buraya tıklayın
-          </Link>
-        </p>
-      </div>
+          <div className="rounded-2xl border border-gray-200 p-5">
+            <h2 className="font-semibold text-gray-900">Başarılarım</h2>
+            <p className="mt-2 text-sm text-gray-600">
+              Puanlarını ve ilerlemeni takip et.
+            </p>
+          </div>
+        </div>
+      </section>
     </main>
   )
 }
