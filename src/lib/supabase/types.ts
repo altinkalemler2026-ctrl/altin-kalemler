@@ -1,10 +1,3 @@
-/**
- * Supabase Database Types
- *
- * Veritabanı tabloları oluşturulduktan sonra
- * `supabase gen types typescript` komutu ile otomatik üretilecek.
- */
-
 export type Json =
   | string
   | number
@@ -16,16 +9,33 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
-      // Tablolar oluşturulduktan sonra eklenecek
+      student_profiles: {
+        Row: {
+          id: string
+          grade_level: number
+          nickname: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          grade_level: number
+          nickname: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          grade_level?: number
+          nickname?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
-    Views: {
-      // View'lar oluşturulduktan sonra eklenecek
-    }
-    Functions: {
-      // Fonksiyonlar oluşturulduktan sonra eklenecek
-    }
-    Enums: {
-      // Enum'lar oluşturulduktan sonra eklenecek
-    }
+    Views: Record<string, never>
+    Functions: Record<string, never>
+    Enums: Record<string, never>
   }
 }
