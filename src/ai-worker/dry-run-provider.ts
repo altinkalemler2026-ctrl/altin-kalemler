@@ -7,6 +7,10 @@ import {
 } from "./output-parser.ts";
 
 import {
+  validateOutputAgainstJob,
+} from "./job-output-validator.ts";
+
+import {
   TestQuestionProvider,
 } from "./test-provider.ts";
 
@@ -87,14 +91,6 @@ export class DryRunQuestionProvider
     );
     console.log("");
 
-    // -------------------------------------------------------
-    // Gerçek provider simülasyonu
-    //
-    // İleride OpenAI / başka provider burada ham metin
-    // döndürecek. Şimdilik deterministic test provider
-    // çıktısını JSON metnine dönüştürüyoruz.
-    // -------------------------------------------------------
-
     const fallbackOutput =
       await this.fallbackProvider.generateQuestions(
         context,
@@ -108,12 +104,6 @@ export class DryRunQuestionProvider
     console.log(
       "Ham provider çıktısı alındı.",
     );
-
-    // -------------------------------------------------------
-    // Güvenlik sınırı:
-    // Ham provider cevabı parser'dan geçmeden
-    // worker output olarak kullanılamaz.
-    // -------------------------------------------------------
 
     const parsed =
       parseAiWorkerOutput(
@@ -131,6 +121,25 @@ export class DryRunQuestionProvider
 
     console.log(
       "Ham provider çıktısı başarıyla parse ve validate edildi.",
+    );
+
+    const jobValidation =
+      validateOutputAgainstJob(
+        context.job,
+        parsed.output,
+      );
+
+    if (!jobValidation.success) {
+      throw new Error(
+        [
+          "AI provider output does not match the requested job.",
+          ...jobValidation.errors,
+        ].join(" "),
+      );
+    }
+
+    console.log(
+      "Provider çıktısı job gereksinimleriyle uyumlu.",
     );
 
     return parsed.output;
