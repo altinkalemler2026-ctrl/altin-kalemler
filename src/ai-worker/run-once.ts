@@ -1,9 +1,9 @@
 import { executeProvider } from "./provider.ts";
 import { SupabaseAiWorker } from "./supabase-worker.ts";
-import { TestQuestionProvider } from "./test-provider.ts";
+import { DryRunQuestionProvider } from "./dry-run-provider.ts";
 
 const WORKER_NAME =
-  "altin-kalemler-local-test-worker";
+  "altin-kalemler-local-dry-run-worker";
 
 const LEASE_SECONDS =
   300;
@@ -13,7 +13,7 @@ async function main(): Promise<void> {
     new SupabaseAiWorker();
 
   const provider =
-    new TestQuestionProvider();
+    new DryRunQuestionProvider();
 
   console.log(
     "AI worker kuyruğu kontrol ediliyor...",
@@ -48,7 +48,7 @@ async function main(): Promise<void> {
       );
 
     console.log(
-      "Test provider çıktısı üretildi.",
+      "Provider çıktısı üretildi.",
     );
 
     workerOutputId =
@@ -140,14 +140,6 @@ async function main(): Promise<void> {
 
     return;
   }
-
-  // -------------------------------------------------------
-  // Reporting:
-  //
-  // Job başarıyla ingest edildikten sonra rapor alınamaması,
-  // generation job'ın başarısız olduğu anlamına gelmez.
-  // Bu nedenle report hatası fail_ai_job_claim çağırmaz.
-  // -------------------------------------------------------
 
   try {
     const report =
