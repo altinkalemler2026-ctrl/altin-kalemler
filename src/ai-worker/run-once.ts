@@ -1,12 +1,15 @@
+import { DryRunQuestionProvider } from "./dry-run-provider.ts";
+import { LeaseHeartbeat } from "./lease-heartbeat.ts";
 import { executeProvider } from "./provider.ts";
 import { SupabaseAiWorker } from "./supabase-worker.ts";
-import { DryRunQuestionProvider } from "./dry-run-provider.ts";
 
 const WORKER_NAME =
   "altin-kalemler-local-dry-run-worker";
 
-const LEASE_SECONDS =
-  300;
+const LEASE_SECONDS = 300;
+
+const HEARTBEAT_INTERVAL_MILLISECONDS =
+  120_000;
 
 async function main(): Promise<void> {
   const worker =
@@ -16,7 +19,7 @@ async function main(): Promise<void> {
     new DryRunQuestionProvider();
 
   console.log(
-    "AI worker kuyruğu kontrol ediliyor...",
+    "AI worker kuyruk kontrolü yapılıyor...",
   );
 
   const claim =
@@ -34,11 +37,24 @@ async function main(): Promise<void> {
   }
 
   console.log(
-    "Job claim edildi:",
+    "AI job claim edildi:",
     claim.ai_job_id,
   );
 
-  let workerOutputId: string;
+  const heartbeat =
+    new LeaseHeartbeat(
+      worker,
+      claim,
+      {
+        leaseSeconds:
+          LEASE_SECONDS,
+
+        heartbeatIntervalMilliseconds:
+          HEARTBEAT_INTERVAL_MILLISECONDS,
+      },
+    );
+
+  heartbeat.start();
 
   try {
     const execution =
@@ -47,53 +63,79 @@ async function main(): Promise<void> {
         claim,
       );
 
-    console.log(
-      "Provider çıktısı üretildi.",
-    );
+    heartbeat.assertHealthy();
 
-    workerOutputId =
-      await worker.registerWorkerOutput({
-        aiJobId:
-          claim.ai_job_id,
+    const workerOutput =
+      await worker.registerWorkerOutput(
+        claim,
+        execution.output,
+        {
+          provider:
+            execution.provider,
 
-        output:
-          execution.output,
+          model:
+            execution.model,
 
-        providerName:
-          execution.providerName,
+          workerVersion:
+            execution.workerVersion,
 
-        modelName:
-          execution.modelName,
+          promptVersion:
+            execution.promptVersion,
+        },
+      );
 
-        promptVersion:
-          execution.promptVersion,
-
-        workerVersion:
-          execution.workerVersion,
-      });
+    heartbeat.assertHealthy();
 
     console.log(
       "Worker output kaydedildi:",
-      workerOutputId,
+      workerOutput,
     );
 
-    const ingestionResult =
+    const ingestion =
       await worker.ingestWorkerOutput(
-        workerOutputId,
+        workerOutput.ai_worker_output_id,
       );
 
-    console.log(
-      "Ingestion tamamlandı:",
-    );
+    heartbeat.assertHealthy();
 
     console.log(
-      JSON.stringify(
-        ingestionResult,
-        null,
-        2,
-      ),
+      "Worker output staging'e işlendi:",
+      ingestion,
     );
+
+    await heartbeat.stop();
+
+    try {
+      const report =
+        await worker.getWorkerOutputReport(
+          workerOutput.ai_worker_output_id,
+        );
+
+      console.log(
+        "Worker output raporu:",
+      );
+
+      console.log(
+        JSON.stringify(
+          report,
+          null,
+          2,
+        ),
+      );
+    } catch (reportError) {
+      const message =
+        reportError instanceof Error
+          ? reportError.message
+          : String(reportError);
+
+      console.error(
+        "Worker output raporu alınamadı:",
+        message,
+      );
+    }
   } catch (error) {
+    await heartbeat.stop();
+
     const message =
       error instanceof Error
         ? error.message
@@ -113,11 +155,11 @@ async function main(): Promise<void> {
           true,
         );
 
-      console.error(
-        "Job failure sonucu:",
+      console.log(
+        "AI job failure sonucu:",
       );
 
-      console.error(
+      console.log(
         JSON.stringify(
           failureResult,
           null,
@@ -131,47 +173,12 @@ async function main(): Promise<void> {
           : String(failureError);
 
       console.error(
-        "Job failure kaydı da başarısız oldu:",
+        "AI job failure kaydı başarısız:",
         failureMessage,
       );
     }
 
     process.exitCode = 1;
-
-    return;
-  }
-
-  try {
-    const report =
-      await worker.getWorkerOutputReport(
-        workerOutputId,
-      );
-
-    console.log(
-      "Worker output raporu:",
-    );
-
-    console.log(
-      JSON.stringify(
-        report,
-        null,
-        2,
-      ),
-    );
-  } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : String(error);
-
-    console.warn(
-      "Worker output raporu alınamadı:",
-      message,
-    );
-
-    console.warn(
-      "Job ingestion daha önce başarıyla tamamlandı; job başarısız sayılmadı.",
-    );
   }
 }
 
@@ -182,7 +189,7 @@ main().catch((error) => {
       : String(error);
 
   console.error(
-    "AI worker başlatılamadı:",
+    "Worker başlatılamadı:",
     message,
   );
 
