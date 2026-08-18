@@ -3,6 +3,10 @@ import {
 } from "./prompt-builder.ts";
 
 import {
+  parseAiWorkerOutput,
+} from "./output-parser.ts";
+
+import {
   TestQuestionProvider,
 } from "./test-provider.ts";
 
@@ -76,15 +80,59 @@ export class DryRunQuestionProvider
       "Ücret oluşmadı.",
     );
     console.log(
-      "Test çıktısı kullanılacak.",
+      "Test provider çıktısı ham JSON olarak simüle edilecek.",
     );
     console.log(
       "========================================",
     );
     console.log("");
 
-    return this.fallbackProvider.generateQuestions(
-      context,
+    // -------------------------------------------------------
+    // Gerçek provider simülasyonu
+    //
+    // İleride OpenAI / başka provider burada ham metin
+    // döndürecek. Şimdilik deterministic test provider
+    // çıktısını JSON metnine dönüştürüyoruz.
+    // -------------------------------------------------------
+
+    const fallbackOutput =
+      await this.fallbackProvider.generateQuestions(
+        context,
+      );
+
+    const rawProviderText =
+      JSON.stringify(
+        fallbackOutput,
+      );
+
+    console.log(
+      "Ham provider çıktısı alındı.",
     );
+
+    // -------------------------------------------------------
+    // Güvenlik sınırı:
+    // Ham provider cevabı parser'dan geçmeden
+    // worker output olarak kullanılamaz.
+    // -------------------------------------------------------
+
+    const parsed =
+      parseAiWorkerOutput(
+        rawProviderText,
+      );
+
+    if (!parsed.success) {
+      throw new Error(
+        [
+          "AI provider output validation failed.",
+          ...parsed.errors,
+        ].join(" "),
+      );
+    }
+
+    console.log(
+      "Ham provider çıktısı başarıyla parse ve validate edildi.",
+    );
+
+    return parsed.output;
   }
 }
