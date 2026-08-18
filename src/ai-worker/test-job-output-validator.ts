@@ -93,6 +93,14 @@ const validQuestion = {
 
   estimated_solve_time_seconds:
     20,
+
+  solution: {
+    explanation:
+      "12 + 8 = 20",
+
+    final_answer:
+      "C",
+  },
 };
 
 function runTest(
@@ -144,6 +152,7 @@ runTest(
   "TEST 1 - TAM UYUMLU",
   {
     schema_version: "1.0",
+
     questions: [
       validQuestion,
     ],
@@ -154,7 +163,8 @@ runTest(
 
 // =========================================================
 // TEST 2
-// Job 1 soru istiyor, provider 2 soru döndürüyor.
+// Job 1 soru istiyor,
+// provider 2 soru döndürüyor.
 // Beklenen: success = false
 // =========================================================
 
@@ -162,10 +172,13 @@ runTest(
   "TEST 2 - YANLIS SORU SAYISI",
   {
     schema_version: "1.0",
+
     questions: [
       validQuestion,
+
       {
         ...validQuestion,
+
         client_question_id:
           "VALIDATOR-LOCAL-002",
       },
@@ -177,7 +190,8 @@ runTest(
 
 // =========================================================
 // TEST 3
-// Job easy istiyor, provider hard döndürüyor.
+// Job easy istiyor,
+// provider hard döndürüyor.
 // Beklenen: success = false
 // =========================================================
 
@@ -185,9 +199,11 @@ runTest(
   "TEST 3 - YANLIS ZORLUK",
   {
     schema_version: "1.0",
+
     questions: [
       {
         ...validQuestion,
+
         difficulty:
           "hard" as const,
       },
@@ -208,9 +224,11 @@ runTest(
   "TEST 4 - YANLIS BILISSEL SEVIYE",
   {
     schema_version: "1.0",
+
     questions: [
       {
         ...validQuestion,
+
         cognitive_type:
           "comprehension" as const,
       },
@@ -231,9 +249,11 @@ runTest(
   "TEST 5 - YANLIS SORU TIPI",
   {
     schema_version: "1.0",
+
     questions: [
       {
         ...validQuestion,
+
         primary_question_type:
           "open_ended",
       },
@@ -254,9 +274,11 @@ runTest(
   "TEST 6 - SURE MINIMUM ALTINDA",
   {
     schema_version: "1.0",
+
     questions: [
       {
         ...validQuestion,
+
         estimated_solve_time_seconds:
           10,
       },
@@ -277,9 +299,11 @@ runTest(
   "TEST 7 - SURE MAKSIMUM USTUNDE",
   {
     schema_version: "1.0",
+
     questions: [
       {
         ...validQuestion,
+
         estimated_solve_time_seconds:
           60,
       },
@@ -306,12 +330,216 @@ runTest(
   "TEST 8 - SURE EKSIK",
   {
     schema_version: "1.0",
+
     questions: [
       questionWithoutSolveTime,
     ],
   },
   false,
 );
+
+
+// =========================================================
+// TEST 9
+// Job yeni üretim istiyor,
+// provider false döndürüyor.
+// Beklenen: success = false
+// =========================================================
+
+const jobWithNewGenerationRequirement: ClaimedAiJob = {
+  ...baseJob,
+
+  input_data: {
+    ...baseJob.input_data,
+
+    generation_requirements: {
+      difficulty: "easy",
+      cognitive_level: "application",
+      question_type: "multiple_choice",
+      is_new_generation: true,
+    },
+  },
+};
+
+console.log("");
+console.log(
+  "========================================",
+);
+console.log(
+  "TEST 9 - YANLIS NEW GENERATION",
+);
+console.log(
+  "========================================",
+);
+
+const newGenerationResult =
+  validateOutputAgainstJob(
+    jobWithNewGenerationRequirement,
+    {
+      schema_version: "1.0",
+
+      questions: [
+        {
+          ...validQuestion,
+
+          is_new_generation:
+            false,
+        },
+      ],
+    },
+  );
+
+console.log(
+  JSON.stringify(
+    newGenerationResult,
+    null,
+    2,
+  ),
+);
+
+if (
+  newGenerationResult.success !==
+  false
+) {
+  throw new Error(
+    "TEST 9 beklenen sonucu vermedi.",
+  );
+}
+
+
+// =========================================================
+// TEST 10
+// Job görsel istemiyor,
+// provider has_visual = true döndürüyor.
+// Beklenen: success = false
+// =========================================================
+
+const jobWithoutVisual: ClaimedAiJob = {
+  ...baseJob,
+
+  input_data: {
+    ...baseJob.input_data,
+
+    generation_requirements: {
+      difficulty: "easy",
+      cognitive_level: "application",
+      question_type: "multiple_choice",
+
+      visual_requirements: {
+        requires_visual:
+          false,
+      },
+    },
+  },
+};
+
+console.log("");
+console.log(
+  "========================================",
+);
+console.log(
+  "TEST 10 - YANLIS VISUAL DURUMU",
+);
+console.log(
+  "========================================",
+);
+
+const visualResult =
+  validateOutputAgainstJob(
+    jobWithoutVisual,
+    {
+      schema_version: "1.0",
+
+      questions: [
+        {
+          ...validQuestion,
+
+          has_visual:
+            true,
+        },
+      ],
+    },
+  );
+
+console.log(
+  JSON.stringify(
+    visualResult,
+    null,
+    2,
+  ),
+);
+
+if (
+  visualResult.success !==
+  false
+) {
+  throw new Error(
+    "TEST 10 beklenen sonucu vermedi.",
+  );
+}
+
+
+// =========================================================
+// TEST 11
+// correct_answer = C
+// solution.final_answer = B
+// Beklenen: success = false
+// =========================================================
+
+console.log("");
+console.log(
+  "========================================",
+);
+console.log(
+  "TEST 11 - COZUM CEVABI UYUSMUYOR",
+);
+console.log(
+  "========================================",
+);
+
+const finalAnswerResult =
+  validateOutputAgainstJob(
+    baseJob,
+    {
+      schema_version: "1.0",
+
+      questions: [
+        {
+          ...validQuestion,
+
+          solution: {
+            explanation:
+              "12 + 8 = 20",
+
+            final_answer:
+              "B",
+          },
+        },
+      ],
+    },
+  );
+
+console.log(
+  JSON.stringify(
+    finalAnswerResult,
+    null,
+    2,
+  ),
+);
+
+if (
+  finalAnswerResult.success !==
+  false
+) {
+  throw new Error(
+    "TEST 11 beklenen sonucu vermedi.",
+  );
+}
+
+
+// =========================================================
+// TÜM TESTLER TAMAMLANDI
+// =========================================================
 
 console.log("");
 console.log(

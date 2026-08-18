@@ -44,6 +44,14 @@ function asNumber(
     : null;
 }
 
+function asBoolean(
+  value: JsonValue | undefined,
+): boolean | null {
+  return typeof value === "boolean"
+    ? value
+    : null;
+}
+
 export function validateOutputAgainstJob(
   job: ClaimedAiJob,
   output: AiWorkerOutput,
@@ -61,6 +69,13 @@ export function validateOutputAgainstJob(
   const solveTimeRequirements =
     asObject(
       input["solve_time_requirements"],
+    );
+
+  const visualRequirements =
+    asObject(
+      generationRequirements[
+        "visual_requirements"
+      ],
     );
 
   const requestedQuestionCount =
@@ -86,6 +101,20 @@ export function validateOutputAgainstJob(
     asString(
       generationRequirements[
         "question_type"
+      ],
+    );
+
+  const requestedIsNewGeneration =
+    asBoolean(
+      generationRequirements[
+        "is_new_generation"
+      ],
+    );
+
+  const requestedHasVisual =
+    asBoolean(
+      visualRequirements[
+        "requires_visual"
       ],
     );
 
@@ -148,6 +177,26 @@ export function validateOutputAgainstJob(
         );
       }
 
+      if (
+        requestedIsNewGeneration !== null &&
+        question.is_new_generation !==
+          requestedIsNewGeneration
+      ) {
+        errors.push(
+          `questions[${index}].is_new_generation does not match the job. Expected ${requestedIsNewGeneration}, received ${question.is_new_generation ?? "undefined"}.`,
+        );
+      }
+
+      if (
+        requestedHasVisual !== null &&
+        question.has_visual !==
+          requestedHasVisual
+      ) {
+        errors.push(
+          `questions[${index}].has_visual does not match the job. Expected ${requestedHasVisual}, received ${question.has_visual ?? "undefined"}.`,
+        );
+      }
+
       const solveTime =
         question.estimated_solve_time_seconds;
 
@@ -191,6 +240,30 @@ export function validateOutputAgainstJob(
         ) {
           errors.push(
             `questions[${index}].estimated_solve_time_seconds exceeds the maximum. Maximum ${maximumSolveTime}, received ${solveTime}.`,
+          );
+        }
+      }
+
+      const solution =
+        question.solution;
+
+      if (
+        solution &&
+        typeof solution[
+          "final_answer"
+        ] === "string"
+      ) {
+        const solutionFinalAnswer =
+          solution[
+            "final_answer"
+          ];
+
+        if (
+          solutionFinalAnswer !==
+          question.correct_answer
+        ) {
+          errors.push(
+            `questions[${index}].solution.final_answer does not match correct_answer. Expected "${question.correct_answer}", received "${solutionFinalAnswer}".`,
           );
         }
       }
