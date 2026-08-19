@@ -65,35 +65,37 @@ async function main(): Promise<void> {
 
     heartbeat.assertHealthy();
 
-    const workerOutput =
-      await worker.registerWorkerOutput(
-        claim,
-        execution.output,
-        {
-          provider:
-            execution.provider,
+    const workerOutputId =
+      await worker.registerWorkerOutput({
+        aiJobId:
+          claim.ai_job_id,
 
-          model:
-            execution.model,
+        output:
+          execution.output,
 
-          workerVersion:
-            execution.workerVersion,
+        providerName:
+          execution.providerName,
 
-          promptVersion:
-            execution.promptVersion,
-        },
-      );
+        modelName:
+          execution.modelName,
+
+        promptVersion:
+          execution.promptVersion,
+
+        workerVersion:
+          execution.workerVersion,
+      });
 
     heartbeat.assertHealthy();
 
     console.log(
       "Worker output kaydedildi:",
-      workerOutput,
+      workerOutputId,
     );
 
     const ingestion =
       await worker.ingestWorkerOutput(
-        workerOutput.ai_worker_output_id,
+        workerOutputId,
       );
 
     heartbeat.assertHealthy();
@@ -108,7 +110,7 @@ async function main(): Promise<void> {
     try {
       const report =
         await worker.getWorkerOutputReport(
-          workerOutput.ai_worker_output_id,
+          workerOutputId,
         );
 
       console.log(

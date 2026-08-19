@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
 import type {
+  TeacherReviewCorrectionProposal,
   TeacherReviewIssue,
   TeacherReviewOutput,
   TeacherReviewRole,
@@ -24,6 +25,12 @@ type TeacherReviewRunRow = {
   subject_id: string;
   status: string;
   current_stage: string;
+};
+
+type ProviderMetadata = {
+  providerName: string;
+  modelName: string;
+  promptVersion: string;
 };
 
 export class TeacherReviewService {
@@ -170,11 +177,7 @@ export class TeacherReviewService {
     run: TeacherReviewRunRow,
     profile: TeacherReviewProfileRow,
     output: TeacherReviewOutput,
-    providerMetadata: {
-      providerName: string;
-      modelName: string;
-      promptVersion: string;
-    },
+    providerMetadata: ProviderMetadata,
   ): Promise<string> {
     const {
       data,
@@ -308,6 +311,15 @@ export class TeacherReviewService {
       output.detected_errors,
     );
 
+    if (output.proposed_correction) {
+      await this.saveCorrectionProposal(
+        reviewId,
+        run,
+        output.proposed_correction,
+        providerMetadata,
+      );
+    }
+
     return reviewId;
   }
 
@@ -372,6 +384,152 @@ export class TeacherReviewService {
     }
   }
 
+  private async saveCorrectionProposal(
+    reviewId: string,
+    run: TeacherReviewRunRow,
+    proposal: TeacherReviewCorrectionProposal,
+    providerMetadata: ProviderMetadata,
+  ): Promise<void> {
+    const {
+      error,
+    } =
+      await this.supabase
+        .from(
+          "ai_teacher_correction_proposals",
+        )
+        .insert({
+          review_run_id:
+            run.id,
+
+          staging_question_id:
+            run.staging_question_id,
+
+          source_review_id:
+            reviewId,
+
+          status:
+            proposal.requires_recheck
+              ? "recheck_required"
+              : "proposed",
+
+          proposed_question_text:
+            proposal.question_text ?? null,
+
+          proposed_option_a:
+            proposal.options?.A ?? null,
+
+          proposed_option_b:
+            proposal.options?.B ?? null,
+
+          proposed_option_c:
+            proposal.options?.C ?? null,
+
+          proposed_option_d:
+            proposal.options?.D ?? null,
+
+          proposed_option_e:
+            proposal.options?.E ?? null,
+
+          proposed_correct_answer:
+            proposal.correct_answer ?? null,
+
+          proposed_solution:
+            proposal.solution ?? {},
+
+          change_summary:
+            proposal.change_summary ?? null,
+
+          change_reasons:
+            proposal.change_reasons ?? [],
+
+          confidence_score:
+            proposal.confidence_score,
+
+          requires_recheck:
+            proposal.requires_recheck,
+
+          human_review_required:
+            false,
+
+          applied_to_staging:
+            false,
+
+          applied_by:
+            null,
+
+          applied_at:
+            null,
+
+          provider_name:
+            providerMetadata.providerName,
+
+          model_name:
+            providerMetadata.modelName,
+
+          prompt_version:
+            providerMetadata.promptVersion,
+
+          metadata: {
+            source:
+              "teacher-review-service",
+
+            automatic_application:
+              false,
+
+            production_publication:
+              false,
+          },
+        });
+
+    if (error) {
+      throw new Error(
+        `Teacher correction proposal save failed: ${error.message}`,
+      );
+    }
+  }
+
+  private async hasUnappliedCorrectionProposal(
+    reviewRunId: string,
+  ): Promise<boolean> {
+    const {
+      data,
+      error,
+    } =
+      await this.supabase
+        .from(
+          "ai_teacher_correction_proposals",
+        )
+        .select("id")
+        .eq(
+          "review_run_id",
+          reviewRunId,
+        )
+        .eq(
+          "applied_to_staging",
+          false,
+        )
+        .in(
+          "status",
+          [
+            "proposed",
+            "recheck_required",
+            "recheck_passed",
+          ],
+        )
+        .limit(1);
+
+    if (error) {
+      throw new Error(
+        `Correction proposal lookup failed: ${error.message}`,
+      );
+    }
+
+    return Boolean(
+      data &&
+      data.length > 0,
+    );
+  }
+
   async completeSubjectTeacherStage(
     runId: string,
     output: TeacherReviewOutput,
@@ -380,24 +538,32 @@ export class TeacherReviewService {
       output.verdict === "pass" ||
       output.verdict === "pass_with_warning";
 
+    const correctionCanContinue =
+      output.correction_required === true &&
+      output.verdict === "needs_correction" &&
+      output.risk_level !== "critical";
+
     const needsHumanReview =
       output.verdict ===
         "human_review_required" ||
       output.verdict === "reject" ||
-      output.risk_level === "high" ||
-      output.risk_level === "critical";
+      output.risk_level === "critical" ||
+      (
+        output.risk_level === "high" &&
+        !correctionCanContinue
+      );
 
     const nextStatus =
       needsHumanReview
         ? "human_review_required"
-        : output.correction_required
+        : correctionCanContinue
           ? "waiting_correction"
           : "waiting_error_hunter";
 
     const nextStage =
       needsHumanReview
         ? "human_review"
-        : output.correction_required
+        : correctionCanContinue
           ? "correction"
           : "error_hunter";
 
@@ -455,24 +621,32 @@ export class TeacherReviewService {
       output.verdict === "pass" ||
       output.verdict === "pass_with_warning";
 
+    const correctionCanContinue =
+      output.correction_required === true &&
+      output.verdict === "needs_correction" &&
+      output.risk_level !== "critical";
+
     const needsHumanReview =
       output.verdict ===
         "human_review_required" ||
       output.verdict === "reject" ||
-      output.risk_level === "high" ||
-      output.risk_level === "critical";
+      output.risk_level === "critical" ||
+      (
+        output.risk_level === "high" &&
+        !correctionCanContinue
+      );
 
     const nextStatus =
       needsHumanReview
         ? "human_review_required"
-        : output.correction_required
+        : correctionCanContinue
           ? "waiting_correction"
           : "waiting_final_checker";
 
     const nextStage =
       needsHumanReview
         ? "human_review"
-        : output.correction_required
+        : correctionCanContinue
           ? "correction"
           : "final_checker";
 
@@ -522,7 +696,78 @@ export class TeacherReviewService {
     }
   }
 
-  async completeFinalCheckerStage(
+  async completeCorrectionStage(
+    runId: string,
+    output: TeacherReviewOutput,
+  ): Promise<void> {
+    const hasCorrectionProposal =
+      output.correction_required === true &&
+      output.proposed_correction !== undefined;
+
+    const needsHumanReview =
+      output.verdict ===
+        "human_review_required" ||
+      output.verdict === "reject" ||
+      output.risk_level === "critical" ||
+      !hasCorrectionProposal;
+
+    const nextStatus =
+      needsHumanReview
+        ? "human_review_required"
+        : "waiting_recheck";
+
+    const nextStage =
+      needsHumanReview
+        ? "human_review"
+        : "recheck";
+
+    const {
+      error,
+    } =
+      await this.supabase
+        .from(
+          "ai_teacher_review_runs",
+        )
+        .update({
+          correction_required:
+            output.correction_required,
+
+          correction_completed:
+            hasCorrectionProposal,
+
+          overall_confidence:
+            output.confidence_score,
+
+          overall_risk_level:
+            output.risk_level,
+
+          human_review_required:
+            needsHumanReview,
+
+          human_review_reason:
+            needsHumanReview
+              ? output.review_summary
+              : null,
+
+          status:
+            nextStatus,
+
+          current_stage:
+            nextStage,
+        })
+        .eq(
+          "id",
+          runId,
+        );
+
+    if (error) {
+      throw new Error(
+        `Correction stage update failed: ${error.message}`,
+      );
+    }
+  }
+
+  async completeRecheckStage(
     runId: string,
     output: TeacherReviewOutput,
   ): Promise<void> {
@@ -537,6 +782,129 @@ export class TeacherReviewService {
         "human_review_required" ||
       output.risk_level === "high" ||
       output.risk_level === "critical";
+
+    const nextStatus =
+      needsHumanReview
+        ? "human_review_required"
+        : "waiting_final_checker";
+
+    const nextStage =
+      needsHumanReview
+        ? "human_review"
+        : "final_checker";
+
+    const {
+      error,
+    } =
+      await this.supabase
+        .from(
+          "ai_teacher_review_runs",
+        )
+        .update({
+          correction_required:
+            output.correction_required,
+
+          overall_confidence:
+            output.confidence_score,
+
+          overall_risk_level:
+            output.risk_level,
+
+          human_review_required:
+            needsHumanReview,
+
+          human_review_reason:
+            needsHumanReview
+              ? output.review_summary
+              : null,
+
+          status:
+            nextStatus,
+
+          current_stage:
+            nextStage,
+        })
+        .eq(
+          "id",
+          runId,
+        );
+
+    if (error) {
+      throw new Error(
+        `Recheck stage update failed: ${error.message}`,
+      );
+    }
+  }
+
+  async markCorrectionRecheckPassed(
+    reviewRunId: string,
+  ): Promise<void> {
+    const {
+      error,
+    } =
+      await this.supabase
+        .from(
+          "ai_teacher_correction_proposals",
+        )
+        .update({
+          status:
+            "recheck_passed",
+        })
+        .eq(
+          "review_run_id",
+          reviewRunId,
+        )
+        .eq(
+          "status",
+          "recheck_required",
+        )
+        .eq(
+          "applied_to_staging",
+          false,
+        );
+
+    if (error) {
+      throw new Error(
+        `Correction recheck status update failed: ${error.message}`,
+      );
+    }
+  }
+
+  async completeFinalCheckerStage(
+    runId: string,
+    output: TeacherReviewOutput,
+  ): Promise<void> {
+    const passed =
+      output.verdict === "pass" ||
+      output.verdict === "pass_with_warning";
+
+    const unappliedCorrectionExists =
+      await this.hasUnappliedCorrectionProposal(
+        runId,
+      );
+
+    const aiRequiresHumanReview =
+      !passed ||
+      output.correction_required ||
+      output.verdict ===
+        "human_review_required" ||
+      output.risk_level === "high" ||
+      output.risk_level === "critical";
+
+    const needsHumanReview =
+      aiRequiresHumanReview ||
+      unappliedCorrectionExists;
+
+    let humanReviewReason:
+      string | null = null;
+
+    if (aiRequiresHumanReview) {
+      humanReviewReason =
+        output.review_summary;
+    } else if (unappliedCorrectionExists) {
+      humanReviewReason =
+        "AI düzeltme önerisi yeniden kontrol edildi ve Final Checker tarafından doğrulandı; ancak öneri staging kaydına henüz uygulanmadı. İnsan onayı gereklidir.";
+    }
 
     const nextStatus =
       needsHumanReview
@@ -572,9 +940,7 @@ export class TeacherReviewService {
             needsHumanReview,
 
           human_review_reason:
-            needsHumanReview
-              ? output.review_summary
-              : null,
+            humanReviewReason,
 
           status:
             nextStatus,
