@@ -10,15 +10,54 @@ type TopicLookup = {
   topicName: string;
 };
 
-function loadEnvFile(filePath: string) {
+type ImportPayload = {
+  import_batch_id: string;
+  source_row_number: number;
+  raw_data: Record<string, unknown>;
+
+  raw_exam_track: string | null;
+  raw_grade_level: string | null;
+  raw_subject_name: string | null;
+
+  raw_topic_code: string | null;
+  raw_topic_name: string | null;
+
+  raw_test_code: string | null;
+  raw_question_number: string | null;
+
+  raw_answer: string | null;
+  raw_difficulty: string | null;
+  raw_quality_level: string | null;
+  raw_cognitive_type: string | null;
+
+  raw_primary_question_type: string | null;
+  raw_secondary_question_type: string | null;
+
+  raw_new_generation: string | null;
+  raw_link: string | null;
+
+  metadata: Record<string, unknown>;
+};
+
+function loadEnvFile(
+  filePath: string,
+) {
   if (!fs.existsSync(filePath)) {
     return;
   }
 
-  const content = fs.readFileSync(filePath, "utf8");
+  const content =
+    fs.readFileSync(
+      filePath,
+      "utf8",
+    );
 
-  for (const rawLine of content.split(/\r?\n/)) {
-    const line = rawLine.trim();
+  for (
+    const rawLine
+    of content.split(/\r?\n/)
+  ) {
+    const line =
+      rawLine.trim();
 
     if (
       !line ||
@@ -28,25 +67,42 @@ function loadEnvFile(filePath: string) {
       continue;
     }
 
-    const separatorIndex = line.indexOf("=");
+    const separatorIndex =
+      line.indexOf("=");
 
-    const key = line
-      .slice(0, separatorIndex)
-      .trim();
+    const key =
+      line
+        .slice(
+          0,
+          separatorIndex,
+        )
+        .trim();
 
-    let value = line
-      .slice(separatorIndex + 1)
-      .trim();
+    let value =
+      line
+        .slice(
+          separatorIndex + 1,
+        )
+        .trim();
 
     if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
+      (
+        value.startsWith('"') &&
+        value.endsWith('"')
+      )
+      ||
+      (
+        value.startsWith("'") &&
+        value.endsWith("'")
+      )
     ) {
-      value = value.slice(1, -1);
+      value =
+        value.slice(1, -1);
     }
 
     if (!process.env[key]) {
-      process.env[key] = value;
+      process.env[key] =
+        value;
     }
   }
 }
@@ -55,75 +111,165 @@ function cellValue(
   row: ExcelJS.Row,
   columnNumber: number,
 ): unknown {
-  const cell = row.getCell(columnNumber);
+  const cell =
+    row.getCell(
+      columnNumber,
+    );
 
   if (
-    typeof cell.value === "object" &&
-    cell.value !== null &&
+    typeof cell.value ===
+      "object"
+    &&
+    cell.value !== null
+    &&
     "result" in cell.value
   ) {
-    return cell.result;
+    return cell.value.result;
   }
 
   return cell.value;
 }
 
-function textValue(value: unknown): string | null {
-  if (value === null || value === undefined) {
+function textValue(
+  value: unknown,
+): string | null {
+  if (
+    value === null ||
+    value === undefined
+  ) {
     return null;
   }
 
-  const text = String(value).trim();
+  const text =
+    String(value).trim();
 
-  return text ? text : null;
+  return text || null;
 }
 
-function integerText(value: unknown): string | null {
-  if (value === null || value === undefined) {
+function integerText(
+  value: unknown,
+): string | null {
+  if (
+    value === null ||
+    value === undefined
+  ) {
     return null;
   }
 
-  if (typeof value === "number") {
-    return String(Math.trunc(value));
+  if (
+    typeof value === "number"
+  ) {
+    return String(
+      Math.trunc(value),
+    );
   }
 
-  const text = String(value).trim();
+  const text =
+    String(value).trim();
 
   if (!text) {
     return null;
   }
 
-  const numeric = Number(text);
+  const numeric =
+    Number(text);
 
-  if (!Number.isFinite(numeric)) {
+  if (
+    !Number.isFinite(
+      numeric,
+    )
+  ) {
     return text;
   }
 
-  return String(Math.trunc(numeric));
+  return String(
+    Math.trunc(numeric),
+  );
+}
+
+function parseLimit(
+  value: string | undefined,
+): number | "all" {
+  if (!value) {
+    return 10;
+  }
+
+  const normalized =
+    value
+      .trim()
+      .toLowerCase();
+
+  if (
+    normalized === "all"
+  ) {
+    return "all";
+  }
+
+  const numeric =
+    Number(normalized);
+
+  if (
+    !Number.isInteger(
+      numeric,
+    )
+    ||
+    numeric <= 0
+  ) {
+    throw new Error(
+      'Limit geçersiz. Örnek: 1000 veya "all".',
+    );
+  }
+
+  return numeric;
+}
+
+function isQuestionRow(
+  row: ExcelJS.Row,
+): boolean {
+  const testCode =
+    textValue(
+      cellValue(row, 10),
+    );
+
+  const questionNumber =
+    integerText(
+      cellValue(row, 11),
+    );
+
+  return Boolean(
+    testCode &&
+    questionNumber,
+  );
 }
 
 async function main() {
   loadEnvFile(
-    path.resolve(process.cwd(), ".env.local"),
+    path.resolve(
+      process.cwd(),
+      ".env.local",
+    ),
   );
 
   const supabaseUrl =
-    process.env.NEXT_PUBLIC_SUPABASE_URL;
+    process.env
+      .NEXT_PUBLIC_SUPABASE_URL;
 
   const serviceRoleKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY;
+    process.env
+      .SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl) {
     throw new Error(
-      "NEXT_PUBLIC_SUPABASE_URL .env.local içinde bulunamadı.",
+      "NEXT_PUBLIC_SUPABASE_URL bulunamadı.",
     );
   }
 
   if (!serviceRoleKey) {
     throw new Error(
-      "SUPABASE_SERVICE_ROLE_KEY .env.local içinde bulunamadı.",
+      "SUPABASE_SERVICE_ROLE_KEY bulunamadı.",
     );
   }
+
 
   const excelPath =
     process.argv[2];
@@ -134,38 +280,70 @@ async function main() {
     );
   }
 
-  const resolvedExcelPath =
-    path.resolve(excelPath);
 
-  if (!fs.existsSync(resolvedExcelPath)) {
+  const limit =
+    parseLimit(
+      process.argv[3],
+    );
+
+
+  const resolvedExcelPath =
+    path.resolve(
+      excelPath,
+    );
+
+
+  if (
+    !fs.existsSync(
+      resolvedExcelPath,
+    )
+  ) {
     throw new Error(
-      `Excel dosyası bulunamadı: ${resolvedExcelPath}`,
+      `Excel bulunamadı: ${resolvedExcelPath}`,
     );
   }
 
-  const supabase = createClient(
-    supabaseUrl,
-    serviceRoleKey,
-    {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
+
+  const supabase =
+    createClient(
+      supabaseUrl,
+      serviceRoleKey,
+      {
+        auth: {
+          persistSession:
+            false,
+
+          autoRefreshToken:
+            false,
+        },
       },
-    },
-  );
+    );
+
 
   const workbook =
     new ExcelJS.Workbook();
+
+
+  console.log(
+    "Excel dosyası okunuyor...",
+  );
+
 
   await workbook.xlsx.readFile(
     resolvedExcelPath,
   );
 
+
   const questionSheet =
-    workbook.getWorksheet("Soru verileri");
+    workbook.getWorksheet(
+      "Soru verileri",
+    );
 
   const topicSheet =
-    workbook.getWorksheet("KONU KODU");
+    workbook.getWorksheet(
+      "KONU KODU",
+    );
+
 
   if (!questionSheet) {
     throw new Error(
@@ -173,44 +351,57 @@ async function main() {
     );
   }
 
+
   if (!topicSheet) {
     throw new Error(
       '"KONU KODU" sayfası bulunamadı.',
     );
   }
 
+
   // ==========================================================
-  // KONU KODU LOOKUP
-  //
-  // F-I kolonlarını kullanıyoruz:
-  // F = Konu kodu
-  // G = Ders
-  // H = Sınıf
-  // I = Konu
+  // TOPIC LOOKUP
   // ==========================================================
 
   const topicLookup =
-    new Map<string, TopicLookup[]>();
+    new Map<
+      string,
+      TopicLookup[]
+    >();
+
 
   for (
     let rowNumber = 2;
-    rowNumber <= topicSheet.rowCount;
+    rowNumber <=
+      topicSheet.rowCount;
     rowNumber += 1
   ) {
     const row =
-      topicSheet.getRow(rowNumber);
+      topicSheet.getRow(
+        rowNumber,
+      );
+
 
     const topicCode =
-      integerText(cellValue(row, 6));
+      integerText(
+        cellValue(row, 6),
+      );
 
     const subjectName =
-      textValue(cellValue(row, 7));
+      textValue(
+        cellValue(row, 7),
+      );
 
     const gradeText =
-      integerText(cellValue(row, 8));
+      integerText(
+        cellValue(row, 8),
+      );
 
     const topicName =
-      textValue(cellValue(row, 9));
+      textValue(
+        cellValue(row, 9),
+      );
+
 
     if (
       !topicCode ||
@@ -221,28 +412,37 @@ async function main() {
       continue;
     }
 
+
     const gradeLevel =
       Number(gradeText);
 
+
     if (
-      !Number.isInteger(gradeLevel) ||
-      gradeLevel < 1 ||
+      !Number.isInteger(
+        gradeLevel,
+      )
+      ||
+      gradeLevel < 1
+      ||
       gradeLevel > 12
     ) {
       continue;
     }
 
-    const entry: TopicLookup = {
+
+    const existing =
+      topicLookup.get(
+        topicCode,
+      ) ?? [];
+
+
+    existing.push({
       gradeLevel,
       subjectName,
       topicCode,
       topicName,
-    };
+    });
 
-    const existing =
-      topicLookup.get(topicCode) ?? [];
-
-    existing.push(entry);
 
     topicLookup.set(
       topicCode,
@@ -250,364 +450,638 @@ async function main() {
     );
   }
 
+
   // ==========================================================
-  // IMPORT BATCH
-  //
-  // Şimdilik sadece 10 gerçek Excel satırı.
+  // QUESTION ROWS
   // ==========================================================
 
-  const { data: batch, error: batchError } =
+  const allQuestionRows:
+    number[] = [];
+
+
+  for (
+    let rowNumber = 2;
+    rowNumber <=
+      questionSheet.rowCount;
+    rowNumber += 1
+  ) {
+    const row =
+      questionSheet.getRow(
+        rowNumber,
+      );
+
+    if (
+      isQuestionRow(row)
+    ) {
+      allQuestionRows.push(
+        rowNumber,
+      );
+    }
+  }
+
+
+  const sourceRowNumbers =
+    limit === "all"
+      ? allQuestionRows
+      : allQuestionRows.slice(
+          0,
+          limit,
+        );
+
+
+  if (
+    sourceRowNumbers.length ===
+    0
+  ) {
+    throw new Error(
+      "Soru satırı bulunamadı.",
+    );
+  }
+
+
+  console.log(
+    `Excel'de bulunan soru satırı: ${allQuestionRows.length}`,
+  );
+
+  console.log(
+    `Bu çalıştırmada işlenecek: ${sourceRowNumbers.length}`,
+  );
+
+  console.log(
+    `Mod: ${
+      limit === "all"
+        ? "TÜMÜ"
+        : limit
+    }`,
+  );
+
+
+  // ==========================================================
+  // IMPORT BATCH
+  // ==========================================================
+
+  const {
+    data: batch,
+    error: batchError,
+  } =
     await supabase
-      .from("import_batches")
+      .from(
+        "import_batches",
+      )
       .insert({
-        batch_type: "excel",
-        status: "processing",
-        total_items: 10,
-        processed_items: 0,
-        success_items: 0,
-        error_items: 0,
+        batch_type:
+          "excel",
+
+        status:
+          "processing",
+
+        total_items:
+          sourceRowNumbers.length,
+
+        processed_items:
+          0,
+
+        success_items:
+          0,
+
+        error_items:
+          0,
       })
       .select("id")
       .single();
 
-  if (batchError || !batch) {
+
+  if (
+    batchError ||
+    !batch
+  ) {
     throw new Error(
       `Import batch oluşturulamadı: ${
-        batchError?.message ?? "bilinmeyen hata"
+        batchError?.message ??
+        "bilinmeyen hata"
       }`,
     );
   }
 
+
+  console.log("");
   console.log(
     `Import batch: ${batch.id}`,
   );
+  console.log("");
 
-  let insertedCount = 0;
-  let failedCount = 0;
 
-  // Excel satırı 1 başlık.
-  // Gerçek kayıtlar 2'den başlıyor.
-  // İlk 10 kayıt = 2..11.
+  // ==========================================================
+  // BULK INSERT
+  //
+  // 500 soru = 1 HTTP isteği.
+  // ==========================================================
+
+  const insertChunkSize =
+    500;
+
+  let insertedCount =
+    0;
+
+
   for (
-    let rowNumber = 2;
-    rowNumber <= 11;
-    rowNumber += 1
+    let startIndex = 0;
+    startIndex <
+      sourceRowNumbers.length;
+    startIndex +=
+      insertChunkSize
   ) {
-    const row =
-      questionSheet.getRow(rowNumber);
+    const chunkRowNumbers =
+      sourceRowNumbers.slice(
+        startIndex,
+        startIndex +
+          insertChunkSize,
+      );
 
-    // --------------------------------------------------------
-    // Soru verileri kolonları
-    //
-    //  1 SORU ID
-    //  2 SINIF
-    //  3 HAZIRLAYAN
-    //  4 KAYNAK /KİTAP TÜRÜ
-    //  5 KİTAP ADI/KATEGORİ
-    //  6 DERS
-    //  7 Konu
-    //  8 SAYFA NO
-    //  9 TEST NO
-    // 10 TEST KODU/DOSYA ADI
-    // 11 SORU NO
-    // 12 CEVAP
-    // 13 KAZANIM KODU/KONU KODU
-    // 14 SORU TİPİ-1
-    // 15 SORU TİPİ-2
-    // 16 SORU TÜRÜ
-    // 17 ZORLUK SEVİYESİ
-    // 18 KALİTE
-    // 19 YENİ NESİL
-    // 20 Link
-    // 21 Sütun1
-    // --------------------------------------------------------
 
-    const rawExamTrack =
-      textValue(cellValue(row, 1));
+    const payload:
+      ImportPayload[] = [];
 
-    const rawPreparer =
-      textValue(cellValue(row, 3));
 
-    const rawSourceType =
-      textValue(cellValue(row, 4));
+    for (
+      const rowNumber
+      of chunkRowNumbers
+    ) {
+      const row =
+        questionSheet.getRow(
+          rowNumber,
+        );
 
-    const rawBookName =
-      textValue(cellValue(row, 5));
 
-    const rawSubjectName =
-      textValue(cellValue(row, 6));
+      const rawExamTrack =
+        textValue(
+          cellValue(row, 1),
+        );
 
-    const rawPageNumber =
-      integerText(cellValue(row, 8));
+      const rawPreparer =
+        textValue(
+          cellValue(row, 3),
+        );
 
-    const rawTestNumber =
-      integerText(cellValue(row, 9));
+      const rawSourceType =
+        textValue(
+          cellValue(row, 4),
+        );
 
-    const rawTestCode =
-      textValue(cellValue(row, 10));
+      const rawBookName =
+        textValue(
+          cellValue(row, 5),
+        );
 
-    const rawQuestionNumber =
-      integerText(cellValue(row, 11));
+      const rawSubjectName =
+        textValue(
+          cellValue(row, 6),
+        );
 
-    const rawAnswer =
-      textValue(cellValue(row, 12));
+      const rawPageNumber =
+        integerText(
+          cellValue(row, 8),
+        );
 
-    const rawTopicCode =
-      integerText(cellValue(row, 13));
+      const rawTestNumber =
+        integerText(
+          cellValue(row, 9),
+        );
 
-    const rawPrimaryQuestionType =
-      integerText(cellValue(row, 14));
+      const rawTestCode =
+        textValue(
+          cellValue(row, 10),
+        );
 
-    const rawSecondaryQuestionType =
-      integerText(cellValue(row, 15));
+      const rawQuestionNumber =
+        integerText(
+          cellValue(row, 11),
+        );
 
-    const rawCognitiveType =
-      integerText(cellValue(row, 16));
+      const rawAnswer =
+        textValue(
+          cellValue(row, 12),
+        );
 
-    const rawDifficulty =
-      integerText(cellValue(row, 17));
+      const rawTopicCode =
+        integerText(
+          cellValue(row, 13),
+        );
 
-    const rawQuality =
-      integerText(cellValue(row, 18));
+      const rawPrimaryQuestionType =
+        integerText(
+          cellValue(row, 14),
+        );
 
-    const rawNewGeneration =
-      textValue(cellValue(row, 19));
+      const rawSecondaryQuestionType =
+        integerText(
+          cellValue(row, 15),
+        );
 
-    const rawLink =
-      textValue(cellValue(row, 20));
+      const rawCognitiveType =
+        integerText(
+          cellValue(row, 16),
+        );
 
-    // --------------------------------------------------------
-    // Grade ve topic:
-    // Excel formülüne güvenmek yerine konu kodundan çözülür.
-    // Aynı kod birden fazla ders için varsa ders adıyla daraltılır.
-    // --------------------------------------------------------
+      const rawDifficulty =
+        integerText(
+          cellValue(row, 17),
+        );
 
-    const topicCandidates =
-      rawTopicCode
-        ? topicLookup.get(rawTopicCode) ?? []
-        : [];
+      const rawQuality =
+        integerText(
+          cellValue(row, 18),
+        );
 
-    const matchingTopics =
-      rawSubjectName
-        ? topicCandidates.filter(
-            (candidate) =>
-              candidate.subjectName
-                .localeCompare(
-                  rawSubjectName,
-                  "tr",
-                  {
-                    sensitivity: "base",
-                  },
-                ) === 0,
-          )
-        : topicCandidates;
+      const rawNewGeneration =
+        textValue(
+          cellValue(row, 19),
+        );
 
-    const topicMatch =
-      matchingTopics.length === 1
-        ? matchingTopics[0]
-        : null;
+      const rawLink =
+        textValue(
+          cellValue(row, 20),
+        );
 
-    const rawGradeLevel =
-      topicMatch
-        ? String(topicMatch.gradeLevel)
-        : textValue(cellValue(row, 2));
 
-    const rawTopicName =
-      topicMatch
-        ? topicMatch.topicName
-        : textValue(cellValue(row, 7));
+      const topicCandidates =
+        rawTopicCode
+          ? topicLookup.get(
+              rawTopicCode,
+            ) ?? []
+          : [];
 
-    const rawData = {
-      excel_row_number: rowNumber,
 
-      preparer: rawPreparer,
+      const matchingTopics =
+        rawSubjectName
+          ? topicCandidates.filter(
+              (
+                candidate,
+              ) =>
+                candidate.subjectName
+                  .localeCompare(
+                    rawSubjectName,
+                    "tr",
+                    {
+                      sensitivity:
+                        "base",
+                    },
+                  ) === 0,
+            )
+          : topicCandidates;
 
-      source_type: rawSourceType,
 
-      book_name_or_category:
-        rawBookName,
+      const topicMatch =
+        matchingTopics.length === 1
+          ? matchingTopics[0]
+          : null;
 
-      page_number:
-        rawPageNumber,
 
-      test_number:
-        rawTestNumber,
+      const rawGradeLevel =
+        topicMatch
+          ? String(
+              topicMatch.gradeLevel,
+            )
+          : textValue(
+              cellValue(row, 2),
+            );
 
-      original_subject:
-        rawSubjectName,
 
-      original_topic_code:
-        rawTopicCode,
+      const rawTopicName =
+        topicMatch
+          ? topicMatch.topicName
+          : textValue(
+              cellValue(row, 7),
+            );
 
-      original_topic_name:
-        rawTopicName,
 
-      link:
-        rawLink,
+      payload.push({
+        import_batch_id:
+          batch.id,
 
-      topic_lookup_candidate_count:
-        topicCandidates.length,
+        source_row_number:
+          rowNumber,
 
-      topic_lookup_matching_count:
-        matchingTopics.length,
-
-      topic_lookup_resolved:
-        topicMatch !== null,
-
-      source_file_name:
-        path.basename(
-          resolvedExcelPath,
-        ),
-
-      smoke_import:
-        true,
-
-      smoke_import_limit:
-        10,
-    };
-
-    const { data: insertedRow, error: insertError } =
-      await supabase
-        .from("excel_question_import_rows")
-        .insert({
-          import_batch_id:
-            batch.id,
-
-          source_row_number:
+        raw_data: {
+          excel_row_number:
             rowNumber,
 
-          raw_data:
-            rawData,
+          preparer:
+            rawPreparer,
 
-          raw_exam_track:
-            rawExamTrack,
+          source_type:
+            rawSourceType,
 
-          raw_grade_level:
-            rawGradeLevel,
+          book_name_or_category:
+            rawBookName,
 
-          raw_subject_name:
+          page_number:
+            rawPageNumber,
+
+          test_number:
+            rawTestNumber,
+
+          original_subject:
             rawSubjectName,
 
-          raw_topic_code:
+          original_topic_code:
             rawTopicCode,
 
-          raw_topic_name:
+          original_topic_name:
             rawTopicName,
 
-          raw_test_code:
-            rawTestCode,
-
-          raw_question_number:
-            rawQuestionNumber,
-
-          raw_answer:
-            rawAnswer,
-
-          raw_difficulty:
-            rawDifficulty,
-
-          raw_quality_level:
-            rawQuality,
-
-          raw_cognitive_type:
-            rawCognitiveType,
-
-          raw_primary_question_type:
-            rawPrimaryQuestionType,
-
-          raw_secondary_question_type:
-            rawSecondaryQuestionType,
-
-          raw_new_generation:
-            rawNewGeneration,
-
-          raw_link:
+          link:
             rawLink,
 
-          metadata: {
-            loader_version:
-              "legacy-excel-v1",
+          topic_lookup_candidate_count:
+            topicCandidates.length,
 
-            source_sheet:
-              "Soru verileri",
-          },
-        })
-        .select("id")
-        .single();
+          topic_lookup_matching_count:
+            matchingTopics.length,
 
-    if (
-      insertError ||
-      !insertedRow
-    ) {
-      failedCount += 1;
+          topic_lookup_resolved:
+            topicMatch !== null,
 
-      console.error(
-        `Satır ${rowNumber} eklenemedi:`,
-        insertError?.message ??
-          "bilinmeyen hata",
-      );
+          source_file_name:
+            path.basename(
+              resolvedExcelPath,
+            ),
 
-      continue;
+          total_excel_question_rows:
+            allQuestionRows.length,
+        },
+
+        raw_exam_track:
+          rawExamTrack,
+
+        raw_grade_level:
+          rawGradeLevel,
+
+        raw_subject_name:
+          rawSubjectName,
+
+        raw_topic_code:
+          rawTopicCode,
+
+        raw_topic_name:
+          rawTopicName,
+
+        raw_test_code:
+          rawTestCode,
+
+        raw_question_number:
+          rawQuestionNumber,
+
+        raw_answer:
+          rawAnswer,
+
+        raw_difficulty:
+          rawDifficulty,
+
+        raw_quality_level:
+          rawQuality,
+
+        raw_cognitive_type:
+          rawCognitiveType,
+
+        raw_primary_question_type:
+          rawPrimaryQuestionType,
+
+        raw_secondary_question_type:
+          rawSecondaryQuestionType,
+
+        raw_new_generation:
+          rawNewGeneration,
+
+        raw_link:
+          rawLink,
+
+        metadata: {
+          loader_version:
+            "legacy-excel-bulk-v1",
+
+          source_sheet:
+            "Soru verileri",
+        },
+      });
     }
 
-    // --------------------------------------------------------
-    // SECURITY DEFINER normalizer:
-    // yalnız service_role çalıştırabilir.
-    // --------------------------------------------------------
 
     const {
-      data: normalizeResult,
-      error: normalizeError,
-    } = await supabase.rpc(
-      "normalize_excel_question_import_row",
-      {
-        p_row_id:
-          insertedRow.id,
-      },
-    );
+      error: insertError,
+    } =
+      await supabase
+        .from(
+          "excel_question_import_rows",
+        )
+        .insert(payload);
 
-    if (normalizeError) {
-      failedCount += 1;
 
-      console.error(
-        `Satır ${rowNumber} normalize edilemedi:`,
-        normalizeError.message,
+    if (insertError) {
+      throw new Error(
+        `Toplu insert hatası: ${insertError.message}`,
       );
-
-      continue;
     }
 
-    insertedCount += 1;
+
+    insertedCount +=
+      payload.length;
+
 
     console.log(
-      `Satır ${rowNumber}:`,
-      JSON.stringify(
-        normalizeResult,
-      ),
+      `RAW insert: ${insertedCount}/${sourceRowNumbers.length}`,
     );
   }
 
+
+  // ==========================================================
+  // BULK NORMALIZATION
+  //
+  // Her çağrıda DB içinde 1000 satır.
+  // ==========================================================
+
+  console.log("");
+  console.log(
+    "Toplu normalizasyon başlıyor...",
+  );
+
+
+  let normalizedProcessed =
+    0;
+
+  let remaining =
+    sourceRowNumbers.length;
+
+
+  while (
+    remaining > 0
+  ) {
+    const {
+      data,
+      error,
+    } =
+      await supabase.rpc(
+        "normalize_excel_question_import_batch",
+        {
+          p_batch_id:
+            batch.id,
+
+          p_limit:
+            1000,
+        },
+      );
+
+
+    if (error) {
+      throw new Error(
+        `Toplu normalize hatası: ${error.message}`,
+      );
+    }
+
+
+    if (!data) {
+      throw new Error(
+        "Toplu normalize sonucu boş döndü.",
+      );
+    }
+
+
+    const processed =
+      Number(
+        data.processed ?? 0,
+      );
+
+    remaining =
+      Number(
+        data.remaining ?? 0,
+      );
+
+
+    normalizedProcessed +=
+      processed;
+
+
+    console.log(
+      `Normalize: ${normalizedProcessed}/${sourceRowNumbers.length} | Kalan: ${remaining}`,
+    );
+
+
+    if (
+      processed === 0 &&
+      remaining > 0
+    ) {
+      throw new Error(
+        "Pending kayıt var fakat normalizer ilerleyemedi.",
+      );
+    }
+  }
+
+
+  // ==========================================================
+  // FINAL COUNTS
+  // ==========================================================
+
+  const {
+    data: finalRows,
+    error: finalRowsError,
+  } =
+    await supabase
+      .from(
+        "excel_question_import_rows",
+      )
+      .select(
+        "normalization_status",
+      )
+      .eq(
+        "import_batch_id",
+        batch.id,
+      );
+
+
+  if (finalRowsError) {
+    throw new Error(
+      `Final sonuçlar okunamadı: ${finalRowsError.message}`,
+    );
+  }
+
+
+  let normalizedCount =
+    0;
+
+  let needsReviewCount =
+    0;
+
+  let quarantinedCount =
+    0;
+
+  let pendingCount =
+    0;
+
+
+  for (
+    const row
+    of finalRows ?? []
+  ) {
+    switch (
+      row.normalization_status
+    ) {
+      case "normalized":
+        normalizedCount += 1;
+        break;
+
+      case "needs_review":
+        needsReviewCount += 1;
+        break;
+
+      case "quarantined":
+        quarantinedCount += 1;
+        break;
+
+      case "pending":
+        pendingCount += 1;
+        break;
+    }
+  }
+
+
+  const processedItems =
+    normalizedCount +
+    needsReviewCount +
+    quarantinedCount;
+
+
   const finalStatus =
-    failedCount === 0
-      ? "completed"
+    pendingCount === 0
+      ? (
+          needsReviewCount === 0 &&
+          quarantinedCount === 0
+            ? "completed"
+            : "completed_with_errors"
+        )
       : "completed_with_errors";
 
-  const { error: updateError } =
+
+  const {
+    error: batchUpdateError,
+  } =
     await supabase
-      .from("import_batches")
+      .from(
+        "import_batches",
+      )
       .update({
         status:
           finalStatus,
 
         processed_items:
-          insertedCount +
-          failedCount,
+          processedItems,
 
         success_items:
-          insertedCount,
+          normalizedCount,
 
         error_items:
-          failedCount,
+          needsReviewCount +
+          quarantinedCount +
+          pendingCount,
 
         completed_at:
           new Date().toISOString(),
@@ -617,34 +1091,60 @@ async function main() {
         batch.id,
       );
 
-  if (updateError) {
+
+  if (batchUpdateError) {
     throw new Error(
-      `Batch özeti güncellenemedi: ${updateError.message}`,
+      `Batch güncellenemedi: ${batchUpdateError.message}`,
     );
   }
+
 
   console.log("");
   console.log(
     "======================================",
   );
+
   console.log(
     `Batch ID: ${batch.id}`,
   );
+
   console.log(
-    `Başarılı: ${insertedCount}`,
+    `Excel soru satırı: ${allQuestionRows.length}`,
   );
+
   console.log(
-    `Hatalı: ${failedCount}`,
+    `İşlenen: ${sourceRowNumbers.length}`,
   );
+
+  console.log(
+    `Normalized: ${normalizedCount}`,
+  );
+
+  console.log(
+    `Needs review: ${needsReviewCount}`,
+  );
+
+  console.log(
+    `Quarantined: ${quarantinedCount}`,
+  );
+
+  console.log(
+    `Pending: ${pendingCount}`,
+  );
+
   console.log(
     `Durum: ${finalStatus}`,
   );
+
   console.log(
     "======================================",
   );
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+
+main().catch(
+  (error) => {
+    console.error(error);
+    process.exit(1);
+  },
+);
