@@ -39,25 +39,18 @@ type ImportPayload = {
   metadata: Record<string, unknown>;
 };
 
-function loadEnvFile(
-  filePath: string,
-) {
+function loadEnvFile(filePath: string) {
   if (!fs.existsSync(filePath)) {
     return;
   }
 
-  const content =
-    fs.readFileSync(
-      filePath,
-      "utf8",
-    );
+  const content = fs.readFileSync(
+    filePath,
+    "utf8",
+  );
 
-  for (
-    const rawLine
-    of content.split(/\r?\n/)
-  ) {
-    const line =
-      rawLine.trim();
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim();
 
     if (
       !line ||
@@ -70,27 +63,24 @@ function loadEnvFile(
     const separatorIndex =
       line.indexOf("=");
 
-    const key =
-      line
-        .slice(
-          0,
-          separatorIndex,
-        )
-        .trim();
+    const key = line
+      .slice(
+        0,
+        separatorIndex,
+      )
+      .trim();
 
-    let value =
-      line
-        .slice(
-          separatorIndex + 1,
-        )
-        .trim();
+    let value = line
+      .slice(
+        separatorIndex + 1,
+      )
+      .trim();
 
     if (
       (
         value.startsWith('"') &&
         value.endsWith('"')
-      )
-      ||
+      ) ||
       (
         value.startsWith("'") &&
         value.endsWith("'")
@@ -112,16 +102,11 @@ function cellValue(
   columnNumber: number,
 ): unknown {
   const cell =
-    row.getCell(
-      columnNumber,
-    );
+    row.getCell(columnNumber);
 
   if (
-    typeof cell.value ===
-      "object"
-    &&
-    cell.value !== null
-    &&
+    typeof cell.value === "object" &&
+    cell.value !== null &&
     "result" in cell.value
   ) {
     return cell.value.result;
@@ -175,9 +160,7 @@ function integerText(
     Number(text);
 
   if (
-    !Number.isFinite(
-      numeric,
-    )
+    !Number.isFinite(numeric)
   ) {
     return text;
   }
@@ -209,10 +192,7 @@ function parseLimit(
     Number(normalized);
 
   if (
-    !Number.isInteger(
-      numeric,
-    )
-    ||
+    !Number.isInteger(numeric) ||
     numeric <= 0
   ) {
     throw new Error(
@@ -240,6 +220,77 @@ function isQuestionRow(
     testCode &&
     questionNumber,
   );
+}
+
+async function getExactStatusCount(
+  supabase: any,
+  batchId: string,
+  status: string,
+): Promise<number> {
+  const {
+    count,
+    error,
+  } =
+    await supabase
+      .from(
+        "excel_question_import_rows",
+      )
+      .select(
+        "id",
+        {
+          count: "exact",
+          head: true,
+        },
+      )
+      .eq(
+        "import_batch_id",
+        batchId,
+      )
+      .eq(
+        "normalization_status",
+        status,
+      );
+
+  if (error) {
+    throw new Error(
+      `${status} sayısı okunamadı: ${error.message}`,
+    );
+  }
+
+  return count ?? 0;
+}
+
+async function getExactBatchRowCount(
+ supabase: any,
+  batchId: string,
+): Promise<number> {
+  const {
+    count,
+    error,
+  } =
+    await supabase
+      .from(
+        "excel_question_import_rows",
+      )
+      .select(
+        "id",
+        {
+          count: "exact",
+          head: true,
+        },
+      )
+      .eq(
+        "import_batch_id",
+        batchId,
+      );
+
+  if (error) {
+    throw new Error(
+      `Batch toplam satır sayısı okunamadı: ${error.message}`,
+    );
+  }
+
+  return count ?? 0;
 }
 
 async function main() {
@@ -270,7 +321,6 @@ async function main() {
     );
   }
 
-
   const excelPath =
     process.argv[2];
 
@@ -280,18 +330,15 @@ async function main() {
     );
   }
 
-
   const limit =
     parseLimit(
       process.argv[3],
     );
 
-
   const resolvedExcelPath =
     path.resolve(
       excelPath,
     );
-
 
   if (
     !fs.existsSync(
@@ -302,7 +349,6 @@ async function main() {
       `Excel bulunamadı: ${resolvedExcelPath}`,
     );
   }
-
 
   const supabase =
     createClient(
@@ -319,20 +365,16 @@ async function main() {
       },
     );
 
-
   const workbook =
     new ExcelJS.Workbook();
-
 
   console.log(
     "Excel dosyası okunuyor...",
   );
 
-
   await workbook.xlsx.readFile(
     resolvedExcelPath,
   );
-
 
   const questionSheet =
     workbook.getWorksheet(
@@ -344,20 +386,17 @@ async function main() {
       "KONU KODU",
     );
 
-
   if (!questionSheet) {
     throw new Error(
       '"Soru verileri" sayfası bulunamadı.',
     );
   }
 
-
   if (!topicSheet) {
     throw new Error(
       '"KONU KODU" sayfası bulunamadı.',
     );
   }
-
 
   // ==========================================================
   // TOPIC LOOKUP
@@ -369,7 +408,6 @@ async function main() {
       TopicLookup[]
     >();
 
-
   for (
     let rowNumber = 2;
     rowNumber <=
@@ -380,7 +418,6 @@ async function main() {
       topicSheet.getRow(
         rowNumber,
       );
-
 
     const topicCode =
       integerText(
@@ -402,7 +439,6 @@ async function main() {
         cellValue(row, 9),
       );
 
-
     if (
       !topicCode ||
       !subjectName ||
@@ -412,29 +448,23 @@ async function main() {
       continue;
     }
 
-
     const gradeLevel =
       Number(gradeText);
-
 
     if (
       !Number.isInteger(
         gradeLevel,
-      )
-      ||
-      gradeLevel < 1
-      ||
+      ) ||
+      gradeLevel < 1 ||
       gradeLevel > 12
     ) {
       continue;
     }
 
-
     const existing =
       topicLookup.get(
         topicCode,
       ) ?? [];
-
 
     existing.push({
       gradeLevel,
@@ -443,13 +473,11 @@ async function main() {
       topicName,
     });
 
-
     topicLookup.set(
       topicCode,
       existing,
     );
   }
-
 
   // ==========================================================
   // QUESTION ROWS
@@ -457,7 +485,6 @@ async function main() {
 
   const allQuestionRows:
     number[] = [];
-
 
   for (
     let rowNumber = 2;
@@ -479,7 +506,6 @@ async function main() {
     }
   }
 
-
   const sourceRowNumbers =
     limit === "all"
       ? allQuestionRows
@@ -487,7 +513,6 @@ async function main() {
           0,
           limit,
         );
-
 
   if (
     sourceRowNumbers.length ===
@@ -497,7 +522,6 @@ async function main() {
       "Soru satırı bulunamadı.",
     );
   }
-
 
   console.log(
     `Excel'de bulunan soru satırı: ${allQuestionRows.length}`,
@@ -514,7 +538,6 @@ async function main() {
         : limit
     }`,
   );
-
 
   // ==========================================================
   // IMPORT BATCH
@@ -550,7 +573,6 @@ async function main() {
       .select("id")
       .single();
 
-
   if (
     batchError ||
     !batch
@@ -563,13 +585,11 @@ async function main() {
     );
   }
 
-
   console.log("");
   console.log(
     `Import batch: ${batch.id}`,
   );
   console.log("");
-
 
   // ==========================================================
   // BULK INSERT
@@ -582,7 +602,6 @@ async function main() {
 
   let insertedCount =
     0;
-
 
   for (
     let startIndex = 0;
@@ -598,10 +617,8 @@ async function main() {
           insertChunkSize,
       );
 
-
     const payload:
       ImportPayload[] = [];
-
 
     for (
       const rowNumber
@@ -611,7 +628,6 @@ async function main() {
         questionSheet.getRow(
           rowNumber,
         );
-
 
       const rawExamTrack =
         textValue(
@@ -703,14 +719,12 @@ async function main() {
           cellValue(row, 20),
         );
 
-
       const topicCandidates =
         rawTopicCode
           ? topicLookup.get(
               rawTopicCode,
             ) ?? []
           : [];
-
 
       const matchingTopics =
         rawSubjectName
@@ -730,12 +744,10 @@ async function main() {
             )
           : topicCandidates;
 
-
       const topicMatch =
         matchingTopics.length === 1
           ? matchingTopics[0]
           : null;
-
 
       const rawGradeLevel =
         topicMatch
@@ -746,14 +758,12 @@ async function main() {
               cellValue(row, 2),
             );
 
-
       const rawTopicName =
         topicMatch
           ? topicMatch.topicName
           : textValue(
               cellValue(row, 7),
             );
-
 
       payload.push({
         import_batch_id:
@@ -858,14 +868,13 @@ async function main() {
 
         metadata: {
           loader_version:
-            "legacy-excel-bulk-v1",
+            "legacy-excel-bulk-v2",
 
           source_sheet:
             "Soru verileri",
         },
       });
     }
-
 
     const {
       error: insertError,
@@ -876,23 +885,19 @@ async function main() {
         )
         .insert(payload);
 
-
     if (insertError) {
       throw new Error(
         `Toplu insert hatası: ${insertError.message}`,
       );
     }
 
-
     insertedCount +=
       payload.length;
-
 
     console.log(
       `RAW insert: ${insertedCount}/${sourceRowNumbers.length}`,
     );
   }
-
 
   // ==========================================================
   // BULK NORMALIZATION
@@ -905,13 +910,11 @@ async function main() {
     "Toplu normalizasyon başlıyor...",
   );
 
-
   let normalizedProcessed =
     0;
 
   let remaining =
     sourceRowNumbers.length;
-
 
   while (
     remaining > 0
@@ -931,20 +934,17 @@ async function main() {
         },
       );
 
-
     if (error) {
       throw new Error(
         `Toplu normalize hatası: ${error.message}`,
       );
     }
 
-
     if (!data) {
       throw new Error(
         "Toplu normalize sonucu boş döndü.",
       );
     }
-
 
     const processed =
       Number(
@@ -956,15 +956,12 @@ async function main() {
         data.remaining ?? 0,
       );
 
-
     normalizedProcessed +=
       processed;
-
 
     console.log(
       `Normalize: ${normalizedProcessed}/${sourceRowNumbers.length} | Kalan: ${remaining}`,
     );
-
 
     if (
       processed === 0 &&
@@ -976,101 +973,83 @@ async function main() {
     }
   }
 
-
   // ==========================================================
   // FINAL COUNTS
+  //
+  // ÖNEMLİ:
+  // Satırları SELECT ile çekmiyoruz.
+  // Supabase/PostgREST varsayılan 1000 satır limitine
+  // takılmamak için exact COUNT kullanıyoruz.
   // ==========================================================
 
-  const {
-    data: finalRows,
-    error: finalRowsError,
-  } =
-    await supabase
-      .from(
-        "excel_question_import_rows",
-      )
-      .select(
-        "normalization_status",
-      )
-      .eq(
-        "import_batch_id",
+  const [
+    totalRowCount,
+    normalizedCount,
+    needsReviewCount,
+    quarantinedCount,
+    pendingCount,
+  ] =
+    await Promise.all([
+      getExactBatchRowCount(
+        supabase,
         batch.id,
-      );
+      ),
 
+      getExactStatusCount(
+        supabase,
+        batch.id,
+        "normalized",
+      ),
 
-  if (finalRowsError) {
-    throw new Error(
-      `Final sonuçlar okunamadı: ${finalRowsError.message}`,
-    );
-  }
+      getExactStatusCount(
+        supabase,
+        batch.id,
+        "needs_review",
+      ),
 
+      getExactStatusCount(
+        supabase,
+        batch.id,
+        "quarantined",
+      ),
 
-  let normalizedCount =
-    0;
-
-  let needsReviewCount =
-    0;
-
-  let quarantinedCount =
-    0;
-
-  let pendingCount =
-    0;
-
-
-  for (
-    const row
-    of finalRows ?? []
-  ) {
-    switch (
-      row.normalization_status
-    ) {
-      case "normalized":
-        normalizedCount += 1;
-        break;
-
-      case "needs_review":
-        needsReviewCount += 1;
-        break;
-
-      case "quarantined":
-        quarantinedCount += 1;
-        break;
-
-      case "pending":
-        pendingCount += 1;
-        break;
-    }
-  }
-
+      getExactStatusCount(
+        supabase,
+        batch.id,
+        "pending",
+      ),
+    ]);
 
   const processedItems =
     normalizedCount +
     needsReviewCount +
     quarantinedCount;
 
+  const errorItems =
+    needsReviewCount +
+    quarantinedCount +
+    pendingCount;
 
   const finalStatus =
-    pendingCount === 0
-      ? (
-          needsReviewCount === 0 &&
-          quarantinedCount === 0
-            ? "completed"
-            : "completed_with_errors"
-        )
-      : "completed_with_errors";
-
+    pendingCount > 0
+      ? "processing"
+      : (
+          errorItems > 0
+            ? "completed_with_errors"
+            : "completed"
+        );
 
   const {
-    error: batchUpdateError,
+    error:
+      batchUpdateError,
   } =
     await supabase
       .from(
         "import_batches",
       )
       .update({
-        status:
-          finalStatus,
+        total_items:
+          totalRowCount,
 
         processed_items:
           processedItems,
@@ -1079,18 +1058,20 @@ async function main() {
           normalizedCount,
 
         error_items:
-          needsReviewCount +
-          quarantinedCount +
-          pendingCount,
+          errorItems,
+
+        status:
+          finalStatus,
 
         completed_at:
-          new Date().toISOString(),
+          pendingCount === 0
+            ? new Date().toISOString()
+            : null,
       })
       .eq(
         "id",
         batch.id,
       );
-
 
   if (batchUpdateError) {
     throw new Error(
@@ -1098,6 +1079,9 @@ async function main() {
     );
   }
 
+  // ==========================================================
+  // FINAL OUTPUT
+  // ==========================================================
 
   console.log("");
   console.log(
@@ -1113,7 +1097,7 @@ async function main() {
   );
 
   console.log(
-    `İşlenen: ${sourceRowNumbers.length}`,
+    `İşlenen: ${totalRowCount}`,
   );
 
   console.log(
@@ -1140,7 +1124,6 @@ async function main() {
     "======================================",
   );
 }
-
 
 main().catch(
   (error) => {
