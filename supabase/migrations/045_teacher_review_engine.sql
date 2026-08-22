@@ -15,6 +15,31 @@
 
 
 -- ============================================================
+-- 0. CANONICAL SUBJECT SEED
+--
+-- ai_teacher_review_profiles.subject_id (ve sonrasinda 046/049) sabit
+-- UUID'lerle public.subjects'e FK'li; repo zincirinde subjects seed'i
+-- yoktu (satirlar production'a elle eklenmisti). Temiz db reset'te FK
+-- ihlalini onlemek icin kanonik dersler burada idempotent seed
+-- ediliyor (degerler production'dan dogrulandi).
+-- ============================================================
+
+insert into public.subjects (id, name, slug, sort_order, is_active)
+values
+  ('430903f3-527e-4e12-b7e8-ac0afdb784aa', 'Matematik', 'matematik', 1, true),
+  ('25fb85d1-4810-4661-9053-6c746486556a', 'Türkçe', 'turkce', 2, true),
+  ('33f52f3a-8032-449e-85db-0bffddec8d06', 'Edebiyat', 'edebiyat', 3, true),
+  ('f4f39552-4d92-4d18-bfd5-c51abe00585d', 'Geometri', 'geometri', 4, true),
+  ('4245101d-6269-40d0-a663-2016ab9d1ee4', 'Tarih', 'tarih', 5, true),
+  ('57a959a8-43e7-4f0e-8b54-a7299386fdb3', 'Fizik', 'fizik', 6, true),
+  ('6dbbbd2f-14d5-47aa-aef0-609a5e339b12', 'Kimya', 'kimya', 7, true),
+  ('71191e01-220a-4682-9351-3d62631308d2', 'Biyoloji', 'biyoloji', 8, true),
+  ('cae032d4-54c0-41d2-b420-17a88fd3770a', 'Coğrafya', 'cografya', 9, true),
+  ('c5750b82-86c9-4f84-b8f8-2a6f58a7a2bb', 'Felsefe', 'felsefe', 10, true)
+on conflict do nothing;
+
+
+-- ============================================================
 -- 1. TEACHER REVIEW PROFILES
 -- ============================================================
 

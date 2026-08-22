@@ -59,3 +59,24 @@ CREATE TRIGGER trigger_set_updated_at
 BEFORE UPDATE ON public.student_profiles
 FOR EACH ROW
 EXECUTE FUNCTION public.set_updated_at();
+-- ============================================================
+-- YETKILER (GRANT)
+--
+-- RLS politikalari yetki VERMEZ; yeni CLI davranisinda postgres
+-- tarafindan olusturulan tablolar otomatik expose edilmedigi icin
+-- yetkiler acikca verilmelidir.
+--   - anon          : erisim yok.
+--   - authenticated : yalniz kendi satiri (RLS: select_own /
+--                     update_own / insert_own).
+--   - service_role  : tam yetki (sunucu tarafi akislari).
+-- ============================================================
+
+REVOKE ALL ON TABLE public.student_profiles FROM anon, authenticated;
+
+GRANT SELECT, INSERT, UPDATE
+ON public.student_profiles
+TO authenticated;
+
+GRANT SELECT, INSERT, UPDATE, DELETE
+ON public.student_profiles
+TO service_role;

@@ -51,9 +51,17 @@ REVOKE EXECUTE
 ON FUNCTION public.get_internal_correct_answer(uuid)
 FROM PUBLIC, anon, authenticated;
 
-REVOKE EXECUTE
-ON FUNCTION public.handle_new_user()
-FROM PUBLIC, anon, authenticated;
+-- handle_new_user() repo migration zincirinde hiç oluşturulmadı
+-- (profil oluşturma client-side yapılıyor). Temiz db reset zincirinde
+-- fonksiyon varsa REVOKE uygulanır, yoksa blok no-op geçer.
+DO $$
+BEGIN
+  IF pg_catalog.to_regprocedure('public.handle_new_user()') IS NOT NULL THEN
+    REVOKE EXECUTE ON FUNCTION public.handle_new_user()
+      FROM PUBLIC, anon, authenticated;
+  END IF;
+END;
+$$;
 
 REVOKE EXECUTE
 ON FUNCTION public.has_admin_permission(uuid, text)
