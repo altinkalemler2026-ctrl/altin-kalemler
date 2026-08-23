@@ -3,7 +3,7 @@
 - **Tarih:** 23 Ağustos 2026
 - **Kapsam:** Push/PR'da otomatik TypeScript kontrolü, görev kapsamlı ESLint, Vitest birim/bileşen testleri, temiz migration zinciri, Faz 1/2/3 SQL QA suite'leri ve Faz 2 paralel sayaç probe'u
 - **Ortam:** Windows 11 / PowerShell 5.1 / Node v24.19.0 / npm 11.17.0 / Docker Desktop + local Supabase (`supabase_db_yarisma-programi`)
-- **Revizyon:** Rev. 2 (ilk gerçek GH Actions koşusundaki typecheck hatasının kök nedeni ve düzeltmesi için §8'e bakın)
+- **Revizyon:** Rev. 3 (§8: temiz-CI typecheck düzeltmesi · §9: eksik Supabase CLI kurulumunun düzeltmesi — ilk gerçek koşu exit 127)
 
 ---
 
@@ -40,19 +40,20 @@ Dokunulmayan (yasaklı) dosyalar: `.env*`, anahtar/secret dosyaları, `.opencode
 4. `npx tsc --noEmit`
 5. `npm run lint:faz3`
 6. `npm run test:unit` (36 test; integration hariç)
-7. `supabase/setup-cli@v1` → `supabase start`
-8. **Sağlık kontrolü:** container içinde `pg_isready` 60x2 sn poll; başarısızsa `::error::Supabase DB 120 saniye icinde hazir olmadı.`
-9. **Teşhis adımı** (yalnız start/health fail ise): `supabase status --debug`, `docker ps -a`, db container logları (son 100 satır)
-10. `supabase db reset` → temiz migration zinciri
-11. **Zincir iddiası (SQL):** `schema_migrations` sayısı **71** (repoda 050 yok), `version='072' name='subjects_read_grant'` varlığı, `authenticated -> subjects SELECT` izni VAR, `anon -> subjects SELECT` izni YOK; ihlalde `MIGRATION_CHAIN_FAIL` / `GRANT_FAIL` exception ile step başarısız
-12. **SQL QA süitleri:** her süit `docker cp` + `psql -v ON_ERROR_STOP=1 -q -A -t`
+7. `supabase/setup-cli@v1` → CLI **2.115.0** sabitlenir (Rev. 3: bu adım Rev. 1 dosyasına girmemişti; bkz. §9) + `supabase --version` doğrulaması
+8. `supabase start`
+9. **Sağlık kontrolü:** container içinde `pg_isready` 60x2 sn poll; başarısızsa `::error::Supabase DB 120 saniye icinde hazir olmadı.`
+10. **Teşhis adımı** (yalnız start/health fail ise): `supabase status --debug`, `docker ps -a`, db container logları (son 100 satır)
+11. `supabase db reset` → temiz migration zinciri
+12. **Zincir iddiası (SQL):** `schema_migrations` sayısı **71** (repoda 050 yok), `version='072' name='subjects_read_grant'` varlığı, `authenticated -> subjects SELECT` izni VAR, `anon -> subjects SELECT` izni YOK; ihlalde `MIGRATION_CHAIN_FAIL` / `GRANT_FAIL` exception ile step başarısız
+13. **SQL QA süitleri:** her süit `docker cp` + `psql -v ON_ERROR_STOP=1 -q -A -t`
     - Faz 3 *self-raising*: exit code + `QA FAZ 3 TAMAM: kalan=0` marker'ı zorunlu
     - Faz 1/2 *parsed*: exit code + çıktıda `|FAIL|` satırı yok + son satır `toplam|gecen|kalan` özeti ve `kalan=0 ve gecen=toplam`
-13. **Paralel sayaç probe'u:** iki ayrı `docker exec` süreci bash `&` + `wait` ile gerçek işletim sistemi paralelliğinde
+14. **Paralel sayaç probe'u:** iki ayrı `docker exec` süreci bash `&` + `wait` ile gerçek işletim sistemi paralelliğinde
     - setup → SETUP_OK; `work TAG=a // TAG=b` → FINAL_USED; verify DO bloğu (kişi başı <=500 ve sayaç==exposure, aksi halde exception) → VERIFY_PASS; cleanup → CLEANUP_OK
     - Ardından aynı döngü `same` moduyla (iki işçi AYNI kullanıcının sayacına yarışır — Faz 2 F-2 senaryosu) ve ikinci cleanup
-14. `npm test` (integration dahil — çalışan Supabase üzerinde gerçek RPC akışı)
-15. Summary echo
+15. `npm test` (integration dahil — çalışan Supabase üzerinde gerçek RPC akışı)
+16. Summary echo
 
 ## 3. Yerel Doğrulama Sonuçları (CI adım sırasıyla)
 
@@ -95,7 +96,7 @@ Dokunulmayan (yasaklı) dosyalar: `.env*`, anahtar/secret dosyaları, `.opencode
 
 ## 5. Kalan Riskler
 
-1. İlk gerçek GH Actions koşusu yerelde birebir koşturulamaz: `supabase start`'ın runner üstündeki imaj çekme süresi (~2 GB) ve CLI sürüm kayması (`latest`) ilk push'ta gözlemlenmeli; istenirse `version:` ile pinlenir.
+1. ~~İlk gerçek GH Actions koşusu yerelde birebir koşturulamaz~~ **Gerçekleşti:** ilk koşu iki kez ortam farkı yüzünden kırıldı (§8 typecheck, §9 eksik CLI). CLI sürümü artık **2.115.0** ile sabit; kalan tek bilinmeyen, runner üstünde `supabase start`'ın imaj çekme süresidir (~2 GB) — sonraki push'ta gözlemlenmelidir (bkz. §9 "gerçek CI doğrulaması").
 2. Faz 1/2 çıktı ayrıştırması metinseldir (`|FAIL|` taraması + son satır özeti); detay metninde literal `|FAIL|` geçmesi teorik yanlış-pozitif üretir (süit formatı değişmedikçe risk yok).
 3. Probe `work` modunda başlıktaki `used_c+used_d==560` iddiası assert EDİLMEZ: gözlenen davranış (500+500, kullanıcılar arası soru paylaşımı) önceki kabul edilen yerel sonuçla aynı; bağlayıcı invariant verify DO bloğudur (<=500 ve sayaç==exposure). Başlık yorumu ile davranış farkının netleştirilmesi ayrı iş.
 4. `db reset` çıktısındaki `WARN: no files matched pattern: supabase/seed.sql` bilinen zararsız gürültü (repo seed kullanmıyor).
@@ -160,5 +161,44 @@ Not: `src` ağacında `LayoutProps`/`PageProps` kullanan tek dosya layout.tsx id
 ### Rev. 2 git teyidi
 - Değişen dosyalar: `src/app/layout.tsx`, `.github/workflows/ci.yml`, bu rapor.
 - Migration/package.json/test/QA SQL dosyalarına ve yasaklı konumlara dokunulmadı; commit/push yapılmadı.
+
+---
+
+## 9. Rev. 3 — Eksik Supabase CLI Kurulumunun Düzeltmesi
+
+### Kök neden
+
+İkinci gerçek koşu, "Start local Supabase" adımında `supabase: command not found` (exit **127**) ile başarısız oldu:
+
+- Workflow'da Supabase CLI'ı kuran bir adım HİÇ YOKTU: GitHub hosted runner imajında `supabase` binary'si bulunmaz.
+- Rev. 1 raporunun §2 adım listesi `supabase/setup-cli@v1`'i ANLATIYORDU ancak bu adım asla `ci.yml` dosyasına girmemişti — rapor-kod tutarsızlığı ilk gerçek koşuda açığa çıktı (Rev. 1 diff review'unda da yakalanamayan tek sapma buydu).
+
+### Düzeltme
+
+`ci.yml`'e, `supabase start`'tan ÖNCE iki adım eklendi:
+
+| Adım | İçerik |
+| --- | --- |
+| Setup Supabase CLI (pinned) | `supabase/setup-cli@v1` + `version: 2.115.0` (**yerelde doğrulanan sürüm**). Action YALNIZCA CLI kurar: token/secret eklenmez, login/link/db push yapılmaz, production'a bağlantı yoktur |
+| Verify Supabase CLI | PATH'te `supabase` var mı kontrolü (`::error::` ile net mesaj) + `supabase --version` çıktısı |
+
+Node 24 pini, npm cache, tetikleyiciler, sağlık kontrolü, teşhis, db reset, zincir iddiası, QA süitleri ve paralel probe akışı DEĞİŞMEDİ.
+
+### Rev. 3 yerel doğrulama sonuçları
+
+| Adım | Sonuç |
+| --- | --- |
+| `npx yaml-lint .github/workflows/ci.yml` | ✅ başarılı |
+| `npx tsc --noEmit` | ✅ 0 hata |
+| `npm run lint:faz3` | ✅ 0 problem |
+| `npm run test:unit` | ✅ 4 dosya / 38/38 |
+
+### Gerçek CI doğrulaması (açık beyan)
+
+CLI kurulum action'ı, `--version` doğrulaması ve özellikle `supabase start` (runner üstünde ~2 GB Docker imaj çekimi) **yalnızca gerçek GitHub Actions ortamında doğrulanabilir** — yerel makine bu koşulları birebir barındıramaz. Bu nedenle bir sonraki push ile tetiklenecek Actions koşusu izlenmeli; "Start local Supabase" adımının yeşil dönmesi bu düzeltmenin nihai kanıtıdır. Yerelde yapılabilen her şey (yaml/tsc/lint/unit) koşulmuş ve yeşildir.
+
+### Rev. 3 git teyidi
+- Değişen dosyalar: `.github/workflows/ci.yml`, bu rapor (yalnızca izin verilen ikisi).
+- package.json/migration/test/uygulama kodu/.env-secret/snippets/import script dokunulmadan duruyor; commit/push/reset/checkout, production, link/login/db push YAPILMADI.
 
 

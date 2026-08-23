@@ -54,6 +54,22 @@ jobs:
       # kullanir. Hata durumunda anlasilir teshis loglari basilir.
       # ----------------------------------------------------------
 
+      - name: Setup Supabase CLI (pinned)
+        uses: supabase/setup-cli@v1
+        with:
+          # Yerelde dogrulanmis surum. Yalnizca CLI kurulumu: token,
+          # login/link/db push ve herhangi bir production baglantisi YOK.
+          version: 2.115.0
+
+      - name: Verify Supabase CLI
+        run: |
+          set -euo pipefail
+          if ! command -v supabase >/dev/null 2>&1; then
+            echo "::error::supabase CLI kurulmus degil (PATH'te yok)."
+            exit 1
+          fi
+          supabase --version
+
       - name: Start local Supabase
         id: sbstart
         run: supabase start
