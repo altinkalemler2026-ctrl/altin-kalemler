@@ -20,6 +20,9 @@ export const TRAINING_ERROR_MESSAGES = {
   /** Haftalık yeni soru limiti doldu. */
   weeklyLimit:
     "Bu ders için bu haftaki yeni soru hakkınız doldu. Tekrar sorularla çalışmaya devam edebilirsiniz.",
+  /** Faz 4 rate limit penceresi doldu (075). */
+  rateLimit:
+    "Çok hızlı işlem yaptınız; lütfen birkaç saniye bekleyip tekrar deneyin.",
   /** Bilinmeyen her hata için genel mesaj. */
   generic:
     "Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin; sorun sürerse destek ekibine bildirin.",
@@ -33,6 +36,7 @@ const AUTH_PATTERN = /kimlik dogrulamasi/i
 const PERIOD_PATTERN = /akademik donem bulunamadi|gecerli akademik donem/i
 const CONTEXT_PATTERN = /baglami cozulemedi/i
 const WEEKLY_LIMIT_PATTERN = /haftalik.*limit|kapasite.*dol/i
+const RATE_LIMIT_PATTERN = /cok fazla istek/i
 
 function errorText(error: unknown): string {
   if (error instanceof Error) return `${error.message}`
@@ -63,6 +67,7 @@ export function mapTrainingError(error: unknown): string {
   if (WEEKLY_LIMIT_PATTERN.test(text)) {
     return TRAINING_ERROR_MESSAGES.weeklyLimit
   }
+  if (RATE_LIMIT_PATTERN.test(text)) return TRAINING_ERROR_MESSAGES.rateLimit
   // PostgREST yetki hataları da oturum mesajına düşer (42501 vb.).
   if (/permission denied|row-level security/i.test(text)) {
     return TRAINING_ERROR_MESSAGES.authRequired

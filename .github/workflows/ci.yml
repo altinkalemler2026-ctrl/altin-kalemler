@@ -160,16 +160,16 @@ jobs:
           SQL
 
       # ----------------------------------------------------------
-      # SQL QA suretleri: Faz 1 / Faz 2 / Faz 3 / Faz 3.5.
+      # SQL QA suretleri: Faz 1 / Faz 2 / Faz 3 / Faz 3.5 / Faz 4.
       # - Faz 3 kendi icinde FAIL durumunda exception firlatir
       #   (psql ON_ERROR_STOP ile exit != 0) ve "TAMAM: kalan=0"
       #   satiri basar.
-      # - Faz 1/2/3.5 exception firlatmadigi icin cikti ayristirilir:
+      # - Faz 1/2/3.5/4 exception firlatmadigi icin cikti ayristirilir:
       #   son satir "toplam|gecen|kalan" ozeti olmali, kalan=0 ve
       #   hicbir "|FAIL|" satiri bulunmamali.
       # ----------------------------------------------------------
 
-      - name: Run SQL QA suites (Faz 1, 2, 3, 3.5)
+      - name: Run SQL QA suites (Faz 1, 2, 3, 3.5, 4)
         run: |
           set -euo pipefail
           run_suite () {
@@ -217,6 +217,7 @@ jobs:
           run_suite faz2 scripts/qa_faz2_local_validation.sql parsed
           run_suite faz3 scripts/qa_faz3_local_validation.sql self-raising
           run_suite faz35 scripts/qa_faz35_local_validation.sql parsed
+          run_suite faz4 scripts/qa_faz4_local_validation.sql parsed
 
       # ----------------------------------------------------------
       # Faz 2 paralel sayaç probe'u: iki AYRI docker exec sureci ile
@@ -289,6 +290,56 @@ jobs:
           require_marker /tmp/probe_cleanup2.log CLEANUP_OK cleanup-2
 
       # ----------------------------------------------------------
+      # Faz 4 rate-limit probe'u: ayni kullanici son-kota yarisi.
+      # Sayaç limit-1'e PRIME edilir; iki isci AYNI anda tuketir.
+      # Deterministik beklenti: tam bir OK + bir LIMITED, hit=5.
+      # ----------------------------------------------------------
+
+      - name: Parallel rate-limit probe (Faz 4)
+        run: |
+          set -euo pipefail
+          PROBE=qa_faz4_parallel_probe.sql
+          PSQL="docker exec $CONTAINER psql -U postgres -d postgres -v ON_ERROR_STOP=1 -A -t"
+
+          rl_mode () {
+            local mode="$1" tag="${2:-}" log="$3"
+            docker cp "scripts/$PROBE" "$CONTAINER:/tmp/$PROBE"
+            if [ -n "$tag" ]; then
+              $PSQL -v MODE="$mode" -v TAG="$tag" -f "/tmp/$PROBE" > "$log" 2>&1
+            else
+              $PSQL -v MODE="$mode" -f "/tmp/$PROBE" > "$log" 2>&1
+            fi
+          }
+
+          require_marker () {
+            local log="$1" marker="$2" label="$3"
+            if ! grep -q "$marker" "$log"; then
+              cat "$log"
+              echo "::error::Probe ($label): beklenen isaret yok: $marker"
+              exit 1
+            fi
+            echo "Probe $label OK ($marker)"
+          }
+
+          rl_mode setup "" /tmp/rl_setup.log
+          require_marker /tmp/rl_setup.log SETUP_OK rl-setup
+
+          echo "== AYNI-KULLANICI son-kota yarisi (R, hit primed 4/5) =="
+          rl_mode work a /tmp/rl_work_a.log &
+          RA=$!
+          rl_mode work b /tmp/rl_work_b.log &
+          RB=$!
+          wait "$RA" || { cat /tmp/rl_work_a.log; echo "::error::rl/a isci basarisiz."; exit 1; }
+          wait "$RB" || { cat /tmp/rl_work_b.log; echo "::error::rl/b isci basarisiz."; exit 1; }
+          grep -h 'RESULT=' /tmp/rl_work_a.log /tmp/rl_work_b.log || true
+
+          rl_mode verify "" /tmp/rl_verify.log
+          require_marker /tmp/rl_verify.log VERIFY_PASS rl-verify
+
+          rl_mode cleanup "" /tmp/rl_cleanup.log
+          require_marker /tmp/rl_cleanup.log CLEANUP_OK rl-cleanup
+
+      # ----------------------------------------------------------
       # Tam test paketi: integration dahil (calisan local Supabase
       # uzerinden gercek RPC akisi).
       # ----------------------------------------------------------
@@ -299,4 +350,4 @@ jobs:
       - name: Summary
         if: always()
         run: |
-          echo "CI adimlari tamamlandi: tsc, eslint(scope), vitest(unit), supabase start+health, db reset(dinamik zincir), QA f1/f2/f3/f3.5, parallel probe(work+same), vitest(full)."
+          echo "CI adimlari tamamlandi: tsc, eslint(scope), vitest(unit), supabase start+health, db reset(dinamik zincir), QA f1/f2/f3/f3.5/f4, parallel probe(work+same), rate-limit probe(faz4), vitest(full)."

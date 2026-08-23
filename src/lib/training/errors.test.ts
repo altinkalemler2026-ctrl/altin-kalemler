@@ -61,4 +61,32 @@ describe("mapTrainingError — Türkçe mesajlar", () => {
     )
     expect(SESSION_EXPIRED_MESSAGE).toContain("Oturumunuz sona erdi")
   })
+
+  it("Faz 4 rate limit hatası beklemeye yönlendiren Türkçe mesaja çevrilir", () => {
+    const message = mapTrainingError(
+      new Error(
+        "Cok fazla istek gonderildi; lutfen kisa bir sure sonra tekrar deneyin."
+      )
+    )
+
+    expect(message).toBe(TRAINING_ERROR_MESSAGES.rateLimit)
+    expect(message).toContain("Çok hızlı")
+    expect(message).toContain("bekleyip")
+
+    const postgrestError = {
+      message: "Cok fazla istek gonderildi.",
+      details: null,
+      hint: null,
+      code: "P0001",
+    }
+    expect(mapTrainingError(postgrestError)).toBe(
+      TRAINING_ERROR_MESSAGES.rateLimit
+    )
+  })
+
+  it("Faz 4 iç yapılandırma hatası kullanıcıya sızmaz, genel mesaja düşer", () => {
+    expect(
+      mapTrainingError(new Error("Rate limit yapilandirmasi gecersiz (p_limit)."))
+    ).toBe(TRAINING_ERROR_MESSAGES.generic)
+  })
 })

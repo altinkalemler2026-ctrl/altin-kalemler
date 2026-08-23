@@ -8374,6 +8374,27 @@ export type Database = {
         }
         Relationships: []
       }
+      rpc_rate_limits: {
+        Row: {
+          hit_count: number
+          rpc_name: string
+          user_id: string
+          window_start: string
+        }
+        Insert: {
+          hit_count?: number
+          rpc_name: string
+          user_id: string
+          window_start: string
+        }
+        Update: {
+          hit_count?: number
+          rpc_name?: string
+          user_id?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       scoring_point_rules: {
         Row: {
           answer_result: string
@@ -10920,6 +10941,10 @@ export type Database = {
           grade_level: number
           schedule_profile_id: string
         }[]
+      }
+      _faz4_consume_rate_limit: {
+        Args: { p_limit: number; p_rpc_name: string; p_window_seconds: number }
+        Returns: undefined
       }
       academic_calendar_delete_week: {
         Args: { p_week: number; p_year: string }
