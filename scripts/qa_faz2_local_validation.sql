@@ -4,6 +4,8 @@
 --
 -- Kapsam:
 --   T-01       : anon RPC EXECUTE denials (067/068/069)
+--   T-01d..l   : 071 sonrasi Faz 2 RPC EXECUTE matrisi
+--                (public/anon=false, authenticated=true)
 --   T-02       : antrenman secimi - mufredat kapisi + show-time atomik
 --                exposure/sayac + payload ALLOWLIST (F-5)
 --   T-02e      : esleme review_status onay kapisi (F-4)
@@ -466,6 +468,73 @@ $blk$;
 
 
 -- ============================================================
+-- T-01d..l: 071 sonrasi Faz 2 RPC EXECUTE matrisi
+-- Imzalar pg_get_function_identity_arguments ile dogrulandi:
+--   select_training_questions(uuid,integer) / get_my_weekly_usage() /
+--   prepare_competition_pack(uuid)
+-- Beklenen: public=false, anon=false, authenticated=true
+-- ============================================================
+
+do $blk$
+begin
+  perform public._qa_true('T-01d',
+    'public: select_training_questions EXECUTE yetkisi yok',
+    not has_function_privilege('public',
+      'public.select_training_questions(uuid,integer)', 'EXECUTE'),
+    null);
+
+  perform public._qa_true('T-01e',
+    'anon: select_training_questions EXECUTE yetkisi yok',
+    not has_function_privilege('anon',
+      'public.select_training_questions(uuid,integer)', 'EXECUTE'),
+    null);
+
+  perform public._qa_true('T-01f',
+    'authenticated: select_training_questions EXECUTE izni var',
+    has_function_privilege('authenticated',
+      'public.select_training_questions(uuid,integer)', 'EXECUTE'),
+    null);
+
+  perform public._qa_true('T-01g',
+    'public: get_my_weekly_usage EXECUTE yetkisi yok',
+    not has_function_privilege('public',
+      'public.get_my_weekly_usage()', 'EXECUTE'),
+    null);
+
+  perform public._qa_true('T-01h',
+    'anon: get_my_weekly_usage EXECUTE yetkisi yok',
+    not has_function_privilege('anon',
+      'public.get_my_weekly_usage()', 'EXECUTE'),
+    null);
+
+  perform public._qa_true('T-01i',
+    'authenticated: get_my_weekly_usage EXECUTE izni var',
+    has_function_privilege('authenticated',
+      'public.get_my_weekly_usage()', 'EXECUTE'),
+    null);
+
+  perform public._qa_true('T-01j',
+    'public: prepare_competition_pack EXECUTE yetkisi yok',
+    not has_function_privilege('public',
+      'public.prepare_competition_pack(uuid)', 'EXECUTE'),
+    null);
+
+  perform public._qa_true('T-01k',
+    'anon: prepare_competition_pack EXECUTE yetkisi yok',
+    not has_function_privilege('anon',
+      'public.prepare_competition_pack(uuid)', 'EXECUTE'),
+    null);
+
+  perform public._qa_true('T-01l',
+    'authenticated: prepare_competition_pack EXECUTE izni var',
+    has_function_privilege('authenticated',
+      'public.prepare_competition_pack(uuid)', 'EXECUTE'),
+    null);
+end;
+$blk$;
+
+
+-- ============================================================
 -- T-02: ANTRENMAN SEÇİMİ (mufredat kapisi + atomik show-time)
 -- Beklenen yeni sorular (havuzun tamami = 8):
 --   Q1..Q5, Q8, Q9, Q10
@@ -764,7 +833,9 @@ declare
   v_r2 jsonb;
   r    record;
 begin
-  execute 'set local role authenticated';
+  -- 070 sonrasi ingest_student_attempt authenticated'a KAPALI.
+  -- Test postgres roluyle calisir; auth.uid() JWT claim'inden okunur
+  -- (fonksiyonlar SECURITY DEFINER, davranis degismez).
   perform set_config('request.jwt.claims',
     '{"sub":"99999999-9999-9999-9999-999999999901","role":"authenticated"}', true);
 
@@ -777,7 +848,6 @@ begin
     'training', 'wrong', 30000);
 
   perform set_config('request.jwt.claims', '', true);
-  execute 'reset role';
 
   perform public._qa_true('T-06a',
     'attempt_number sirali artar (1,2)',
@@ -835,7 +905,7 @@ begin
   select public._faz2_normalize_metric_key('  ÖZEL Tip!!  ') into v_norm1;
   select public._faz2_normalize_metric_key(null) into v_norm2;
 
-  execute 'set local role authenticated';
+  -- 070 sonrasi: postgres rolu + JWT claim'leri (bkz. T-06 notu).
   perform set_config('request.jwt.claims',
     '{"sub":"99999999-9999-9999-9999-999999999901","role":"authenticated"}', true);
 
@@ -848,7 +918,6 @@ begin
     'training', 'timeout', 2000);
 
   perform set_config('request.jwt.claims', '', true);
-  execute 'reset role';
 
   select count(*) into v_cnt1
     from public.student_dimension_metrics
@@ -1177,7 +1246,7 @@ delete from public.academic_weeks where academic_year = 'QA-Y-2099';
 
 do $blk$
 begin
-  execute 'set local role authenticated';
+  -- 070 sonrasi: postgres rolu + JWT claim'leri (bkz. T-06 notu).
   perform set_config('request.jwt.claims',
     '{"sub":"99999999-9999-9999-9999-999999999901","role":"authenticated"}', true);
 
@@ -1200,7 +1269,6 @@ begin
     $sql$select public.get_my_weekly_usage()$sql$);
 
   perform set_config('request.jwt.claims', '', true);
-  execute 'reset role';
 end;
 $blk$;
 
