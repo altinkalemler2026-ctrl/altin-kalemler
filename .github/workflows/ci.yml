@@ -23,10 +23,10 @@ jobs:
       CONTAINER: supabase_db_yarisma-programi
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node (pinned to local validated version)
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 24.19.0
           cache: npm

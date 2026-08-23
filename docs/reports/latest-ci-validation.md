@@ -3,7 +3,7 @@
 - **Tarih:** 23 Ağustos 2026
 - **Kapsam:** Push/PR'da otomatik TypeScript kontrolü, görev kapsamlı ESLint, Vitest birim/bileşen testleri, temiz migration zinciri, Faz 1/2/3 SQL QA suite'leri ve Faz 2 paralel sayaç probe'u
 - **Ortam:** Windows 11 / PowerShell 5.1 / Node v24.19.0 / npm 11.17.0 / Docker Desktop + local Supabase (`supabase_db_yarisma-programi`)
-- **Revizyon:** Rev. 1
+- **Revizyon:** Rev. 2 (ilk gerçek GH Actions koşusundaki typecheck hatasının kök nedeni ve düzeltmesi için §8'e bakın)
 
 ---
 
@@ -34,8 +34,8 @@ Dokunulmayan (yasaklı) dosyalar: `.env*`, anahtar/secret dosyaları, `.opencode
 
 **Tek job (`ci`, ubuntu-latest, timeout 30 dk)** — ucuz kapılar önce, pahalı DB adımları sonra:
 
-1. `actions/checkout@v4`
-2. `actions/setup-node@v4` → **node-version: 24.19.0 sabit** (yerelde doğrulanmış sürümle aynı), `cache: npm`
+1. `actions/checkout@v5`
+2. `actions/setup-node@v5` → **node-version: 24.19.0 sabit** (yerelde doğrulanmış sürümle aynı), `cache: npm`
 3. `npm ci`
 4. `npx tsc --noEmit`
 5. `npm run lint:faz3`
@@ -122,5 +122,43 @@ Commit adayı: `.github/workflows/ci.yml`, `package.json`, `docs/reports/latest-
 - Production Supabase'e bağlanma, link, login ve db push YAPILMADI — tüm DB işlemleri yerel Docker stack üzerindedir.
 - `.env`, anahtar/secret dosyaları, `.opencode/`, `opencode.json`, `supabase/snippets/` ve `scripts/import-legacy-excel.ts` dosyalarına DOKUNULMADI.
 - 001–072 migration dosyaları ve uygulama davranışı DEĞİŞTİRİLMEDİ (yalnızca CI yardımcı scriptleri + package.json test scriptleri).
+
+---
+
+## 8. Rev. 2 — İlk Gerçek CI Koşusu Düzeltmesi
+
+### Kök neden
+
+CI'ın ilk gerçek koşusu `src/app/layout.tsx:21 — Cannot find name 'LayoutProps'` ile typecheck adımında başarısız oldu:
+
+- `tsconfig.json` include listesinde `.next/types/**/*.ts`, `.next/dev/types/**/*.ts` ve `.next/dev/dev/types/**/*.ts` desenleri var.
+- Next.js 16 dev sunucusu, global `LayoutProps<Route>` / `PageProps` yardımcı tiplerini bu klasörler altında ÜRETİR.
+- Yerelde `tsc --noEmit` yalnızca `next dev` çalıştırıldığı için geçiyordu: üretilmiş bildirimler diskte mevcuttu.
+- Temiz CI checkout'unda `.next/` hiç yoktur → include desenleri boş eşleşir → global bildirim yüklenmez → `LayoutProps` bilinmeyen ad.
+
+Yerel tsc'nin yeşil görünmesi CI'ı maskelemişti (ortam farkı, kod hatası değil).
+
+### Düzeltmeler
+
+| Dosya | Değişiklik |
+| --- | --- |
+| `src/app/layout.tsx` | `LayoutProps<"/">` yerine açık tip: `{ children }: { children: ReactNode }` (`ReactNode` import'u eklendi). Kod içi yorum ile temiz-CI bağımsızlığı belgelendi. `metadata`, `lang="tr"`, font değişkenleri ve render çıktısı BİREBİR korundu |
+| `.github/workflows/ci.yml` | `actions/checkout@v4` → **@v5**, `actions/setup-node@v4` → **@v5** (Node 24 runtime uyumlu güncel ana sürümler). Girdiler, tetikleyiciler, cache, QA/probe akışı ve secret'sız model değişmedi |
+
+### Rev. 2 yerel doğrulama sonuçları
+
+| Adım | Sonuç |
+| --- | --- |
+| `npm ci` | ✅ 581 paket |
+| **Temiz-CI simülasyonu:** `.next` gizlendi → `npx tsc --noEmit` → `.next` geri yüklendi | ✅ **0 hata** (düzeltilmemiş halde bu koşul CI'daki hatayı birebir üretirdi) |
+| `npm run lint:faz3` | ✅ 0 problem |
+| `npm run test:unit` | ✅ 4 dosya / 38/38 |
+| `npx yaml-lint .github/workflows/ci.yml` | ✅ başarılı |
+
+Not: `src` ağacında `LayoutProps`/`PageProps` kullanan tek dosya layout.tsx idi (grep ile doğrulandı); başka sayfa türü bağımlılığı yoktur.
+
+### Rev. 2 git teyidi
+- Değişen dosyalar: `src/app/layout.tsx`, `.github/workflows/ci.yml`, bu rapor.
+- Migration/package.json/test/QA SQL dosyalarına ve yasaklı konumlara dokunulmadı; commit/push yapılmadı.
 
 
