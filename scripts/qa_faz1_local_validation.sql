@@ -168,23 +168,28 @@ do $blk$
 declare
   v_ok boolean;
 begin
-  -- T-01: 65 surum, repodaki dosya listesiyle birebir (050 repoda yok)
-  select (select count(*) from supabase_migrations.schema_migrations) = 65
-     and not exists (
+  -- T-01: Faz 1 gecmisi eksiksiz (001..066, 050 haric).
+  -- Not: 067+ Faz 2 surumleri eklenmis olabilir; bu test Faz 1
+  -- surumlerinin TAMAMININ uygulandigini dogrular, daha yeni
+  -- surumlerin varligini yasaklamaz (yasak, Faz 2 ile yapisal
+  -- olarak celisir; 2026-08 F-4/F-5 duzeltme dongusunde giderildi).
+  select not exists (
            select 1
-           from supabase_migrations.schema_migrations s
-           full outer join (
-             select lpad(g::text, 3, '0') as version
-             from generate_series(1, 66) g
-             where g <> 50
-           ) e on e.version = s.version
-           where s.version is null or e.version is null
+             from (
+               select lpad(g::text, 3, '0') as version
+                 from generate_series(1, 66) g
+                where g <> 50
+             ) e
+            where not exists (
+              select 1
+                from supabase_migrations.schema_migrations s
+               where s.version = e.version
+            )
          )
-     and (select max(version) from supabase_migrations.schema_migrations) = '066'
     into v_ok;
 
   insert into public._qa_faz1_results
-  select 'T-01', 'migration gecmisi tam (001..066, 050 haric, 65 surum)',
+  select 'T-01', 'migration gecmisi: Faz 1 surumleri eksiksiz (001..066, 050 haric)',
          case when v_ok then 'PASS' else 'FAIL' end, null;
 end;
 $blk$;
