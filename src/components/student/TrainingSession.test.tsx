@@ -232,6 +232,52 @@ describe("TrainingSession — cevap akışı", () => {
     expect(keys[0]).toBe(keys[1])
   })
 
+  it("beklenmeyen throw'da güvenli Türkçe hata görünür ve retry aynı client_key ile yapılır", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    let callCount = 0
+    const keys: string[] = []
+    const submitAction = createSubmitAction(async (input) => {
+      callCount += 1
+      keys.push(input.clientKey)
+      if (callCount === 1) {
+        // ActionResponse sözleşmesi dışı transport hatası simülasyonu.
+        throw new Error("fetch failed: ECONNRESET")
+      }
+      return okResult()
+    })
+
+    render(
+      <TrainingSession
+        subjectName="Matematik"
+        questions={[Q1]}
+        submitAction={submitAction}
+      />
+    )
+
+    await user.click(screen.getByLabelText(/Ankara/))
+    await user.click(screen.getByRole("button", { name: "Cevapla" }))
+
+    // Ham hata metni sızmaz; güvenli Türkçe mesaj görünür.
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Bağlantı hatası, tekrar deneyin."
+      )
+    )
+    expect(screen.getByRole("alert").textContent).not.toContain("ECONNRESET")
+
+    // finally kilidi bıraktı: buton yeniden aktif.
+    expect(screen.getByRole("button", { name: "Cevapla" })).toBeEnabled()
+
+    await user.click(screen.getByRole("button", { name: "Cevapla" }))
+    await waitFor(() => expect(callCount).toBe(2))
+    expect(keys[0]).toBe(keys[1])
+
+    await waitFor(() =>
+      expect(screen.getByText(/Oturum Özeti/)).toBeInTheDocument()
+    )
+    expect(screen.getByText("1 soru yanıtlandı.")).toBeInTheDocument()
+  })
+
   it("duplicate:true başarı sayılır ve ikinci attempt çağrısı yapılmaz", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     const submitAction = createSubmitAction(async () =>
@@ -358,6 +404,22 @@ describe("TrainingSession — pas/boş/süre davranışı", () => {
     expect(
       screen.getByRole("link", { name: /Başka ders çalış/ })
     ).toHaveAttribute("href", "/training")
+  })
+
+  it("geri dönüş bağlantıları next/link ile href ve a11y davranışını korur", () => {
+    render(
+      <TrainingSession
+        subjectName="Matematik"
+        questions={[]}
+        submitAction={createSubmitAction()}
+        backHref="/panel"
+      />
+    )
+
+    const backLink = screen.getByRole("link", { name: "Ders seçimine dön" })
+    expect(backLink).toHaveAttribute("href", "/panel")
+    // Dokunma hedefi sınıfı gerilememeli.
+    expect(backLink).toHaveClass("min-h-11")
   })
 
   it("soru listesi boşsa fail-closed bilgilendirme gösterir", () => {

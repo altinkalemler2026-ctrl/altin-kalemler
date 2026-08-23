@@ -1,8 +1,8 @@
 # Faz 3 — Training UI Dikey Dilim Doğrulama Raporu
 
-**Tarih:** 23 Ağustos 2026 (Rev. 2 — final review B1–B5 düzeltmeleri sonrası)
+**Tarih:** 23 Ağustos 2026 (Rev. 3 — güvenilirlik/navigasyon düzeltmeleri; önceki: Rev. 2 final review B1–B5)
 **Kapsam:** `/training` ders seçimi + `/training/[subjectId]` çözüm oturumu ekranları, server-only servis katmanı, test altyapısı ve tam doğrulama döngüsü.
-**Başlangıç commit'i:** `fe2d362` (Faz 3 foundation) · **Bu çalışmanın sonunda da `fe2d362`** — commit/push YAPILMADI (görev kuralı).
+**Başlangıç durumu:** Training UI `22d9a20` ile `main`'de yayında; bu revizyonun başladığı noktada HEAD `9871b06` (CI pipeline). **Rev. 3 sonunda da commit/push YAPILMADI** (görev kuralı).
 
 ---
 
@@ -10,17 +10,18 @@
 
 | Alan | Sonuç |
 | --- | --- |
-| TypeScript (`tsc --noEmit`) | ✅ 0 hata |
-| ESLint (bu görevin tüm dosyaları) | ✅ 0 hata / 0 uyarı |
-| Vitest birim + bileşen + action katmanı | ✅ 36/36 |
+| TypeScript (`tsc --noEmit`) | ✅ 0 hata (Rev. 3'te yeniden doğrulandı) |
+| ESLint (bu görevin tüm dosyaları) | ✅ 0 hata / 0 uyarı (Rev. 3'te yeniden doğrulandı) |
+| Vitest birim + bileşen + action katmanı | ✅ 38/38 (Rev. 3: +2 test) |
 | Vitest entegrasyon (gerçek RPC, gerçek auth) | ✅ 2/2 |
-| **Vitest toplam** | ✅ **38/38** |
-| SQL regresyon Faz 1 / 2 / 3 | ✅ 34/34 · 49/49 · 34/34, `kalan=0` |
+| **Vitest toplam** | ✅ **40/40** (Rev. 3) |
+| SQL regresyon Faz 1 / 2 / 3 | ✅ 34/34 · 49/49 · 34/34, `kalan=0` (şema değişmedi; Rev. 2 koşuları geçerli) |
 | Test verisi kalıntısı | ✅ 0 |
 | Gizli veri sızıntı taraması | ✅ `correct_answer`/`legacy_question_key` işaretçileri payload'da yok |
 | Final review bulguları (B1–B5) | ✅ Tamamı düzeltildi ve yeniden doğrulandı |
+| Rev. 3 güvenilirlik/navigasyon bulguları (R1–R2) | ✅ Düzeltildi, yeni testlerle pinlendi |
 
-**KARAR: ONAY — dikey dilim tanımlanan kabul kriterlerini sağlıyor; final review bulguları kapandı.**
+**KARAR: ONAY — dikey dilim tanımlanan kabul kriterlerini sağlıyor; final review bulguları kapandı; Rev. 3 güvenilirlik/navigasyon düzeltmeleri doğrulandı.**
 
 ---
 
@@ -158,3 +159,28 @@ Final read-only review (güvenlik + kod + UX) 2 düzeltme-bloklayıcı (B1, B2) 
 - Production/link/login/db push işlemi yapılmadı.
 
 **Nihai karar: ONAY — commit için hazır** (yukarıdaki §10 dahil, final review'daki kesin dosya listesiyle).
+
+---
+
+## 11. Rev. 3 — Güvenilirlik ve Navigasyon Düzeltmeleri
+
+Read-only Faz 3 release review'ının iki engelleyici-olmayan bulgusu bu revizyonda kapatıldı:
+
+| Bulgu | Dosya | Çözüm | Doğrulama |
+| --- | --- | --- | --- |
+| R1: `sendAnswer` içinde ActionResponse dışı throw yakalanmıyordu (transport hatasında UI sessiz kalıyordu) | `TrainingSession.tsx` | try/catch eklendi: güvenli Türkçe "Bağlantı hatası, tekrar deneyin." mesajı; ham hata metni (ör. ECONNRESET) sızmaz; `client_key` haritada korunduğu için tekrar gönderim idempotent retry; `finally` kilidi bırakma davranışı aynen korundu | Yeni test: throw → alert'te yalnız Türkçe mesaj (`ECONNRESET` DOM'da yok), buton yeniden aktif, ikinci çağrı AYNI client_key, akış özete ulaşır ("1 soru yanıtlandı") |
+| R2: Geri dönüş bağlantıları `<a href>` — tam sayfa yenileniyordu | `TrainingSession.tsx` | Boş-liste kartı ve özet ekranındaki iki bağlantı `next/link` `<Link>`'e çevrildi; görsel sınıflar ve `min-h-11` dokunma hedefi birebir korundu | Yeni test: boş-liste bağlantısı doğru href + `min-h-11`; mevcut özet linki testi (href=/training) aynen geçti |
+
+### Rev. 3 doğrulama koşuları
+- `npx tsc --noEmit` → 0 hata.
+- `npm run lint:faz3` → 0 problem.
+- `npx vitest run src/components/student/TrainingSession.test.tsx` → 15/15 (13→15, +2 yeni test).
+- `npm test` tam paket → **5 dosya / 40 test → 40 PASS / 0 FAIL** (integration gerçek RPC akışı + kalıntı sıfır dahil).
+- SQL QA yeniden koşulmadı — şema/migration değişikliği yoktur (yalnızca istemci bileşeni + test).
+
+### Rev. 3 git / teslim teyidi
+- Değişen dosyalar: `src/components/student/TrainingSession.tsx`, `src/components/student/TrainingSession.test.tsx`, bu rapor.
+- Migration/CI/package.json/QA SQL dosyalarına dokunulmadı; `.env*`, secret'lar, `.opencode/`, `opencode.json`, `supabase/snippets/`, `scripts/import-legacy-excel.ts` değişmedi.
+- **Git commit/push/reset/checkout YAPILMADI** — değişiklikler çalışma ağacında bekliyor.
+
+**Rev. 3 kararı: ONAY.**

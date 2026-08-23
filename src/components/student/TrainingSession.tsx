@@ -7,12 +7,14 @@
  *   bileşene hiç ulaşmaz; ayrıca render/log edilmemesi testle denetlenir).
  * - Her soru için bir kez üretilen client_key ile gönderim yapar;
  *   ağ hatasında AYNI key ile yeniden dener, duplicate:true cevabı
- *   başarı sayılır ve ikinci attempt oluşturmaz.
+ *   başarı sayılır ve ikinci attempt oluşturmaz. ActionResponse
+ *   sözleşmesi dışı throw'lar da güvenli Türkçe mesaja düşer.
  * - Erişilebilirlik: yerel radio-group semantiği, klavye ile seçim,
  *   görünür focus, ≥44px dokunma hedefleri, aria-live geri bildirim.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import Link from "next/link"
 
 import {
   CHOICE_LETTERS,
@@ -206,6 +208,13 @@ export default function TrainingSession({
           } — sonraki soruya geçiliyor.`
         )
         advance()
+      } catch {
+        // ActionResponse sözleşmesi dışı throw / transport hatası:
+        // güvenli Türkçe mesaj; client_key haritada korunduğu için
+        // tekrar gönderim idempotent retry olarak çalışır.
+        const message = "Bağlantı hatası, tekrar deneyin."
+        setError(message)
+        setFeedback(message)
       } finally {
         submittingRef.current = false
         setSubmitting(false)
@@ -241,9 +250,12 @@ export default function TrainingSession({
           <p className="mt-2 text-gray-600">
             Bu ders için şu anda çözülebilir soru bulunamadı.
           </p>
-          <a href={backHref} className="mt-4 inline-flex min-h-11 items-center font-medium text-gray-900 underline-offset-4 hover:underline">
+          <Link
+            href={backHref}
+            className="mt-4 inline-flex min-h-11 items-center font-medium text-gray-900 underline-offset-4 hover:underline"
+          >
             Ders seçimine dön
-          </a>
+          </Link>
         </div>
       </main>
     )
@@ -284,12 +296,12 @@ export default function TrainingSession({
             Oturum tamamlandı. Tüm cevapların sunucu tarafında değerlendirildi.
           </p>
 
-          <a
+          <Link
             href={backHref}
             className="mt-5 inline-flex min-h-11 items-center rounded-xl bg-gray-900 px-6 py-3 font-semibold text-white transition hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900"
           >
             Başka ders çalış
-          </a>
+          </Link>
         </section>
       </main>
     )
