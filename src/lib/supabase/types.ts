@@ -10921,6 +10921,40 @@ export type Database = {
           schedule_profile_id: string
         }[]
       }
+      academic_calendar_delete_week: {
+        Args: { p_week: number; p_year: string }
+        Returns: undefined
+      }
+      academic_calendar_has_permission: {
+        Args: { p_permission_code: string }
+        Returns: boolean
+      }
+      academic_calendar_list_weeks: {
+        Args: { p_year: string }
+        Returns: {
+          academic_year: string
+          ends_at: string
+          is_started: boolean
+          starts_at: string
+          week: number
+        }[]
+      }
+      academic_calendar_list_years: {
+        Args: never
+        Returns: {
+          academic_year: string
+          week_count: number
+        }[]
+      }
+      academic_calendar_upsert_week: {
+        Args: {
+          p_ends_at: string
+          p_starts_at: string
+          p_week: number
+          p_year: string
+        }
+        Returns: undefined
+      }
       activate_question_for_students: {
         Args: { p_question_id: string; p_reason?: string }
         Returns: Json

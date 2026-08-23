@@ -103,33 +103,50 @@ jobs:
           echo "===== db container logs (son 100) ====="
           docker logs "$CONTAINER" --tail 100 2>&1 || true
 
-      - name: Reset database (temiz migration zinciri 001-072)
+      - name: Reset database (temiz migration zinciri, dinamik)
         run: supabase db reset
 
       - name: Assert migration chain and subjects grant
         run: |
           set -euo pipefail
+          # Dinamik sayim: beklenen migrasyon sayisi ve son surum
+          # dosya listesinden turetilir; sabit sayiya dayanilmaz.
+          expected_count=$(ls supabase/migrations/*.sql | wc -l | tr -d ' ')
+          latest_version=$(ls supabase/migrations/*.sql | xargs -n1 basename | cut -d_ -f1 | sort | tail -n 1)
+          echo "Beklenen migrasyon: $expected_count, son surum: $latest_version"
           docker exec -i "$CONTAINER" psql -U postgres -d postgres \
-            -v ON_ERROR_STOP=1 -At <<'SQL'
+            -v ON_ERROR_STOP=1 -At \
+            -v expected_count="$expected_count" \
+            -v latest_version="$latest_version" \
+            <<'SQL'
+          select set_config('qa.expected_count', :'expected_count', false),
+                 set_config('qa.latest_version', :'latest_version', false);
           do $$
           declare
-            v_mig int;
-            v_final boolean;
+            v_mig     int;
+            v_final   boolean;
+            v_expected int;
+            v_latest  text;
           begin
-            -- 001..072 arasinda 050 numarali dosya repoda yoktur -> 71.
+            v_expected := current_setting('qa.expected_count')::int;
+            v_latest   := current_setting('qa.latest_version');
+
             select count(*) into v_mig from supabase_migrations.schema_migrations;
-            if v_mig <> 71 then
-              raise exception 'MIGRATION_CHAIN_FAIL: beklenen 71 migrasyon, bulunan %', v_mig
+            if v_mig <> v_expected then
+              raise exception 'MIGRATION_CHAIN_FAIL: repoda % migrasyon, DB''de % uygulandi',
+                v_expected, v_mig
                 using errcode = 'P0001';
             end if;
+
             select exists (
               select 1 from supabase_migrations.schema_migrations
-               where version = '072' and name = 'subjects_read_grant'
+               where version = v_latest
             ) into v_final;
             if not v_final then
-              raise exception 'MIGRATION_CHAIN_FAIL: son migrasyon (072 subjects_read_grant) uygulanmamis'
+              raise exception 'MIGRATION_CHAIN_FAIL: son migrasyon (%) uygulanmamis', v_latest
                 using errcode = 'P0001';
             end if;
+
             if not has_table_privilege('authenticated', 'public.subjects', 'SELECT') then
               raise exception 'GRANT_FAIL: authenticated -> public.subjects SELECT izni yok (072)'
                 using errcode = 'P0001';
@@ -143,16 +160,16 @@ jobs:
           SQL
 
       # ----------------------------------------------------------
-      # SQL QA suretleri: Faz 1 / Faz 2 / Faz 3.
+      # SQL QA suretleri: Faz 1 / Faz 2 / Faz 3 / Faz 3.5.
       # - Faz 3 kendi icinde FAIL durumunda exception firlatir
       #   (psql ON_ERROR_STOP ile exit != 0) ve "TAMAM: kalan=0"
       #   satiri basar.
-      # - Faz 1/2 exception firlatmadigi icin cikti ayristirilir:
+      # - Faz 1/2/3.5 exception firlatmadigi icin cikti ayristirilir:
       #   son satir "toplam|gecen|kalan" ozeti olmali, kalan=0 ve
       #   hicbir "|FAIL|" satiri bulunmamali.
       # ----------------------------------------------------------
 
-      - name: Run SQL QA suites (Faz 1, 2, 3)
+      - name: Run SQL QA suites (Faz 1, 2, 3, 3.5)
         run: |
           set -euo pipefail
           run_suite () {
@@ -199,6 +216,7 @@ jobs:
           run_suite faz1 scripts/qa_faz1_local_validation.sql parsed
           run_suite faz2 scripts/qa_faz2_local_validation.sql parsed
           run_suite faz3 scripts/qa_faz3_local_validation.sql self-raising
+          run_suite faz35 scripts/qa_faz35_local_validation.sql parsed
 
       # ----------------------------------------------------------
       # Faz 2 paralel sayaç probe'u: iki AYRI docker exec sureci ile
@@ -281,4 +299,4 @@ jobs:
       - name: Summary
         if: always()
         run: |
-          echo "CI adimlari tamamlandi: tsc, eslint(scope), vitest(unit), supabase start+health, db reset(001-072), QA f1/f2/f3, parallel probe(work+same), vitest(full)."
+          echo "CI adimlari tamamlandi: tsc, eslint(scope), vitest(unit), supabase start+health, db reset(dinamik zincir), QA f1/f2/f3/f3.5, parallel probe(work+same), vitest(full)."
