@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "lint:faz3": "eslint src/components/student src/lib/training \"src/app/(student)/training\" src/app/layout.tsx \"src/app/(student)/layout.tsx\" \"src/app/(student)/dashboard/page.tsx\" vitest.config.ts src/test",
+    "test": "vitest run",
+    "test:unit": "vitest run --exclude \"**/*.local.test.ts\""
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
