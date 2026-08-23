@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 
@@ -45,12 +46,19 @@ export default async function DashboardPage() {
         </p>
 
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded-2xl border border-gray-200 p-5">
+          <Link
+            href="/training"
+            className="flex min-h-11 flex-col rounded-2xl border border-gray-200 p-5 transition hover:border-gray-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900"
+          >
             <h2 className="font-semibold text-gray-900">Konu Çalış</h2>
             <p className="mt-2 text-sm text-gray-600">
               Ders ve konu seçerek soru çöz.
             </p>
-          </div>
+            <span className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-gray-900">
+              Çalışmaya başla
+              <span aria-hidden="true">→</span>
+            </span>
+          </Link>
 
           <div className="rounded-2xl border border-gray-200 p-5">
             <h2 className="font-semibold text-gray-900">Yarışmalar</h2>
