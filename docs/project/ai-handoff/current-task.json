@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "revision": 2,
+  "project": "altin-kalemler",
+  "task_id": "safe-code-failover-bootstrap",
+  "task_mode": "write",
+  "status": "awaiting_human_task",
+  "canonical_report": "docs/reports/latest-faz5-security-validation.md",
+  "models": {
+    "primary": "opencode/big-pickle",
+    "fallbacks": [
+      "opencode/x-preview-f-free",
+      "opencode/mimo-v2.5-free"
+    ]
+  },
+  "execution_policy": {
+    "automatic_readonly_failover": true,
+    "automatic_write_failover": false,
+    "max_attempts_per_model": 1,
+    "resume_from_checkpoint_only": true,
+    "require_acceptance_before_complete": true
+  },
+  "scope": {
+    "allowed_paths": [],
+    "denied_paths": [
+      ".env",
+      ".env.*",
+      "**/*.pem",
+      "**/*.key",
+      "**/secrets/**"
+    ]
+  },
+  "task": {
+    "objective": "Açıkça kapsamlandırılmış ve insan tarafından onaylanmış bir sonraki kod görevini bekle.",
+    "acceptance_criteria": []
+  },
+  "checkpoint": {
+    "last_completed_step": "SANDBOX_WRITE_FAILOVER_VALIDATED",
+    "next_action": "AWAIT_HUMAN_TASK",
+    "files_changed": [],
+    "verification_evidence": [
+      "PRIMARY_PASS",
+      "FAILOVER_PASS",
+      "FAZ5_QA_15_PASS_0_FAIL",
+      "SANDBOX_WRITE_FAILOVER_SYNTAX_PASS",
+      "SANDBOX_PRIMARY_PROVIDER_FAILURE_DETECTED",
+      "SANDBOX_FALLBACK_PASS",
+      "SANDBOX_PRIMARY_AND_FALLBACK_SAFE_TRUE",
+      "AUTOMATIC_WRITE_FAILOVER_FALSE"
+    ]
+  },
+  "safety": {
+    "forbidden_actions": [
+      "production access",
+      "supabase link/login/db push",
+      "git commit/push/reset/checkout/clean",
+      "secret or .env access",
+      "unscoped file writes"
+    ],
+    "human_approval_required_for": [
+      "activating automatic_write_failover",
+      "changing allowed_paths",
+      "database reset or migration execution",
+      "git write operations",
+      "production operations"
+    ]
+  }
+}

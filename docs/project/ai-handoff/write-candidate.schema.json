@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "altin-kalemler/ai-handoff/write-candidate.schema.json",
+  "title": "AI Write Candidate Package",
+  "description": "Yalnizca staging verisi: gercek proje dosyalarina hicbir zaman otomatik uygulanmayan aday degisiklik paketi. Ilk surumde delete, rename, move, chmod, binary patch veya keyfi komut destegi YOKTUR; yalnizca create ve replace vardir. Uygulama/promotion kapisi ayri insan onayli bir asamada tanimlanacaktir.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "task_revision",
+    "canonical_report",
+    "producer",
+    "status",
+    "changes",
+    "acceptance_criteria",
+    "safety"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "task_revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "canonical_report": {
+      "const": "docs/reports/latest-faz5-security-validation.md"
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "model"
+      ],
+      "properties": {
+        "role": {
+          "enum": [
+            "primary",
+            "fallback"
+          ]
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "status": {
+      "const": "READY_FOR_VALIDATION"
+    },
+    "changes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "description": "items.path degerleri benzersiz olmalidir; JSON Schema anahtar-benzerligini ifade edemedigi icin bu kurali scripts/validate_ai_write_candidate.ps1 uygular.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "operation",
+          "expected_sha256",
+          "content_base64",
+          "content_sha256"
+        ],
+        "if": {
+          "properties": {
+            "operation": {
+              "const": "create"
+            }
+          },
+          "required": [
+            "operation"
+          ]
+        },
+        "then": {
+          "properties": {
+            "expected_sha256": {
+              "const": null
+            }
+          }
+        },
+        "else": {
+          "properties": {
+            "expected_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "operation": {
+            "enum": [
+              "create",
+              "replace"
+            ]
+          },
+          "expected_sha256": {
+            "description": "create icin null; replace icin mevcut dosyanin 64 karakter lowercase hex SHA-256 degeri."
+          },
+          "content_base64": {
+            "type": "string",
+            "minLength": 1
+          },
+          "content_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      }
+    },
+    "acceptance_criteria": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "production_accessed",
+        "db_command_ran",
+        "git_write_ran",
+        "secret_accessed",
+        "delete_requested",
+        "real_project_files_changed"
+      ],
+      "properties": {
+        "production_accessed": {
+          "const": false
+        },
+        "db_command_ran": {
+          "const": false
+        },
+        "git_write_ran": {
+          "const": false
+        },
+        "secret_accessed": {
+          "const": false
+        },
+        "delete_requested": {
+          "const": false
+        },
+        "real_project_files_changed": {
+          "const": false
+        }
+      }
+    }
+  }
+}

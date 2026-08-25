@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "altin-kalemler/ai-handoff/task-state.schema.json",
+  "title": "AI Handoff Task State",
+  "description": "Big Pickle / Ox Alpha / MiMo modelleri arasinda ortak, dogrulanmis gorev ve checkpoint durumu.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "revision",
+    "project",
+    "task_id",
+    "task_mode",
+    "status",
+    "canonical_report",
+    "models",
+    "execution_policy",
+    "scope",
+    "task",
+    "checkpoint",
+    "safety"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "project": {
+      "type": "string"
+    },
+    "task_id": {
+      "type": "string"
+    },
+    "task_mode": {
+      "type": "string",
+      "enum": [
+        "readonly",
+        "write"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "awaiting_human_task",
+        "ready",
+        "in_progress",
+        "blocked",
+        "review_required",
+        "completed"
+      ]
+    },
+    "canonical_report": {
+      "type": "string"
+    },
+    "models": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "primary",
+        "fallbacks"
+      ],
+      "properties": {
+        "primary": {
+          "type": "string"
+        },
+        "fallbacks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "execution_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "automatic_readonly_failover",
+        "automatic_write_failover",
+        "max_attempts_per_model",
+        "resume_from_checkpoint_only",
+        "require_acceptance_before_complete"
+      ],
+      "properties": {
+        "automatic_readonly_failover": {
+          "type": "boolean"
+        },
+        "automatic_write_failover": {
+          "type": "boolean"
+        },
+        "max_attempts_per_model": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "resume_from_checkpoint_only": {
+          "type": "boolean"
+        },
+        "require_acceptance_before_complete": {
+          "type": "boolean"
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_paths",
+        "denied_paths"
+      ],
+      "properties": {
+        "allowed_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "denied_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "objective",
+        "acceptance_criteria"
+      ],
+      "properties": {
+        "objective": {
+          "type": "string"
+        },
+        "acceptance_criteria": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "last_completed_step",
+        "next_action",
+        "files_changed",
+        "verification_evidence"
+      ],
+      "properties": {
+        "last_completed_step": {
+          "type": "string"
+        },
+        "next_action": {
+          "type": "string"
+        },
+        "files_changed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "verification_evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "forbidden_actions",
+        "human_approval_required_for"
+      ],
+      "properties": {
+        "forbidden_actions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "human_approval_required_for": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      }
+    }
+  }
+}
