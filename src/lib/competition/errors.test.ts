@@ -65,4 +65,30 @@ describe("mapCompetitionError — Turkce mesajlar", () => {
   it("SESSION_EXPIRED_MESSAGE kullaniciya uygun", () => {
     expect(SESSION_EXPIRED_MESSAGE).toContain("Oturumunuz sona erdi")
   })
+
+  it("cevap zaten gonderildi hatasi Turkce mesaja cevrilir", () => {
+    expect(
+      mapCompetitionError(new Error("Answer already submitted for this question."))
+    ).toBe(COMPETITION_ERROR_MESSAGES.answerAlreadySubmitted)
+  })
+
+  it("soru henuz baslamadi hatasi Turkce mesaja cevrilir", () => {
+    expect(
+      mapCompetitionError(new Error("Soru henuz baslamadi."))
+    ).toBe(COMPETITION_ERROR_MESSAGES.questionNotStarted)
+  })
+
+  it("yarisma sona erdi hatasi Turkce mesaja cevrilir", () => {
+    expect(
+      mapCompetitionError(new Error("Yarisma sona erdi."))
+    ).toBe(COMPETITION_ERROR_MESSAGES.competitionCompleted)
+  })
+
+  it("skor tablosu mevcut degil hatasi Turkce mesaja cevrilir", () => {
+    expect(
+      mapCompetitionError(
+        new Error("Detailed scoreboard is available after the competition ends.")
+      )
+    ).toBe(COMPETITION_ERROR_MESSAGES.scoreboardNotAvailable)
+  })
 })

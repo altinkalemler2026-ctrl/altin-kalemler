@@ -29,6 +29,18 @@ export const COMPETITION_ERROR_MESSAGES = {
   /** Katilimci degil. */
   notParticipant:
     "Bu yarismaya katilimci degilsiniz.",
+  /** Cevap zaten gonderilmis (duplicate). */
+  answerAlreadySubmitted:
+    "Bu soruya cevabiniz zaten gonderildi.",
+  /** Soru henuz baslamadi. */
+  questionNotStarted:
+    "Soru henuz baslamadi; lutfen bekleyin.",
+  /** Yarisma sona erdi. */
+  competitionCompleted:
+    "Yarisma sona erdi.",
+  /** Skor tablosu henuz mevcut degil. */
+  scoreboardNotAvailable:
+    "Skor tablosu yarisma sona erdikten sonra goruntulenebilir.",
   /** Genel bilinmeyen hata. */
   generic:
     "Beklenmeyen bir hata olustu. Lutfen tekrar deneyin; sorun surerse destek ekibine bildirin.",
@@ -45,6 +57,10 @@ const PROFILE_PATTERN = /profil bulunamadi|ogrenci profili/i
 const COMPETITION_NOT_FOUND_PATTERN = /yarisma bulunamadi/i
 const COMPETITION_STATUS_PATTERN = /durumu paket|izin vermiyor/i
 const NOT_PARTICIPANT_PATTERN = /katilimci degilsiniz/i
+const ANSWER_ALREADY_SUBMITTED_PATTERN = /cevap zaten gonderildi|already submitted/i
+const QUESTION_NOT_STARTED_PATTERN = /soru henuz baslamadi/i
+const COMPETITION_COMPLETED_PATTERN = /yarisma sona erdi/i
+const SCOREBOARD_NOT_AVAILABLE_PATTERN = /skor tablosu.*mevcut degil|after the competition ends/i
 
 function errorText(error: unknown): string {
   if (error instanceof Error) return `${error.message}`
@@ -75,6 +91,18 @@ export function mapCompetitionError(error: unknown): string {
   }
   if (NOT_PARTICIPANT_PATTERN.test(text)) {
     return COMPETITION_ERROR_MESSAGES.notParticipant
+  }
+  if (ANSWER_ALREADY_SUBMITTED_PATTERN.test(text)) {
+    return COMPETITION_ERROR_MESSAGES.answerAlreadySubmitted
+  }
+  if (QUESTION_NOT_STARTED_PATTERN.test(text)) {
+    return COMPETITION_ERROR_MESSAGES.questionNotStarted
+  }
+  if (COMPETITION_COMPLETED_PATTERN.test(text)) {
+    return COMPETITION_ERROR_MESSAGES.competitionCompleted
+  }
+  if (SCOREBOARD_NOT_AVAILABLE_PATTERN.test(text)) {
+    return COMPETITION_ERROR_MESSAGES.scoreboardNotAvailable
   }
   // PostgREST yetki hatalari da oturum mesajina dusur (42501 vb.).
   if (/permission denied|row-level security/i.test(text)) {
