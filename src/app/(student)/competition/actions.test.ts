@@ -495,31 +495,15 @@ describe("getOwnCompetitionResultAction", () => {
         grade_level: 10,
         subject_id: "22222222-2222-2222-2222-222222222222",
         question_count: 5,
-        winner_user_id: "99999999-8888-4000-8000-000000000901",
         result_type: "win_loss",
-        players: [
-          {
-            user_id: "99999999-8888-4000-8000-000000000901",
-            player_slot: 1,
-            total_points: 300,
-            correct_count: 3,
-            wrong_count: 1,
-            pass_count: 0,
-            timeout_count: 1,
-            finished_at: "2025-01-01T00:05:00Z",
-          },
-          {
-            user_id: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE",
-            player_slot: 2,
-            total_points: 200,
-            correct_count: 2,
-            wrong_count: 2,
-            pass_count: 0,
-            timeout_count: 1,
-            finished_at: "2025-01-01T00:05:00Z",
-          },
-        ],
-        questions: [
+        my_player_slot: 1,
+        my_total_points: 300,
+        my_correct_count: 3,
+        my_wrong_count: 1,
+        my_pass_count: 0,
+        my_timeout_count: 1,
+        my_finished_at: "2025-01-01T00:05:00Z",
+        question_results: [
           { question_order: 1, difficulty: "easy", points_awarded: 100, time_ms: 5000 },
           { question_order: 2, difficulty: "medium", points_awarded: 0, time_ms: 15000 },
         ],
@@ -539,7 +523,6 @@ describe("getOwnCompetitionResultAction", () => {
       expect(result.data.myCorrectCount).toBe(3)
 
       const json = JSON.stringify(result.data)
-      expect(json).not.toContain("AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")
       expect(json).not.toContain("winner_user_id")
       expect(json).not.toContain("winnerUserId")
       expect(json).not.toContain('"players"')

@@ -48,11 +48,15 @@ function assertUuid(value: string, label: string): string {
 // calistirilmadigindan Database tipinde tanimli degildir.
 // Tipler 079 migration sozlesmesinden turetilmistir.
 
-type MissingRpcName = "join_matchmaking_queue" | "leave_matchmaking_queue"
+type MissingRpcName =
+  | "join_matchmaking_queue"
+  | "leave_matchmaking_queue"
+  | "get_own_competition_result"
 
 type MissingRpcArgsMap = {
   join_matchmaking_queue: { p_subject_id: string }
   leave_matchmaking_queue: Record<string, never>
+  get_own_competition_result: { p_competition_id: string }
 }
 
 /**
@@ -428,163 +432,100 @@ export async function setPlayerReady(
 }
 
 // ------------------------------------------------------------
-// PRIVATE: Raw scoreboard — hicbir export ile istemciye gecmez
+// 081: Own result — get_own_competition_result RPC
 // ------------------------------------------------------------
 
 /**
- * INTERNAL: Ham skor tablosu verisi.
- * Bu tip service.ts disinda export edilmez;
- * client component veya action response uzerinden erisebilir degildir.
+ * mapOwnCompetitionResult — get_own_competition_result RPC cevabini
+ * OwnCompetitionResult DTO'ya cevirir. Rakip verisi zaten RPC tarafinda
+ * filtrelenmistir; bu mapper yalnizca tip donusumu yapar.
  */
-interface RawScoreboardPlayer {
-  user_id: string
-  player_slot: number
-  total_points: number
-  correct_count: number
-  wrong_count: number
-  pass_count: number
-  timeout_count: number
-  finished_at: string | null
-}
-
-interface RawScoreboardQuestion {
-  question_order: number
-  question_id: string
-  difficulty: string
-  question_result: string | null
-  points_awarded: number
-  time_ms: number
-}
-
-interface RawScoreboard {
-  competition_id: string
-  competition_code: string
-  competition_type: string
-  grade_level: number
-  subject_id: string
-  question_count: number
-  winner_user_id: string | null
-  result_type: string
-  players: RawScoreboardPlayer[]
-  questions: RawScoreboardQuestion[]
-  started_at: string | null
-  completed_at: string | null
-}
-
-/**
- * INTERNAL: Ham skor tablosu RPC'si.
- * Export edilmez; yalnizca getOwnResult icinde kullanilir.
- */
-async function getRawScoreboard(
-  client: CompetitionClient,
-  competitionId: string
-): Promise<RawScoreboard> {
-  assertUuid(competitionId, "competitionId")
-  const { data, error } = await client.rpc("get_competition_scoreboard", {
-    p_competition_id: competitionId,
-  })
-  if (error) throw error
+export function mapOwnCompetitionResult(raw: unknown): OwnCompetitionResult {
   const record =
-    typeof data === "object" && data !== null
-      ? (data as Record<string, unknown>)
+    typeof raw === "object" && raw !== null
+      ? (raw as Record<string, unknown>)
       : {}
 
-  const players = Array.isArray(record.players)
-    ? (record.players as RawScoreboardPlayer[])
-    : []
-  const questions = Array.isArray(record.questions)
-    ? (record.questions as RawScoreboardQuestion[])
-    : []
-
   return {
-    competition_id:
+    competitionId:
       typeof record.competition_id === "string" ? record.competition_id : "",
-    competition_code:
+    competitionCode:
       typeof record.competition_code === "string"
         ? record.competition_code
         : "",
-    competition_type:
+    competitionType:
       typeof record.competition_type === "string"
         ? record.competition_type
         : "",
-    grade_level:
+    gradeLevel:
       typeof record.grade_level === "number" ? record.grade_level : 0,
-    subject_id:
+    subjectId:
       typeof record.subject_id === "string" ? record.subject_id : "",
-    question_count:
+    questionCount:
       typeof record.question_count === "number" ? record.question_count : 0,
-    winner_user_id:
-      typeof record.winner_user_id === "string"
-        ? record.winner_user_id
-        : null,
-    result_type:
+    resultType:
       typeof record.result_type === "string" ? record.result_type : "",
-    players,
-    questions,
-    started_at:
+    myPlayerSlot:
+      typeof record.my_player_slot === "number" ? record.my_player_slot : 0,
+    myTotalPoints:
+      typeof record.my_total_points === "number" ? record.my_total_points : 0,
+    myCorrectCount:
+      typeof record.my_correct_count === "number"
+        ? record.my_correct_count
+        : 0,
+    myWrongCount:
+      typeof record.my_wrong_count === "number" ? record.my_wrong_count : 0,
+    myPassCount:
+      typeof record.my_pass_count === "number" ? record.my_pass_count : 0,
+    myTimeoutCount:
+      typeof record.my_timeout_count === "number"
+        ? record.my_timeout_count
+        : 0,
+    myFinishedAt:
+      typeof record.my_finished_at === "string" ? record.my_finished_at : null,
+    questionResults: Array.isArray(record.question_results)
+      ? (record.question_results as Array<Record<string, unknown>>)
+          .map((q) => ({
+            questionOrder:
+              typeof q.question_order === "number" ? q.question_order : 0,
+            difficulty:
+              typeof q.difficulty === "string" ? q.difficulty : "",
+            pointsAwarded:
+              typeof q.points_awarded === "number" ? q.points_awarded : 0,
+            timeMs: typeof q.time_ms === "number" ? q.time_ms : 0,
+          }))
+          .sort((a, b) => a.questionOrder - b.questionOrder)
+      : [],
+    startedAt:
       typeof record.started_at === "string" ? record.started_at : null,
-    completed_at:
+    completedAt:
       typeof record.completed_at === "string" ? record.completed_at : null,
   }
 }
 
-// ------------------------------------------------------------
-// Faz 5b: Own result export
-// ------------------------------------------------------------
-
 /**
- * Kullanicinin kendi yarisma sonucunu dondurur.
+ * Kullanicinin kendi yarisma sonucunu getir.
  *
- * GUVENLIK:
- *  - Rakip satirlari mapper'da atilir.
- *  - winnerUserId DTO'ya girmez.
- *  - Full scoreboard hicbir sekilde client'a gecmez.
- *  - authenticatedUserId parametresi sunucu auth.getUser()'dan gelir;
- *    JS tarafinda auth.uid() kullanilmaz (PostgreSQL fonksiyonudur).
+ * 081 SONRASI: get_competition_scoreboard yerine
+ * get_own_competition_result kullanilir. RPC zaten yalnizca
+ * kendi verisini dondurur; rakip verisi fonksiyon icerisinde
+ * filtrelenmistir.
+ *
+ * authenticatedUserId parametresi suan artik kullanilmiyor
+ * (RPC auth.uid() ile kendi kullanici bulur) ancak geriye donuk
+ * uyumluluk icin korunmustur.
  */
 export async function getOwnResult(
   client: CompetitionClient,
   competitionId: string,
-  authenticatedUserId: string
+  _authenticatedUserId?: string
 ): Promise<OwnCompetitionResult> {
-  const raw = await getRawScoreboard(client, competitionId)
-
-  const ownPlayer = raw.players.find(
-    (p) => p.user_id === authenticatedUserId
+  assertUuid(competitionId, "competitionId")
+  const { data, error } = await callMissingGeneratedRpc(
+    toNarrowClient(client),
+    "get_own_competition_result",
+    { p_competition_id: competitionId }
   )
-
-  const ownQuestions = raw.questions
-    .filter((q) => {
-      if (!ownPlayer) return false
-      const ownAnswerForQuestion = raw.questions.find(
-        (oq) => oq.question_order === q.question_order
-      )
-      return ownAnswerForQuestion !== undefined
-    })
-    .sort((a, b) => a.question_order - b.question_order)
-
-  return {
-    competitionId: raw.competition_id,
-    competitionCode: raw.competition_code,
-    competitionType: raw.competition_type,
-    gradeLevel: raw.grade_level,
-    subjectId: raw.subject_id,
-    questionCount: raw.question_count,
-    resultType: raw.result_type,
-    myPlayerSlot: ownPlayer?.player_slot ?? 0,
-    myTotalPoints: ownPlayer?.total_points ?? 0,
-    myCorrectCount: ownPlayer?.correct_count ?? 0,
-    myWrongCount: ownPlayer?.wrong_count ?? 0,
-    myPassCount: ownPlayer?.pass_count ?? 0,
-    myTimeoutCount: ownPlayer?.timeout_count ?? 0,
-    myFinishedAt: ownPlayer?.finished_at ?? null,
-    questionResults: ownQuestions.map((q) => ({
-      questionOrder: q.question_order,
-      difficulty: q.difficulty,
-      pointsAwarded: q.points_awarded,
-      timeMs: q.time_ms,
-    })),
-    startedAt: raw.started_at,
-    completedAt: raw.completed_at,
-  }
+  if (error) throw error
+  return mapOwnCompetitionResult(data)
 }

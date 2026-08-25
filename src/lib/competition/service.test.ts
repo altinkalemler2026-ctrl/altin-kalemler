@@ -19,6 +19,7 @@ import {
   mapQuestionResult,
   mapSessionState,
   mapAnswerSubmitResult,
+  mapOwnCompetitionResult,
   CompetitionValidationError,
 } from "./service"
 
@@ -418,5 +419,115 @@ describe("RPC adapter & type safety", () => {
     expect(json).not.toContain("opponent")
     expect(json).not.toContain("leaked")
     expect(json).not.toContain("999")
+  })
+})
+
+// ------------------------------------------------------------
+// 081: mapOwnCompetitionResult tests
+// ------------------------------------------------------------
+
+describe("mapOwnCompetitionResult", () => {
+  it("gecerli own result dondurur", () => {
+    const result = mapOwnCompetitionResult({
+      competition_id: "11111111-1111-1111-1111-111111111111",
+      competition_code: "F5-PRIVACY81",
+      competition_type: "one_vs_one",
+      grade_level: 5,
+      subject_id: "22222222-2222-2222-2222-222222222222",
+      question_count: 2,
+      result_type: "win_loss",
+      my_player_slot: 1,
+      my_total_points: 300,
+      my_correct_count: 3,
+      my_wrong_count: 1,
+      my_pass_count: 0,
+      my_timeout_count: 1,
+      my_finished_at: "2025-01-01T00:05:00Z",
+      question_results: [
+        { question_order: 1, difficulty: "easy", points_awarded: 100, time_ms: 5000 },
+        { question_order: 2, difficulty: "hard", points_awarded: 200, time_ms: 8000 },
+      ],
+      started_at: "2025-01-01T00:00:00Z",
+      completed_at: "2025-01-01T00:05:00Z",
+    })
+
+    expect(result.competitionId).toBe("11111111-1111-1111-1111-111111111111")
+    expect(result.competitionCode).toBe("F5-PRIVACY81")
+    expect(result.myPlayerSlot).toBe(1)
+    expect(result.myTotalPoints).toBe(300)
+    expect(result.myCorrectCount).toBe(3)
+    expect(result.questionResults).toHaveLength(2)
+    expect(result.questionResults[0].questionOrder).toBe(1)
+    expect(result.questionResults[1].questionOrder).toBe(2)
+  })
+
+  it("rakip verisi DTO'da bulunmaz", () => {
+    const result = mapOwnCompetitionResult({
+      competition_id: "11111111-1111-1111-1111-111111111111",
+      competition_code: "F5-TEST",
+      competition_type: "one_vs_one",
+      grade_level: 5,
+      subject_id: "22222222-2222-2222-2222-222222222222",
+      question_count: 5,
+      result_type: "win_loss",
+      my_player_slot: 1,
+      my_total_points: 100,
+      my_correct_count: 1,
+      my_wrong_count: 0,
+      my_pass_count: 0,
+      my_timeout_count: 0,
+      my_finished_at: "2025-01-01T00:05:00Z",
+      question_results: [],
+      started_at: "2025-01-01T00:00:00Z",
+      completed_at: "2025-01-01T00:05:00Z",
+      // RPC'den gelmamasi gereken rakip alanlari
+      winner_user_id: "SECRET_USER_ID",
+      players: [{ user_id: "SECRET" }],
+      point_changes: [{ user_id: "SECRET" }],
+    } as Record<string, unknown>)
+
+    const json = JSON.stringify(result)
+    expect(json).not.toContain("SECRET_USER_ID")
+    expect(json).not.toContain("SECRET")
+    expect(json).not.toContain("winner_user_id")
+    expect(json).not.toContain("winnerUserId")
+    expect(json).not.toContain('"players"')
+    expect(json).not.toContain("point_changes")
+  })
+
+  it("null/bozuk response guvenli default'a duser", () => {
+    const result = mapOwnCompetitionResult(null)
+    expect(result.competitionId).toBe("")
+    expect(result.competitionCode).toBe("")
+    expect(result.myTotalPoints).toBe(0)
+    expect(result.questionResults).toEqual([])
+  })
+
+  it("question_results sirali doner", () => {
+    const result = mapOwnCompetitionResult({
+      competition_id: "11111111-1111-1111-1111-111111111111",
+      competition_code: "F5-TEST",
+      competition_type: "one_vs_one",
+      grade_level: 5,
+      subject_id: "22222222-2222-2222-2222-222222222222",
+      question_count: 3,
+      result_type: "win_loss",
+      my_player_slot: 2,
+      my_total_points: 250,
+      my_correct_count: 2,
+      my_wrong_count: 1,
+      my_pass_count: 0,
+      my_timeout_count: 0,
+      my_finished_at: null,
+      question_results: [
+        { question_order: 3, difficulty: "hard", points_awarded: 150, time_ms: 12000 },
+        { question_order: 1, difficulty: "easy", points_awarded: 100, time_ms: 3000 },
+      ],
+      started_at: null,
+      completed_at: null,
+    })
+
+    expect(result.questionResults[0].questionOrder).toBe(1)
+    expect(result.questionResults[1].questionOrder).toBe(3)
   })
 })
