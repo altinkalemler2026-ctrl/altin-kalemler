@@ -387,8 +387,10 @@ $blk$;
 
 
 -- ============================================================
--- T-05..08: PACK HAZIRLAMA + MATERIALIZASYON + EXPOSURE
+-- T-05..08: PACK AUTO-PREPARE (082) + MATERIALIZASYON + EXPOSURE
 -- (A kimliğiyle devam; qa5.comp_id oturum değişkeninden okunur)
+-- 082: pack join_matchmaking_queue icinde otomatik hazirlanir;
+--      manuel prepare_competition_pack cagrisi kaldirildi.
 -- ============================================================
 
 select set_config('request.jwt.claims',
@@ -396,26 +398,41 @@ select set_config('request.jwt.claims',
 
 do $blk$
 declare
-  v_comp uuid := nullif(current_setting('qa5.comp_id', true), '')::uuid;
-  v_pack jsonb;
+  v_comp   uuid := nullif(current_setting('qa5.comp_id', true), '')::uuid;
+  v_qcount integer;
+  v_unique boolean;
+  v_diff_ok boolean;
+  v_vault  uuid;
 begin
-  select public.prepare_competition_pack(v_comp) into v_pack;
+  -- 082: pack join_matchmaking_queue icinde otomatik hazirlanir.
+  select count(*) into v_qcount
+    from public.competition_questions cq
+   where cq.competition_id = v_comp;
+
+  select count(distinct cq.question_order) = 5 into v_unique
+    from public.competition_questions cq
+   where cq.competition_id = v_comp;
+
+  select not exists (
+    select 1 from public.competition_questions cq
+     where cq.competition_id = v_comp
+       and cq.difficulty not in ('easy','medium','hard')
+  ) into v_diff_ok;
 
   perform public._qa5_true('T-05',
-    'pack hazirlandi: 5 snapshot satiri (1..5, zorluklar gecerli)',
-    v_pack ? 'priority'
-      and (select count(*) from public.competition_questions cq
-            where cq.competition_id = v_comp) = 5
-      and (select count(distinct cq.question_order)
-             from public.competition_questions cq
-            where cq.competition_id = v_comp) = 5
-      and not exists (
-        select 1 from public.competition_questions cq
-         where cq.competition_id = v_comp
-           and cq.difficulty not in ('easy','medium','hard')),
-    'priority=' || coalesce(v_pack ->> 'priority', '?'));
+    'pack otomatik hazirlandi: 5 snapshot satiri (1..5, zorluklar gecerli)',
+    v_qcount = 5 and v_unique and v_diff_ok,
+    'qcount=' || v_qcount || ' unique=' || v_unique);
 
   -- Snapshot soru seti kasadaki eligible setin alt kümesi mi?
+  select qv.id into v_vault
+    from public.question_vaults qv
+   where qv.vault_type = 'one_v_one'
+     and qv.grade_level = 12
+     and qv.subject_id = '430903f3-527e-4e12-b7e8-ac0afdb784aa'
+   order by qv.created_at asc
+   limit 1;
+
   perform public._qa5_true('T-06',
     'snapshot sorulari kasa uyeligiyle ortusuyor (5/5)',
     not exists (
@@ -423,7 +440,7 @@ begin
        where cq.competition_id = v_comp
          and not exists (
            select 1 from public.question_vault_memberships m
-            where m.vault_id = (v_pack ->> 'vault_id')::uuid
+            where m.vault_id = v_vault
               and m.question_id = cq.question_id
               and m.membership_status = 'active'
               and m.one_v_one_eligible = true)));
