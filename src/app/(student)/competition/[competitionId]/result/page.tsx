@@ -44,7 +44,7 @@ export default async function CompetitionResultPage({ params }: PageProps) {
   // Own result — rakip satirlari service tarafinda atilir
   let ownResult
   try {
-    ownResult = await getOwnResult(supabase, competitionId, user.id)
+    ownResult = await getOwnResult(supabase, competitionId)
   } catch {
     redirect(`/competition/${competitionId}`)
   }

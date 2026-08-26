@@ -24,13 +24,11 @@ vi.mock("@/app/(student)/competition/actions", () => ({
 
 import {
   joinMatchmakingQueueAction,
-  leaveMatchmakingQueueAction,
 } from "@/app/(student)/competition/actions"
 
 import MatchmakingQueue from "./MatchmakingQueue"
 
 const mockedJoin = vi.mocked(joinMatchmakingQueueAction)
-const mockedLeave = vi.mocked(leaveMatchmakingQueueAction)
 
 beforeEach(() => {
   vi.clearAllMocks()

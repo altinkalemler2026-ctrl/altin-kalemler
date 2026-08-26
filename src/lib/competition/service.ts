@@ -518,7 +518,6 @@ export function mapOwnCompetitionResult(raw: unknown): OwnCompetitionResult {
 export async function getOwnResult(
   client: CompetitionClient,
   competitionId: string,
-  _authenticatedUserId?: string
 ): Promise<OwnCompetitionResult> {
   assertUuid(competitionId, "competitionId")
   const { data, error } = await callMissingGeneratedRpc(

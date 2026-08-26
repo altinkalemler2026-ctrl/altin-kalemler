@@ -325,6 +325,7 @@ const {
     _removedSolveTime,
   ...questionWithoutSolveTime
 } = validQuestion;
+void _removedSolveTime
 
 runTest(
   "TEST 8 - SURE EKSIK",

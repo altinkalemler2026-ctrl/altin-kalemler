@@ -206,7 +206,7 @@ export async function getOwnCompetitionResultAction(
   if (!user) return { ok: false, message: SESSION_EXPIRED_MESSAGE }
 
   try {
-    const data = await getOwnResult(supabase, competitionId, user.id)
+    const data = await getOwnResult(supabase, competitionId)
     return { ok: true, data }
   } catch (error) {
     if (error instanceof CompetitionValidationError) {

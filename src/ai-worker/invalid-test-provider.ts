@@ -22,6 +22,7 @@ export class InvalidTestQuestionProvider
   async generateQuestions(
     _context: AiProviderContext,
   ): Promise<AiWorkerOutput> {
+    void _context
     return {
       schema_version:
         "1.0",
