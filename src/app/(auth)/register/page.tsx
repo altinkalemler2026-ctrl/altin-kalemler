@@ -1,10 +1,12 @@
 "use client"
 
 import { FormEvent, useState } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 
 export default function RegisterPage() {
+  const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [passwordAgain, setPasswordAgain] = useState("")
@@ -75,6 +77,11 @@ export default function RegisterPage() {
     if (!data.user) {
       setError("Kullanıcı hesabı oluşturulamadı.")
       setLoading(false)
+      return
+    }
+
+    if (data.session) {
+      router.replace("/dashboard")
       return
     }
 

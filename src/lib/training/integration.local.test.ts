@@ -176,7 +176,8 @@ insert into public.curriculum_schedule_profiles
 values ('${PROFILE_ID}', 'TUI-SCHED', 'TUI Profil', '${VERSION_ID}', true, true);
 
 insert into public.student_profiles (id, grade_level, nickname)
-values ('${USER_ID}', 12, 'TUI-NICK');
+values ('${USER_ID}', 12, 'TUI-NICK')
+on conflict (id) do nothing;
 
 insert into public.academic_weeks (academic_year, week, starts_at, ends_at)
 values ('${YEAR}', 5, current_date - 3, current_date + 4);

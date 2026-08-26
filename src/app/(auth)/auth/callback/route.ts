@@ -48,24 +48,32 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  const { error: profileError } = await supabase
+  const { data: existingProfile } = await supabase
     .from("student_profiles")
-    .upsert(
-      {
-        id: user.id,
-        nickname: nickname.trim(),
-        grade_level: gradeLevel,
-      },
-      {
-        onConflict: "id",
-      }
-    )
+    .select("id")
+    .eq("id", user.id)
+    .maybeSingle()
 
-  if (profileError) {
-    return NextResponse.redirect(
-      new URL("/login?error=profile_setup", requestUrl.origin)
-    )
+  if (!existingProfile) {
+    const { error: profileError } = await supabase
+      .from("student_profiles")
+      .upsert(
+        {
+          id: user.id,
+          nickname: nickname.trim(),
+          grade_level: gradeLevel,
+        },
+        {
+          onConflict: "id",
+        }
+      )
+
+    if (profileError) {
+      return NextResponse.redirect(
+        new URL("/login?error=profile_setup", requestUrl.origin)
+      )
+    }
   }
 
-  return NextResponse.redirect(new URL("/", requestUrl.origin))
+  return NextResponse.redirect(new URL("/dashboard", requestUrl.origin))
 }
