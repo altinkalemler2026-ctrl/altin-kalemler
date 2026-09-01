@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import ExcelJS from "exceljs";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 type TopicLookup = {
   gradeLevel: number;
@@ -223,7 +223,7 @@ function isQuestionRow(
 }
 
 async function getExactStatusCount(
-  supabase: any,
+  supabase: SupabaseClient,
   batchId: string,
   status: string,
 ): Promise<number> {
@@ -261,7 +261,7 @@ async function getExactStatusCount(
 }
 
 async function getExactBatchRowCount(
- supabase: any,
+ supabase: SupabaseClient,
   batchId: string,
 ): Promise<number> {
   const {
