@@ -6881,6 +6881,7 @@ export type Database = {
       question_similarity_matches: {
         Row: {
           candidate_staging_id: string
+          copyright_risk: boolean
           created_at: string
           details: Json
           id: string
@@ -6892,6 +6893,7 @@ export type Database = {
         }
         Insert: {
           candidate_staging_id: string
+          copyright_risk?: boolean
           created_at?: string
           details?: Json
           id?: string
@@ -6903,6 +6905,7 @@ export type Database = {
         }
         Update: {
           candidate_staging_id?: string
+          copyright_risk?: boolean
           created_at?: string
           details?: Json
           id?: string
