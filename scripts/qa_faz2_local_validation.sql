@@ -468,11 +468,13 @@ $blk$;
 
 
 -- ============================================================
--- T-01d..l: 071 sonrasi Faz 2 RPC EXECUTE matrisi
+-- T-01d..m: 071 sonrasi Faz 2 RPC EXECUTE matrisi
 -- Imzalar pg_get_function_identity_arguments ile dogrulandi:
 --   select_training_questions(uuid,integer) / get_my_weekly_usage() /
 --   prepare_competition_pack(uuid)
--- Beklenen: public=false, anon=false, authenticated=true
+-- Beklenen: public=false, anon=false, authenticated=true;
+--   prepare_competition_pack icin 082 sonrasi authenticated=false,
+--   service_role=true (istemci cagrisi kapali, otomatik paket hazirligi).
 -- ============================================================
 
 do $blk$
@@ -526,8 +528,14 @@ begin
     null);
 
   perform public._qa_true('T-01l',
-    'authenticated: prepare_competition_pack EXECUTE izni var',
-    has_function_privilege('authenticated',
+    '082: authenticated prepare_competition_pack EXECUTE izni YOK',
+    not has_function_privilege('authenticated',
+      'public.prepare_competition_pack(uuid)', 'EXECUTE'),
+    null);
+
+  perform public._qa_true('T-01m',
+    '082: service_role prepare_competition_pack EXECUTE izni var',
+    has_function_privilege('service_role',
       'public.prepare_competition_pack(uuid)', 'EXECUTE'),
     null);
 end;
@@ -956,7 +964,22 @@ declare
   v_bused  integer;
 begin
   -- UA'nin haftalik sayaci 500'de; clamp yolu da burada test edilir.
+  -- 082 sonrasi: prepare_competition_pack istemciden cagrilamaz.
+  -- Once istemci deniali kanitlanir; islevsel yollar 070 sonrasi
+  -- postgres rolu + JWT claim deseniyle tetiklenir (bkz. T-06 notu).
   execute 'set local role authenticated';
+  perform set_config('request.jwt.claims',
+    '{"sub":"99999999-9999-9999-9999-999999999901","role":"authenticated"}', true);
+
+  perform public._qa_expect('T-08m',
+    '082: istemci prepare_competition_pack dogrudan cagiramaz',
+    '42501',
+    $sql$select public.prepare_competition_pack(
+      '11111111-1111-1111-1111-000000000001')$sql$);
+
+  perform set_config('request.jwt.claims', '', true);
+  execute 'reset role';
+
   perform set_config('request.jwt.claims',
     '{"sub":"99999999-9999-9999-9999-999999999901","role":"authenticated"}', true);
 
@@ -1045,7 +1068,6 @@ begin
     'ub_sayac=' || coalesce(v_bused, -1));
 
   -- K3: butun paketler bloklu -> fail-closed.
-  execute 'set local role authenticated';
   perform set_config('request.jwt.claims',
     '{"sub":"99999999-9999-9999-9999-999999999901","role":"authenticated"}', true);
 
@@ -1106,6 +1128,21 @@ begin
                 91, 'easy')$sql$);
 
   begin
+    -- 077/082 sonrasi: prepare_competition_pack snapshot'i otomatik
+    -- doldurur (question_count=5). Otomatik dolum kanitlanir; yasal
+    -- tek-soru yazma yolu temiz snapshot uzerinde dogrulanir.
+    select count(*) into v_cnt
+      from public.competition_questions
+     where competition_id = '11111111-1111-1111-1111-000000000001';
+
+    perform public._qa_true('T-08j',
+      'prepare_competition_pack snapshot''i otomatik doldurur (5)',
+      v_cnt = 5,
+      'satir=' || v_cnt);
+
+    delete from public.competition_questions
+     where competition_id = '11111111-1111-1111-1111-000000000001';
+
     insert into public.competition_questions
       (competition_id, question_id, question_order, difficulty)
     values ('11111111-1111-1111-1111-000000000001',
@@ -1164,7 +1201,7 @@ begin
       where competition_id = '11111111-1111-1111-1111-000000000004'
         and question_order = 11$sql$);
 
-  execute 'set local role authenticated';
+  -- 082 sonrasi: postgres rolu + JWT claim'leri (bkz. T-06 notu).
   perform set_config('request.jwt.claims',
     '{"sub":"99999999-9999-9999-9999-999999999901","role":"authenticated"}', true);
 
