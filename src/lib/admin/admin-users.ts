@@ -108,8 +108,36 @@ export function parseGrade(value: string | undefined): number | null {
     : null
 }
 
-/** Liste sorgularının sabit güvenli üst sınırı. */
-export const USER_LIST_LIMIT = 200
+/** Kullanıcı listesi sayfa boyutu (sabit ürün kararı). */
+export const USER_PAGE_SIZE = 25
+
+/** parsePage üst sınırı; from/to hesabı güvenli aralıkta kalır. */
+const MAX_PAGE = 1_000_000
+
+/**
+ * Sunucu taraflı liste sonucu. `status: "error"` veri kaynağının
+ * OKUNAMADIĞINI belirtir ve UI'da gerçekten boş sonuçtan AYRI gösterilir;
+ * ham Supabase hata metni asla taşınmaz.
+ */
+export interface ListPageResult<T> {
+  status: "ok" | "error"
+  items: T[]
+  /** Filtrelere uyan toplam kayıt sayısı (hata durumunda 0). */
+  total: number
+  page: number
+  totalPages: number
+}
+
+/**
+ * Sorgu parametresinden güvenli sayfa numarası. Negatif, sıfır, NaN,
+ * ondalıklı ve boş girdiler 1'e düşer; aşırı büyük değerler MAX_PAGE'e
+ * kırpılır. Sonuç her zaman >= 1 tam sayıdır.
+ */
+export function parsePage(value: string | undefined): number {
+  const n = Number(value)
+  if (!Number.isInteger(n) || n < 1) return 1
+  return n > MAX_PAGE ? MAX_PAGE : n
+}
 
 /**
  * Kullanıcı sayısı — admin SELECT politikası üzerinden student_profiles
@@ -127,38 +155,72 @@ export async function countUsers(): Promise<number | null> {
 
 /**
  * Kullanıcı listesi — student_profiles + student_public_profiles JOIN.
- * Limit 200 ile geniş bir listeden arama yapılabilir.
+ * Sunucu taraflı sayfalama: önce aynı filtrelerle exact count, sonra
+ * yalnızca istenen sayfa `.range(from, to)` ile çekilir. Hata durumunda
+ * `status: "error"` döner; boş listeyle karışmaz.
  */
 export async function listUsers(
   filter: UserFilter,
-): Promise<UserListItem[]> {
+  page: number
+): Promise<ListPageResult<UserListItem>> {
   const supabase = await createClient()
+  const safePage = parsePage(String(page))
 
-  let query = supabase
+  let countQuery = supabase
+    .from("student_profiles")
+    .select("id", { count: "exact", head: true })
+  if (filter.grade !== undefined && filter.grade !== null) {
+    countQuery = countQuery.eq("grade_level", filter.grade)
+  }
+  if (filter.query) {
+    countQuery = countQuery.ilike("nickname", `%${filter.query}%`)
+  }
+
+  const { count, error: countError } = await countQuery
+  if (countError || count === null) {
+    return { status: "error", items: [], total: 0, page: safePage, totalPages: 1 }
+  }
+
+  const total = count
+  const totalPages = Math.max(1, Math.ceil(total / USER_PAGE_SIZE))
+  if (total === 0 || safePage > totalPages) {
+    return { status: "ok", items: [], total, page: safePage, totalPages }
+  }
+
+  const from = (safePage - 1) * USER_PAGE_SIZE
+  let dataQuery = supabase
     .from("student_profiles")
     .select(
       "id, nickname, grade_level, created_at, student_public_profiles(is_visible, total_points, monthly_points, avatar_key)",
     )
     .order("created_at", { ascending: false })
-    .limit(USER_LIST_LIMIT)
+    .range(from, from + USER_PAGE_SIZE - 1)
 
   if (filter.grade !== undefined && filter.grade !== null) {
-    query = query.eq("grade_level", filter.grade)
+    dataQuery = dataQuery.eq("grade_level", filter.grade)
   }
   if (filter.query) {
-    query = query.ilike("nickname", `%${filter.query}%`)
+    dataQuery = dataQuery.ilike("nickname", `%${filter.query}%`)
   }
 
-  const { data, error } = await query
-  if (error) return []
+  const { data, error } = await dataQuery
+  if (error) {
+    return { status: "error", items: [], total, page: safePage, totalPages }
+  }
 
-  return (data ?? []).map((row) => {
-    const r = row as Record<string, unknown>
-    const pub = Array.isArray(r.student_public_profiles)
-      ? (r.student_public_profiles[0] as Record<string, unknown> | undefined)
-      : null
-    return mapUserListItem(r, pub ?? null)
-  })
+  return {
+    status: "ok",
+    items: (data ?? []).map((row) => {
+      const r = row as Record<string, unknown>
+      const pub = Array.isArray(r.student_public_profiles)
+        ? (r.student_public_profiles[0] as Record<string, unknown> | undefined)
+        : null
+      return mapUserListItem(r, pub ?? null)
+    }),
+    total,
+    page: safePage,
+    totalPages,
+  }
 }
 
 /**

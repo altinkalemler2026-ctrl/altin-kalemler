@@ -35,7 +35,35 @@ export type QuestionFilter = {
 }
 
 /** Liste sorgularının sabit güvenli üst sınırı. */
-export const QUESTION_LIST_LIMIT = 200
+export const QUESTION_PAGE_SIZE = 25
+
+/** parsePage üst sınırı; from/to hesabı güvenli aralıkta kalır. */
+const MAX_PAGE = 1_000_000
+
+/**
+ * Sunucu taraflı liste sonucu. `status: "error"` veri kaynağının
+ * OKUNAMADIĞINI belirtir ve UI'da gerçekten boş sonuçtan AYRI gösterilir;
+ * ham Supabase hata metni asla taşınmaz.
+ */
+export interface ListPageResult<T> {
+  status: "ok" | "error"
+  items: T[]
+  /** Filtrelere uyan toplam kayıt sayısı (hata durumunda 0). */
+  total: number
+  page: number
+  totalPages: number
+}
+
+/**
+ * Sorgu parametresinden güvenli sayfa numarası. Negatif, sıfır, NaN,
+ * ondalıklı ve boş girdiler 1'e düşer; aşırı büyük değerler MAX_PAGE'e
+ * kırpılır. Sonuç her zaman >= 1 tam sayıdır.
+ */
+export function parsePage(value: string | undefined): number {
+  const n = Number(value)
+  if (!Number.isInteger(n) || n < 1) return 1
+  return n > MAX_PAGE ? MAX_PAGE : n
+}
 
 /** PostgREST `or` filtre dilbilgisini bozan karakterler (ayraç/parantez). */
 const SEARCH_RESERVED_CHARS = /[,()]/g
@@ -81,6 +109,8 @@ export interface QuestionListItem {
   correct_answer: string | null
   created_at: string
   subject_name: string | null
+  /** Telif/lisans durumu; "approved" dışındaki dolu değerler risk işareti gösterir. */
+  license_status: string | null
 }
 
 export interface QuestionDetail extends QuestionListItem {
@@ -147,6 +177,8 @@ export function mapQuestionListItem(row: Record<string, unknown>): QuestionListI
       typeof row.correct_answer === "string" ? row.correct_answer : null,
     created_at: typeof row.created_at === "string" ? row.created_at : "",
     subject_name: subjectNameFrom(row.subjects),
+    license_status:
+      typeof row.license_status === "string" ? row.license_status : null,
   }
 }
 
@@ -188,50 +220,99 @@ export async function listSubjects(): Promise<SubjectRow[]> {
   return (data ?? []) as SubjectRow[]
 }
 
+const QUESTION_LIST_COLUMNS =
+  "id, question_code, question_text, exam_track, grade_level, difficulty, approval_status, is_active, correct_answer, created_at, license_status, subjects(name)"
+
 export async function listQuestions(
-  filter: QuestionFilter
-): Promise<QuestionListItem[]> {
+  filter: QuestionFilter,
+  page: number
+): Promise<ListPageResult<QuestionListItem>> {
   const supabase = await createClient()
+  const safePage = parsePage(String(page))
 
-  let query = supabase
+  let countQuery = supabase
     .from("questions")
-    .select(
-      "id, question_code, question_text, exam_track, grade_level, difficulty, approval_status, is_active, correct_answer, created_at, subjects(name)"
-    )
-    .order("created_at", { ascending: false })
-    .limit(QUESTION_LIST_LIMIT)
-
+    .select("id", { count: "exact", head: true })
   if (filter.examTrack) {
-    query = query.eq("exam_track", filter.examTrack)
+    countQuery = countQuery.eq("exam_track", filter.examTrack)
   }
   if (filter.grade !== undefined && filter.grade !== null) {
-    query = query.eq("grade_level", filter.grade)
+    countQuery = countQuery.eq("grade_level", filter.grade)
   }
   if (filter.subjectId) {
-    query = query.eq("subject_id", filter.subjectId)
+    countQuery = countQuery.eq("subject_id", filter.subjectId)
   }
   if (filter.difficulty) {
-    query = query.eq("difficulty", filter.difficulty)
+    countQuery = countQuery.eq("difficulty", filter.difficulty)
   }
   if (filter.approvalStatus) {
-    query = query.eq("approval_status", filter.approvalStatus)
+    countQuery = countQuery.eq("approval_status", filter.approvalStatus)
   }
   if (filter.isActive !== undefined) {
-    query = query.eq("is_active", filter.isActive)
+    countQuery = countQuery.eq("is_active", filter.isActive)
   }
   const searchQuery = sanitizeSearchQuery(filter.query)
   if (searchQuery) {
-    query = query.or(
+    countQuery = countQuery.or(
       `question_code.ilike.%${searchQuery}%,question_text.ilike.%${searchQuery}%`
     )
   }
 
-  const { data, error } = await query
-  if (error) return []
+  const { count, error: countError } = await countQuery
+  if (countError || count === null) {
+    return { status: "error", items: [], total: 0, page: safePage, totalPages: 1 }
+  }
 
-  return (data ?? []).map((row) =>
-    mapQuestionListItem(row as unknown as Record<string, unknown>)
-  )
+  const total = count
+  const totalPages = Math.max(1, Math.ceil(total / QUESTION_PAGE_SIZE))
+  if (total === 0 || safePage > totalPages) {
+    return { status: "ok", items: [], total, page: safePage, totalPages }
+  }
+
+  const from = (safePage - 1) * QUESTION_PAGE_SIZE
+  let dataQuery = supabase
+    .from("questions")
+    .select(QUESTION_LIST_COLUMNS)
+    .order("created_at", { ascending: false })
+    .range(from, from + QUESTION_PAGE_SIZE - 1)
+  if (filter.examTrack) {
+    dataQuery = dataQuery.eq("exam_track", filter.examTrack)
+  }
+  if (filter.grade !== undefined && filter.grade !== null) {
+    dataQuery = dataQuery.eq("grade_level", filter.grade)
+  }
+  if (filter.subjectId) {
+    dataQuery = dataQuery.eq("subject_id", filter.subjectId)
+  }
+  if (filter.difficulty) {
+    dataQuery = dataQuery.eq("difficulty", filter.difficulty)
+  }
+  if (filter.approvalStatus) {
+    dataQuery = dataQuery.eq("approval_status", filter.approvalStatus)
+  }
+  if (filter.isActive !== undefined) {
+    dataQuery = dataQuery.eq("is_active", filter.isActive)
+  }
+  if (searchQuery) {
+    dataQuery = dataQuery.or(
+      `question_code.ilike.%${searchQuery}%,question_text.ilike.%${searchQuery}%`
+    )
+  }
+
+  const { data, error } = await dataQuery
+  if (error) {
+    return { status: "error", items: [], total, page: safePage, totalPages }
+  }
+
+  return {
+    status: "ok",
+    items: (data ?? []).map((row) =>
+      mapQuestionListItem(row as unknown as Record<string, unknown>)
+    ),
+    total,
+    page: safePage,
+    totalPages,
+  }
 }
 
 export async function getQuestionDetail(

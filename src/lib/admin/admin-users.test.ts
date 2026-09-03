@@ -1,13 +1,14 @@
 import { describe, expect, it, vi } from "vitest"
 import {
   GRADES,
-  USER_LIST_LIMIT,
+  USER_PAGE_SIZE,
   countUsers,
   getUserDetail,
   listUsers,
   mapUserDetail,
   mapUserListItem,
   parseGrade,
+  parsePage,
 } from "./admin-users"
 
 const createClientMock = vi.hoisted(() => vi.fn())
@@ -28,6 +29,7 @@ function makeQueryMock(result: {
     "select",
     "order",
     "limit",
+    "range",
     "eq",
     "or",
     "ilike",
@@ -196,27 +198,118 @@ describe("countUsers", () => {
   })
 })
 
-describe("listUsers — sorgu hattı (fail-closed)", () => {
-  it("veri kaynağı hatasında boş liste döner", async () => {
+describe("parsePage", () => {
+  it("boş/geçersiz/ondalıklı/negatif girdiler 1 döner", () => {
+    for (const bad of [undefined, "", "abc", "0", "-3", "2.5", "1e3x"]) {
+      expect(parsePage(bad)).toBe(1)
+    }
+  })
+
+  it("geçerli sayfa numarasını korur", () => {
+    expect(parsePage("3")).toBe(3)
+    expect(parsePage("12")).toBe(12)
+  })
+
+  it("aşırı büyük değerleri güvenli üst sınıra kırpılır", () => {
+    expect(parsePage("99999999999")).toBe(1_000_000)
+  })
+})
+
+describe("listUsers — sayfalama ve fail-closed", () => {
+  it("count hatasında status:'error' döner (boş liste ≠ hata)", async () => {
     const builder = makeQueryMock({
+      data: null,
+      error: { message: "permission denied" },
+      count: null,
+    })
+    createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
+    const result = await listUsers({}, 1)
+    expect(result.status).toBe("error")
+    expect(result.items).toEqual([])
+    expect(result.total).toBe(0)
+  })
+
+  it("toplam 0 kayıt: ok + boş liste + totalPages 1 + veri sorgusu yok", async () => {
+    const builder = makeQueryMock({ data: null, error: null, count: 0 })
+    createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
+    const result = await listUsers({}, 1)
+    expect(result.status).toBe("ok")
+    expect(result.items).toEqual([])
+    expect(result.total).toBe(0)
+    expect(result.totalPages).toBe(1)
+    expect(builder.range).not.toHaveBeenCalled()
+  })
+
+  it("varsayılan sayfa için doğru range uygulanır", async () => {
+    const builder = makeQueryMock({ data: [], error: null, count: 60 })
+    createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
+    const result = await listUsers({}, 1)
+    expect(builder.range).toHaveBeenCalledWith(0, USER_PAGE_SIZE - 1)
+    expect(result.status).toBe("ok")
+    expect(result.page).toBe(1)
+    expect(result.totalPages).toBe(3)
+  })
+
+  it("ikinci sayfa için doğru range uygulanır", async () => {
+    const builder = makeQueryMock({ data: [], error: null, count: 60 })
+    createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
+    const result = await listUsers({}, 2)
+    expect(builder.range).toHaveBeenCalledWith(
+      USER_PAGE_SIZE,
+      USER_PAGE_SIZE * 2 - 1
+    )
+    expect(result.page).toBe(2)
+  })
+
+  it("son sayfada eksik kayıt aralığı (total 51, page 3)", async () => {
+    const builder = makeQueryMock({ data: [], error: null, count: 51 })
+    createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
+    const result = await listUsers({}, 3)
+    expect(builder.range).toHaveBeenCalledWith(50, 74)
+    expect(result.totalPages).toBe(3)
+  })
+
+  it("istenen sayfa son sayfayı aşıyorsa veri çekilmez (sızma yok)", async () => {
+    const builder = makeQueryMock({ data: [], error: null, count: 10 })
+    createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
+    const result = await listUsers({}, 99)
+    expect(result.status).toBe("ok")
+    expect(result.items).toEqual([])
+    expect(result.page).toBe(99)
+    expect(builder.range).not.toHaveBeenCalled()
+  })
+
+  it("veri sorgusu hatasında status:'error' döner ve total korunur", async () => {
+    const countBuilder = makeQueryMock({ data: null, error: null, count: 40 })
+    const dataBuilder = makeQueryMock({
       data: null,
       error: { message: "db down" },
     })
-    createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
-    await expect(listUsers({})).resolves.toEqual([])
+    const from = vi
+      .fn()
+      .mockReturnValueOnce(countBuilder)
+      .mockReturnValueOnce(dataBuilder)
+    createClientMock.mockResolvedValue({ from })
+    const result = await listUsers({}, 1)
+    expect(result.status).toBe("error")
+    expect(result.total).toBe(40)
+    expect(result.totalPages).toBe(2)
   })
 
-  it("limit sabit ile uygulanır", async () => {
-    const builder = makeQueryMock({ data: [], error: null })
+  it("count sorgusu exact/head ile kurulur", async () => {
+    const builder = makeQueryMock({ data: null, error: null, count: 0 })
     createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
-    await listUsers({})
-    expect(builder.limit).toHaveBeenCalledWith(USER_LIST_LIMIT)
+    await listUsers({}, 1)
+    expect(builder.select).toHaveBeenCalledWith("id", {
+      count: "exact",
+      head: true,
+    })
   })
 
-  it("arama ve sınıf filtrelerini zincire ekler", async () => {
-    const builder = makeQueryMock({ data: [], error: null })
+  it("arama ve sınıf filtrelerini her iki sorguya uygular", async () => {
+    const builder = makeQueryMock({ data: [], error: null, count: 60 })
     createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
-    await listUsers({ grade: 7, query: "ali" })
+    await listUsers({ grade: 7, query: "ali" }, 1)
     expect(builder.eq).toHaveBeenCalledWith("grade_level", 7)
     expect(builder.ilike).toHaveBeenCalledWith("nickname", "%ali%")
   })
@@ -231,12 +324,13 @@ describe("listUsers — sorgu hattı (fail-closed)", () => {
         { is_visible: true, total_points: 120, monthly_points: 30, avatar_key: "av.png" },
       ],
     }
-    const builder = makeQueryMock({ data: [row], error: null })
+    const builder = makeQueryMock({ data: [row], error: null, count: 1 })
     createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
-    const items = await listUsers({})
-    expect(items).toHaveLength(1)
-    expect(items[0]?.nickname).toBe("ali")
-    expect(items[0]?.total_points).toBe(120)
+    const result = await listUsers({}, 1)
+    expect(result.items).toHaveLength(1)
+    expect(result.items[0]?.nickname).toBe("ali")
+    expect(result.items[0]?.total_points).toBe(120)
+    expect(result.total).toBe(1)
   })
 })
 

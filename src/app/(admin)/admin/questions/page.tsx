@@ -6,11 +6,13 @@ import {
   DIFFICULTIES,
   EXAM_TRACKS,
   GRADES,
-  QUESTION_LIST_LIMIT,
   listQuestions,
   listSubjects,
   parseGrade,
+  parsePage,
   parseUuid,
+  type ListPageResult,
+  type QuestionListItem,
 } from "@/lib/admin/question-bank"
 import {
   ADMIN_QUESTIONS_MESSAGES as M,
@@ -29,7 +31,80 @@ type SearchParams = Promise<{
   approvalStatus?: string
   isActive?: string
   query?: string
+  page?: string
 }>
+
+type CurrentFilters = {
+  examTrack?: string
+  grade?: string
+  subject?: string
+  difficulty?: string
+  approvalStatus?: string
+  isActive?: string
+  query?: string
+}
+
+/** Filtreleri koruyarak güvenli kodlanmış sayfa bağlantısı üretir. */
+function pageHref(current: CurrentFilters, page: number): string {
+  const sp = new URLSearchParams()
+  for (const [key, value] of Object.entries(current)) {
+    if (value) sp.set(key, value)
+  }
+  sp.set("page", String(page))
+  return `/admin/questions?${sp.toString()}`
+}
+
+function PaginationNav({
+  result,
+  current,
+}: {
+  result: ListPageResult<QuestionListItem>
+  current: CurrentFilters
+}) {
+  const hasPrev = result.page > 1
+  const hasNext = result.page < result.totalPages
+  if (!hasPrev && !hasNext) return null
+  return (
+    <nav
+      aria-label={M.paginationLabel}
+      className="flex items-center justify-between gap-3 border-t border-gray-200 px-6 py-4"
+    >
+      {hasPrev ? (
+        <Link
+          href={pageHref(current, result.page - 1)}
+          className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+        >
+          {M.prevPage}
+        </Link>
+      ) : (
+        <span
+          aria-disabled="true"
+          className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 text-sm font-medium text-gray-400"
+        >
+          {M.prevPage}
+        </span>
+      )}
+      <p className="text-sm text-gray-600">
+        {`Sayfa ${result.page} / ${result.totalPages}`}
+      </p>
+      {hasNext ? (
+        <Link
+          href={pageHref(current, result.page + 1)}
+          className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+        >
+          {M.nextPage}
+        </Link>
+      ) : (
+        <span
+          aria-disabled="true"
+          className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 text-sm font-medium text-gray-400"
+        >
+          {M.nextPage}
+        </span>
+      )}
+    </nav>
+  )
+}
 
 function difficultyLabel(value: string): string {
   switch (value) {
@@ -92,29 +167,47 @@ export default async function AdminQuestionsPage({
   const isActive =
     isActiveParam === "true" ? true : isActiveParam === "false" ? false : undefined
   const query = params.query?.trim() || undefined
+  const page = parsePage(params.page)
 
-  const [questions, subjects] = await Promise.all([
-    listQuestions({
-      examTrack:
-        examTrack && (EXAM_TRACKS as readonly string[]).includes(examTrack)
-          ? examTrack
-          : undefined,
-      grade: grade ?? undefined,
-      subjectId,
-      difficulty:
-        difficulty && (DIFFICULTIES as readonly string[]).includes(difficulty)
-          ? difficulty
-          : undefined,
-      approvalStatus:
-        approvalStatus &&
-        (APPROVAL_STATUSES as readonly string[]).includes(approvalStatus)
-          ? approvalStatus
-          : undefined,
-      isActive,
-      query,
-    }),
+  const validatedFilters = {
+    examTrack:
+      examTrack && (EXAM_TRACKS as readonly string[]).includes(examTrack)
+        ? examTrack
+        : undefined,
+    grade: grade ?? undefined,
+    subjectId,
+    difficulty:
+      difficulty && (DIFFICULTIES as readonly string[]).includes(difficulty)
+        ? difficulty
+        : undefined,
+    approvalStatus:
+      approvalStatus &&
+      (APPROVAL_STATUSES as readonly string[]).includes(approvalStatus)
+        ? approvalStatus
+        : undefined,
+    isActive,
+    query,
+  }
+
+  const [result, subjects] = await Promise.all([
+    listQuestions(validatedFilters, page),
     listSubjects(),
   ])
+
+  const currentFilters: CurrentFilters = {
+    examTrack: validatedFilters.examTrack,
+    grade: validatedFilters.grade !== undefined ? String(validatedFilters.grade) : undefined,
+    subject: validatedFilters.subjectId,
+    difficulty: validatedFilters.difficulty,
+    approvalStatus: validatedFilters.approvalStatus,
+    isActive:
+      validatedFilters.isActive === true
+        ? "true"
+        : validatedFilters.isActive === false
+          ? "false"
+          : undefined,
+    query: validatedFilters.query,
+  }
 
   return (
     <main className="min-h-screen bg-gray-50 p-4 sm:p-8">
@@ -264,17 +357,16 @@ export default async function AdminQuestionsPage({
         </form>
 
         <section className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-          {questions.length === 0 ? (
+          {result.status === "error" ? (
+            <p role="alert" className="px-6 py-10 text-gray-600">
+              {M.listError}
+            </p>
+          ) : result.items.length === 0 ? (
             <p className="px-6 py-10 text-gray-600">{M.empty}</p>
           ) : (
             <>
-              {questions.length >= QUESTION_LIST_LIMIT && (
-                <p className="border-b border-gray-200 bg-amber-50 px-6 py-3 text-sm text-amber-800">
-                  {M.truncatedNotice}
-                </p>
-              )}
               <ul className="divide-y divide-gray-200">
-              {questions.map((q) => (
+              {result.items.map((q) => (
                 <li key={q.id}>
                   <Link
                     href={`/admin/questions/${q.id}`}
@@ -302,6 +394,11 @@ export default async function AdminQuestionsPage({
                           {approvalStatusLabel(q.approval_status)}
                         </span>
                       )}
+                      {q.license_status && q.license_status !== "approved" && (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                          {M.copyrightRisk}
+                        </span>
+                      )}
                       <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs">
                         {q.is_active ? M.activeYes : M.activeNo}
                       </span>
@@ -310,6 +407,7 @@ export default async function AdminQuestionsPage({
                 </li>
               ))}
               </ul>
+              <PaginationNav result={result} current={currentFilters} />
             </>
           )}
         </section>

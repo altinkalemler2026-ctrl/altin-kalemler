@@ -10,12 +10,13 @@
 import { describe, expect, it, vi } from "vitest"
 import {
   GRADES,
-  QUESTION_LIST_LIMIT,
+  QUESTION_PAGE_SIZE,
   listQuestions,
   listSubjects,
   mapQuestionDetail,
   mapQuestionListItem,
   parseGrade,
+  parsePage,
   parseUuid,
   sanitizeSearchQuery,
 } from "./question-bank"
@@ -38,6 +39,7 @@ function makeQueryMock(result: {
     "select",
     "order",
     "limit",
+    "range",
     "eq",
     "or",
     "ilike",
@@ -130,6 +132,18 @@ describe("mapQuestionListItem — allowlist", () => {
     )
     expect(approved.approval_status).toBe("approved")
     expect(approved.is_active).toBe(true)
+  })
+
+  it("license_status alanını taşır (telif riski göstergesi için)", () => {
+    expect(mapQuestionListItem(rawRow()).license_status).toBe("approved")
+    expect(
+      mapQuestionListItem(rawRow({ license_status: "under_review" }))
+        .license_status
+    ).toBe("under_review")
+    expect(mapQuestionListItem(rawRow({ license_status: null })).license_status).toBeNull()
+    expect(
+      mapQuestionListItem(rawRow({ license_status: 42 })).license_status
+    ).toBeNull()
   })
 
   it("gizli/PII/alan dışı alanları listeleme DTO'suna katmaz", () => {
@@ -236,48 +250,130 @@ describe("parseUuid", () => {
   })
 })
 
-describe("listQuestions — sorgu hattı (fail-closed)", () => {
-  it("veri kaynağı hatasında boş liste döner", async () => {
-    createClientMock.mockResolvedValue({
-      from: vi.fn(() => makeQueryMock({ data: null, error: { message: "db down" } })),
-    })
-    await expect(listQuestions({})).resolves.toEqual([])
+describe("parsePage", () => {
+  it("boş/geçersiz/ondalıklı/negatif girdiler 1 döner", () => {
+    for (const bad of [undefined, "", "abc", "0", "-3", "2.5", "1e3x"]) {
+      expect(parsePage(bad)).toBe(1)
+    }
   })
 
-  it("limit sabit ile uygulanır", async () => {
-    const builder = makeQueryMock({ data: [], error: null })
-    const from = vi.fn(() => builder)
+  it("geçerli sayfa numarasını korur", () => {
+    expect(parsePage("3")).toBe(3)
+    expect(parsePage("12")).toBe(12)
+  })
+
+  it("aşırı büyük değerleri güvenli üst sınıra kırpılır", () => {
+    expect(parsePage("99999999999")).toBe(1_000_000)
+  })
+})
+
+describe("listQuestions — sayfalama ve fail-closed", () => {
+  it("count hatasında status:'error' döner (boş liste ≠ hata)", async () => {
+    const builder = makeQueryMock({
+      data: null,
+      error: { message: "db down" },
+      count: null,
+    })
+    createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
+    const result = await listQuestions({}, 1)
+    expect(result.status).toBe("error")
+    expect(result.items).toEqual([])
+    expect(result.total).toBe(0)
+  })
+
+  it("toplam 0 kayıt: ok + boş liste + totalPages 1 + veri sorgusu yok", async () => {
+    const builder = makeQueryMock({ data: null, error: null, count: 0 })
+    createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
+    const result = await listQuestions({}, 1)
+    expect(result.status).toBe("ok")
+    expect(result.items).toEqual([])
+    expect(result.total).toBe(0)
+    expect(result.totalPages).toBe(1)
+    expect(builder.range).not.toHaveBeenCalled()
+  })
+
+  it("varsayılan sayfa için doğru range uygulanır", async () => {
+    const builder = makeQueryMock({ data: [], error: null, count: 60 })
+    createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
+    const result = await listQuestions({}, 1)
+    expect(builder.range).toHaveBeenCalledWith(0, QUESTION_PAGE_SIZE - 1)
+    expect(result.status).toBe("ok")
+    expect(result.page).toBe(1)
+    expect(result.totalPages).toBe(3)
+  })
+
+  it("ikinci sayfa için doğru range uygulanır", async () => {
+    const builder = makeQueryMock({ data: [], error: null, count: 60 })
+    createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
+    const result = await listQuestions({}, 2)
+    expect(builder.range).toHaveBeenCalledWith(
+      QUESTION_PAGE_SIZE,
+      QUESTION_PAGE_SIZE * 2 - 1
+    )
+    expect(result.page).toBe(2)
+  })
+
+  it("son sayfada eksik kayıt aralığı (total 27, page 2)", async () => {
+    const builder = makeQueryMock({ data: [], error: null, count: 27 })
+    createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
+    const result = await listQuestions({}, 2)
+    expect(builder.range).toHaveBeenCalledWith(25, 49)
+    expect(result.totalPages).toBe(2)
+  })
+
+  it("istenen sayfa son sayfayı aşıyorsa veri çekilmez", async () => {
+    const builder = makeQueryMock({ data: [rawRow()], error: null, count: 10 })
+    createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
+    const result = await listQuestions({}, 99)
+    expect(result.status).toBe("ok")
+    expect(result.items).toEqual([])
+    expect(result.page).toBe(99)
+    expect(builder.range).not.toHaveBeenCalled()
+  })
+
+  it("veri sorgusu hatasında status:'error' döner ve total korunur", async () => {
+    const countBuilder = makeQueryMock({ data: null, error: null, count: 40 })
+    const dataBuilder = makeQueryMock({
+      data: null,
+      error: { message: "db down" },
+    })
+    const from = vi
+      .fn()
+      .mockReturnValueOnce(countBuilder)
+      .mockReturnValueOnce(dataBuilder)
     createClientMock.mockResolvedValue({ from })
-    await listQuestions({})
-    expect(builder.limit).toHaveBeenCalledWith(QUESTION_LIST_LIMIT)
+    const result = await listQuestions({}, 1)
+    expect(result.status).toBe("error")
+    expect(result.total).toBe(40)
+    expect(result.totalPages).toBe(2)
   })
 
   it("arama girdisi sanitizasyonla or filtresine bağlanır", async () => {
-    const builder = makeQueryMock({ data: [], error: null })
-    const from = vi.fn(() => builder)
-    createClientMock.mockResolvedValue({ from })
-    await listQuestions({ query: "mat, (TYT)" })
+    const builder = makeQueryMock({ data: [], error: null, count: 60 })
+    createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
+    await listQuestions({ query: "mat, (TYT)" }, 1)
     expect(builder.or).toHaveBeenCalledWith(
       "question_code.ilike.%mat TYT%,question_text.ilike.%mat TYT%"
     )
   })
 
   it("boş arama girdisi or filtresi üretmez", async () => {
-    const builder = makeQueryMock({ data: [], error: null })
-    const from = vi.fn(() => builder)
-    createClientMock.mockResolvedValue({ from })
-    await listQuestions({ query: ",,()" })
+    const builder = makeQueryMock({ data: [], error: null, count: 60 })
+    createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
+    await listQuestions({ query: ",,()" }, 1)
     expect(builder.or).not.toHaveBeenCalled()
   })
 
   it("başarılı cevabı DTO listesine çevirir", async () => {
-    const builder = makeQueryMock({ data: [rawRow()], error: null })
-    const from = vi.fn(() => builder)
-    createClientMock.mockResolvedValue({ from })
-    const rows = await listQuestions({})
-    expect(rows).toHaveLength(1)
-    expect(rows[0]?.question_code).toBe("TYT-MAT-001")
-    expect(rows[0]?.subject_name).toBe("Matematik")
+    const builder = makeQueryMock({ data: [rawRow()], error: null, count: 1 })
+    createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
+    const result = await listQuestions({}, 1)
+    expect(result.status).toBe("ok")
+    expect(result.items).toHaveLength(1)
+    expect(result.items[0]?.question_code).toBe("TYT-MAT-001")
+    expect(result.items[0]?.subject_name).toBe("Matematik")
+    expect(result.total).toBe(1)
+    expect(result.totalPages).toBe(1)
   })
 })
 

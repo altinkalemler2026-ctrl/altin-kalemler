@@ -83,8 +83,12 @@ export const ADMIN_QUESTIONS_MESSAGES = {
   difficultyLabel: "Zorluk",
   questionCode: "Soru kodu",
   searchLabel: "Ara (soru kodu veya metni)",
-  truncatedNotice:
-    "Sonuç sayısı fazla; yalnızca ilk 200 kayıt gösteriliyor. Daraltmak için filtre kullanın.",
+  listError:
+    "Soru listesi şu anda okunamadı. Lütfen daha sonra tekrar deneyin.",
+  paginationLabel: "Sayfalama",
+  prevPage: "Önceki",
+  nextPage: "Sonraki",
+  copyrightRisk: "Telif riski",
   noCorrectAnswer: "Doğru cevap yok",
   noQuestionText: "Soru metni yok",
 } as const
@@ -151,6 +155,9 @@ export const ADMIN_USERS_MESSAGES = {
   gradeLevel: "Sınıf seviyesi",
   lastUpdated: "Son güncelleme",
   classYears: "Sınıf",
-  truncatedNotice:
-    "Sonuç sayısı fazla; yalnızca ilk 200 kayıt gösteriliyor. Daraltmak için filtre kullanın.",
+  listError:
+    "Kullanıcı listesi şu anda okunamadı. Lütfen daha sonra tekrar deneyin.",
+  paginationLabel: "Sayfalama",
+  prevPage: "Önceki",
+  nextPage: "Sonraki",
 } as const

@@ -1,7 +1,14 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
-import { USER_LIST_LIMIT, listUsers, parseGrade, GRADES } from "@/lib/admin/admin-users"
+import {
+  listUsers,
+  parseGrade,
+  parsePage,
+  GRADES,
+  type ListPageResult,
+  type UserListItem,
+} from "@/lib/admin/admin-users"
 import { ADMIN_USERS_MESSAGES as M } from "@/lib/admin/admin-panel-messages"
 
 type PermissionRpc = (
@@ -12,6 +19,7 @@ type PermissionRpc = (
 type SearchParams = Promise<{
   grade?: string
   query?: string
+  page?: string
 }>
 
 /** Deterministik tarih gösterimi (GG.AA.YYYY); bozuk girdide "-". */
@@ -24,6 +32,70 @@ function formatDate(value: string): string {
     month: "2-digit",
     year: "numeric",
   })
+}
+
+/** Filtreleri koruyarak güvenli kodlanmış sayfa bağlantısı üretir. */
+function pageHref(
+  current: { grade?: string; query?: string },
+  page: number
+): string {
+  const sp = new URLSearchParams()
+  if (current.grade) sp.set("grade", current.grade)
+  if (current.query) sp.set("query", current.query)
+  sp.set("page", String(page))
+  return `/admin/users?${sp.toString()}`
+}
+
+function PaginationNav({
+  result,
+  current,
+}: {
+  result: ListPageResult<UserListItem>
+  current: { grade?: string; query?: string }
+}) {
+  const hasPrev = result.page > 1
+  const hasNext = result.page < result.totalPages
+  if (!hasPrev && !hasNext) return null
+  return (
+    <nav
+      aria-label={M.paginationLabel}
+      className="flex items-center justify-between gap-3 border-t border-gray-200 px-6 py-4"
+    >
+      {hasPrev ? (
+        <Link
+          href={pageHref(current, result.page - 1)}
+          className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+        >
+          {M.prevPage}
+        </Link>
+      ) : (
+        <span
+          aria-disabled="true"
+          className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 text-sm font-medium text-gray-400"
+        >
+          {M.prevPage}
+        </span>
+      )}
+      <p className="text-sm text-gray-600">
+        {`Sayfa ${result.page} / ${result.totalPages}`}
+      </p>
+      {hasNext ? (
+        <Link
+          href={pageHref(current, result.page + 1)}
+          className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+        >
+          {M.nextPage}
+        </Link>
+      ) : (
+        <span
+          aria-disabled="true"
+          className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 text-sm font-medium text-gray-400"
+        >
+          {M.nextPage}
+        </span>
+      )}
+    </nav>
+  )
 }
 
 export default async function AdminUsersPage({
@@ -51,11 +123,19 @@ export default async function AdminUsersPage({
   const params = await searchParams
   const grade = parseGrade(params.grade)
   const query = params.query?.trim() || undefined
+  const page = parsePage(params.page)
 
-  const users = await listUsers({
-    grade: grade ?? undefined,
+  const result = await listUsers(
+    {
+      grade: grade ?? undefined,
+      query,
+    },
+    page
+  )
+  const currentFilters = {
+    grade: grade !== null ? String(grade) : undefined,
     query,
-  })
+  }
 
   return (
     <main className="min-h-screen bg-gray-50 p-4 sm:p-8">
@@ -120,17 +200,16 @@ export default async function AdminUsersPage({
           aria-label="Kullanıcı listesi"
           className="rounded-2xl border border-gray-200 bg-white shadow-sm"
         >
-          {users.length === 0 ? (
+          {result.status === "error" ? (
+            <p role="alert" className="px-6 py-10 text-gray-600">
+              {M.listError}
+            </p>
+          ) : result.items.length === 0 ? (
             <p className="px-6 py-10 text-gray-600">{M.empty}</p>
           ) : (
             <>
-              {users.length >= USER_LIST_LIMIT && (
-                <p className="border-b border-gray-200 bg-amber-50 px-6 py-3 text-sm text-amber-800">
-                  {M.truncatedNotice}
-                </p>
-              )}
               <ul className="divide-y divide-gray-200">
-              {users.map((u) => (
+              {result.items.map((u) => (
                 <li key={u.id}>
                   <Link
                     href={`/admin/users/${u.id}`}
@@ -167,6 +246,7 @@ export default async function AdminUsersPage({
                 </li>
               ))}
               </ul>
+              <PaginationNav result={result} current={currentFilters} />
             </>
           )}
         </section>

@@ -1,9 +1,11 @@
 /**
- * /admin/users list page security tests (Server Component).
+ * /admin/users list page security + pagination tests (Server Component).
  *
  * - Unauthenticated → /login redirect
  * - Non-admin (permission error or canView !== true) → /dashboard redirect
  * - Authorized admin → page renders with safe fields only
+ * - Server-side pagination: page parsing, range, prev/next links
+ * - Error vs empty separation: data source error shows distinct message
  * - DTO allowlist enforced: no PII/secrets in rendered output
  * - No mutation imports: page is strictly read-only
  */
@@ -35,8 +37,8 @@ vi.mock("@/lib/admin/admin-users", async () => {
   return {
     listUsers: listUsersMock,
     parseGrade: actual.parseGrade,
+    parsePage: actual.parsePage,
     GRADES: actual.GRADES,
-    USER_LIST_LIMIT: actual.USER_LIST_LIMIT,
     countUsers: vi.fn(),
     getUserDetail: vi.fn(),
     mapUserListItem: vi.fn(),
@@ -50,7 +52,13 @@ beforeEach(() => {
   createClientMock.mockReset()
   redirectMock.mockClear()
   listUsersMock.mockReset()
-  listUsersMock.mockResolvedValue([])
+  listUsersMock.mockResolvedValue({
+    status: "ok",
+    items: [],
+    total: 0,
+    page: 1,
+    totalPages: 1,
+  })
 
   createClientMock.mockImplementation(async () => ({
     auth: { getUser: getUserMock },
@@ -78,6 +86,17 @@ function mockNoPermission() {
 
 function mockPermissionError() {
   rpcMock.mockResolvedValue({ data: null, error: { message: "permission denied" } })
+}
+
+function okResult(overrides: Partial<{ items: unknown[]; total: number; page: number; totalPages: number }> = {}) {
+  return {
+    status: "ok",
+    items: [],
+    total: 0,
+    page: 1,
+    totalPages: 1,
+    ...overrides,
+  }
 }
 
 import AdminUsersPage from "./page"
@@ -118,7 +137,7 @@ describe("AdminUsersPage — auth gates", () => {
 })
 
 describe("AdminUsersPage — authorized admin", () => {
-  it("users.manage yetkisiyle listUsers çağrılır", async () => {
+  it("users.manage yetkisiyle listUsers varsayılan sayfa 1 ile çağrılır", async () => {
     mockAuthenticated()
     mockAdminPermission()
 
@@ -127,25 +146,61 @@ describe("AdminUsersPage — authorized admin", () => {
     expect(rpcMock).toHaveBeenCalledWith("teacher_review_admin_has_permission", {
       p_permission_code: "users.manage",
     })
-    expect(listUsersMock).toHaveBeenCalledWith({ grade: undefined, query: undefined })
+    expect(listUsersMock).toHaveBeenCalledWith(
+      { grade: undefined, query: undefined },
+      1,
+    )
   })
 
-  it("grade filtresi doğrudan geçirilir", async () => {
+  it("grade ve query filtreleri doğrudan geçirilir", async () => {
     mockAuthenticated()
     mockAdminPermission()
 
-    await AdminUsersPage({ searchParams: Promise.resolve({ grade: "7" }) })
+    await AdminUsersPage({
+      searchParams: Promise.resolve({ grade: "7", query: "ali" }),
+    })
 
-    expect(listUsersMock).toHaveBeenCalledWith({ grade: 7, query: undefined })
+    expect(listUsersMock).toHaveBeenCalledWith({ grade: 7, query: "ali" }, 1)
   })
 
-  it("query filtresi doğrudan geçirilir", async () => {
+  it("page parametresi sayıya çevrilip geçirilir", async () => {
     mockAuthenticated()
     mockAdminPermission()
 
-    await AdminUsersPage({ searchParams: Promise.resolve({ query: "ali" }) })
+    await AdminUsersPage({ searchParams: Promise.resolve({ page: "2" }) })
 
-    expect(listUsersMock).toHaveBeenCalledWith({ grade: undefined, query: "ali" })
+    expect(listUsersMock).toHaveBeenCalledWith(
+      { grade: undefined, query: undefined },
+      2,
+    )
+  })
+
+  it("geçersiz page değerleri 1'e düşer", async () => {
+    mockAuthenticated()
+    mockAdminPermission()
+
+    for (const bad of ["abc", "0", "-3", "2.5", ""]) {
+      listUsersMock.mockClear()
+      await AdminUsersPage({ searchParams: Promise.resolve({ page: bad }) })
+      expect(listUsersMock).toHaveBeenCalledWith(
+        { grade: undefined, query: undefined },
+        1,
+      )
+    }
+  })
+
+  it("çok büyük page güvenli üst sınıra kırpılır", async () => {
+    mockAuthenticated()
+    mockAdminPermission()
+
+    await AdminUsersPage({
+      searchParams: Promise.resolve({ page: "99999999999" }),
+    })
+
+    expect(listUsersMock).toHaveBeenCalledWith(
+      { grade: undefined, query: undefined },
+      1_000_000,
+    )
   })
 })
 
@@ -153,23 +208,28 @@ describe("AdminUsersPage — PII/secret non-leakage", () => {
   it("hiçbir sensitive alan listUsers sonuçlarından geçmez", async () => {
     mockAuthenticated()
     mockAdminPermission()
-    listUsersMock.mockResolvedValue([
-      {
-        id: "u1",
-        nickname: "testuser",
-        grade_level: 7,
-        created_at: "2026-01-01T00:00:00Z",
-        is_visible: true,
-        total_points: 100,
-        monthly_points: 10,
-        avatar_key: "av.png",
-        email: "secret@example.com",
-        phone: "+905551234567",
-        password_hash: "$2b$10$secret",
-        metadata: { email: "x" },
-        schedule_profile_id: "secret",
-      },
-    ])
+    listUsersMock.mockResolvedValue(
+      okResult({
+        items: [
+          {
+            id: "u1",
+            nickname: "testuser",
+            grade_level: 7,
+            created_at: "2026-01-01T00:00:00Z",
+            is_visible: true,
+            total_points: 100,
+            monthly_points: 10,
+            avatar_key: "av.png",
+            email: "secret@example.com",
+            phone: "+905551234567",
+            password_hash: "$2b$10$secret",
+            metadata: { email: "x" },
+            schedule_profile_id: "secret",
+          },
+        ],
+        total: 1,
+      }),
+    )
 
     const result = await AdminUsersPage({
       searchParams: Promise.resolve({}),
@@ -186,15 +246,47 @@ describe("AdminUsersPage — PII/secret non-leakage", () => {
   })
 })
 
-describe("AdminUsersPage — no mutation capability", () => {
-  it("sayfa mutation fonksiyonu import etmez", async () => {
-    const pageModule = await import("./page")
-    const source = Object.keys(pageModule)
-    expect(source).toEqual(["default"])
+describe("AdminUsersPage — hata ve boş durum ayrımı", () => {
+  it("gerçekten boş sonuçta 'kayıt bulunamadı' mesajı gösterilir", async () => {
+    mockAuthenticated()
+    mockAdminPermission()
+    listUsersMock.mockResolvedValue(okResult())
+
+    const result = await AdminUsersPage({
+      searchParams: Promise.resolve({}),
+    })
+    const { renderToString } = await import("react-dom/server")
+    const html = renderToString(result)
+
+    expect(html).toContain("Bu filtrelerle eşleşen kullanıcı bulunamadı")
+    expect(html).not.toContain("okunamadı")
+  })
+
+  it("veri kaynağı hatasında ayrı hata mesajı gösterilir (ham mesaj sızmaz)", async () => {
+    mockAuthenticated()
+    mockAdminPermission()
+    listUsersMock.mockResolvedValue({
+      status: "error",
+      items: [],
+      total: 0,
+      page: 1,
+      totalPages: 1,
+    })
+
+    const result = await AdminUsersPage({
+      searchParams: Promise.resolve({}),
+    })
+    const { renderToString } = await import("react-dom/server")
+    const html = renderToString(result)
+
+    expect(html).toContain("Kullanıcı listesi şu anda okunamadı")
+    expect(html).not.toContain("Bu filtrelerle eşleşen kullanıcı bulunamadı")
+    expect(html).not.toContain("db down")
+    expect(html).not.toContain("permission denied")
   })
 })
 
-describe("AdminUsersPage — liste kesme uyarısı", () => {
+describe("AdminUsersPage — sayfalama gezinmesi", () => {
   const baseUser = {
     id: "u1",
     nickname: "testuser",
@@ -206,33 +298,48 @@ describe("AdminUsersPage — liste kesme uyarısı", () => {
     avatar_key: "av.png",
   }
 
-  function fillUsers(count: number) {
-    return Array.from({ length: count }, (_, i) => ({
-      ...baseUser,
-      id: `u${i}`,
-      nickname: `user-${i}`,
-    }))
-  }
-
-  it("limite ulaşıldığında kesme uyarısı gösterilir", async () => {
+  it("çok sayfalı sonuçta sayfa göstergesi ve her iki bağlantı görünür", async () => {
     mockAuthenticated()
     mockAdminPermission()
-    const { USER_LIST_LIMIT } = await import("@/lib/admin/admin-users")
-    listUsersMock.mockResolvedValue(fillUsers(USER_LIST_LIMIT))
+    listUsersMock.mockResolvedValue(
+      okResult({ items: [baseUser], total: 60, page: 2, totalPages: 3 }),
+    )
 
     const result = await AdminUsersPage({
-      searchParams: Promise.resolve({}),
+      searchParams: Promise.resolve({ page: "2" }),
     })
     const { renderToString } = await import("react-dom/server")
     const html = renderToString(result)
 
-    expect(html).toContain("yalnızca ilk 200 kayıt gösteriliyor")
+    expect(html).toContain("Sayfa 2 / 3")
+    expect(html).toContain("Önceki")
+    expect(html).toContain("Sonraki")
+    expect(html).toContain('aria-label="Sayfalama"')
   })
 
-  it("limit altında kesme uyarısı gösterilmez", async () => {
+  it("bağlantılar arama ve filtre parametrelerini korur", async () => {
     mockAuthenticated()
     mockAdminPermission()
-    listUsersMock.mockResolvedValue(fillUsers(3))
+    listUsersMock.mockResolvedValue(
+      okResult({ items: [baseUser], total: 60, page: 2, totalPages: 3 }),
+    )
+
+    const result = await AdminUsersPage({
+      searchParams: Promise.resolve({ grade: "7", query: "ali", page: "2" }),
+    })
+    const { renderToString } = await import("react-dom/server")
+    const html = renderToString(result)
+
+    expect(html).toContain("grade=7&amp;query=ali&amp;page=1")
+    expect(html).toContain("grade=7&amp;query=ali&amp;page=3")
+  })
+
+  it("ilk sayfada 'Önceki' devre dışıdır", async () => {
+    mockAuthenticated()
+    mockAdminPermission()
+    listUsersMock.mockResolvedValue(
+      okResult({ items: [baseUser], total: 60, page: 1, totalPages: 3 }),
+    )
 
     const result = await AdminUsersPage({
       searchParams: Promise.resolve({}),
@@ -240,15 +347,53 @@ describe("AdminUsersPage — liste kesme uyarısı", () => {
     const { renderToString } = await import("react-dom/server")
     const html = renderToString(result)
 
-    expect(html).not.toContain("yalnızca ilk 200 kayıt gösteriliyor")
+    expect(html).toContain('aria-disabled="true"')
+    expect(html).toContain("Sayfa 1 / 3")
+    expect(html).not.toContain("page=0")
+  })
+
+  it("son sayfada 'Sonraki' devre dışıdır", async () => {
+    mockAuthenticated()
+    mockAdminPermission()
+    listUsersMock.mockResolvedValue(
+      okResult({ items: [baseUser], total: 60, page: 3, totalPages: 3 }),
+    )
+
+    const result = await AdminUsersPage({
+      searchParams: Promise.resolve({ page: "3" }),
+    })
+    const { renderToString } = await import("react-dom/server")
+    const html = renderToString(result)
+
+    expect(html).toContain("Sayfa 3 / 3")
+    expect(html).not.toContain("page=4")
+  })
+
+  it("tek sayfalık sonuçta gezinme gösterilmez", async () => {
+    mockAuthenticated()
+    mockAdminPermission()
+    listUsersMock.mockResolvedValue(
+      okResult({ items: [baseUser], total: 5, page: 1, totalPages: 1 }),
+    )
+
+    const result = await AdminUsersPage({
+      searchParams: Promise.resolve({}),
+    })
+    const { renderToString } = await import("react-dom/server")
+    const html = renderToString(result)
+
+    expect(html).not.toContain('aria-label="Sayfalama"')
   })
 
   it("bozuk tarih güvenli '-' olarak gösterilir", async () => {
     mockAuthenticated()
     mockAdminPermission()
-    listUsersMock.mockResolvedValue([
-      { ...baseUser, created_at: "tarih-degil" },
-    ])
+    listUsersMock.mockResolvedValue(
+      okResult({
+        items: [{ ...baseUser, created_at: "tarih-degil" }],
+        total: 1,
+      }),
+    )
 
     const result = await AdminUsersPage({
       searchParams: Promise.resolve({}),
@@ -258,5 +403,13 @@ describe("AdminUsersPage — liste kesme uyarısı", () => {
 
     expect(html).not.toContain("Invalid Date")
     expect(html).toContain(">-</p>")
+  })
+})
+
+describe("AdminUsersPage — no mutation capability", () => {
+  it("sayfa mutation fonksiyonu import etmez", async () => {
+    const pageModule = await import("./page")
+    const source = Object.keys(pageModule)
+    expect(source).toEqual(["default"])
   })
 })
