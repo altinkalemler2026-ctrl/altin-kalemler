@@ -1163,4 +1163,3 @@ drop table public._qa_s94_results;
 
 rollback;
 
-\echo ROLLBACK DONE â€” all fixtures removed.

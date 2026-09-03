@@ -1,15 +1,15 @@
--- ============================================================
+﻿-- ============================================================
 -- scripts/qa_grade_hardening_093_local.sql
 -- Altin Kalemler - Migration 093 yerel QA suite
--- (Ogrenci sınıf değişikliği güvenlik sertleştirmesi)
+-- (Ogrenci sÄ±nÄ±f deÄŸiÅŸikliÄŸi gÃ¼venlik sertleÅŸtirmesi)
 --
 -- Kapsam:
---   T-00 : yetki matrisi (tablo/kolon ayrıcalıkları)
+--   T-00 : yetki matrisi (tablo/kolon ayrÄ±calÄ±klarÄ±)
 --   T-01 : ogrenci KENDI nickname alanini guncelleyebilir
 --   T-02 : ogrenci KENDI grade_level degerini DEGISTIREMEZ (42501)
 --   T-03 : nickname + grade_level AYNI UPDATE'te -> butunlukle
 --          reddedilir; nickname de degismez (atomiklik)
---   T-04 : ogrenci BASKA kullanıcının profilini guncelleyemez
+--   T-04 : ogrenci BASKA kullanÄ±cÄ±nÄ±n profilini guncelleyemez
 --          (RLS: 0 satir; diger profil degisme)
 --   T-05 : anon kullanici guncelleme yapamaz (42501)
 --   T-06 : service_role yonetim yolu calisir (grade_level guncellemesi)
@@ -347,7 +347,7 @@ $blk$;
 
 
 -- ============================================================
--- T-04: ogrenci BASKA kullanıcının profilini guncelleyemez (RLS)
+-- T-04: ogrenci BASKA kullanÄ±cÄ±nÄ±n profilini guncelleyemez (RLS)
 -- ============================================================
 
 do $blk$
@@ -625,4 +625,3 @@ drop table public._qa_g93_results;
 
 rollback;
 
-\echo ROLLBACK DONE — all fixtures removed.
