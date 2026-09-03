@@ -49,6 +49,14 @@ jobs:
         run: npm run test:unit
 
       # ----------------------------------------------------------
+      # Production build: tum runtime rotalarinin derlenmesi CI'da
+      # garanti edilir. Pahali Supabase blokindan ONCE kosar.
+      # ----------------------------------------------------------
+
+      - name: Production build (next build)
+        run: npm run build
+
+      # ----------------------------------------------------------
       # Local Supabase: saglik kontrolu + temiz migration zinciri.
       # Secret gerektirmez; yalnizca yerel gelistirme varsayilanlarini
       # kullanir. Hata durumunda anlasilir teshis loglari basilir.
@@ -158,6 +166,25 @@ jobs:
           end $$;
           select 'CHAIN_OK';
           SQL
+
+      # ----------------------------------------------------------
+      # Tip drift guard: committed src/lib/supabase/types.ts dosyasi
+      # migration zinciriyle birebir uyumlu mu? Uretilen tipler farkli
+      # cikarsa CI kirmizi yanar (tipler unutulmus/guncellenmemis).
+      # db reset SONRASI kosulur: ayni temiz zincir uzerinden dogrulama.
+      # Salt-okunur: yalniz gen ciktisi gecici dosyada karsilastirilir.
+      # ----------------------------------------------------------
+
+      - name: Supabase type drift guard (gen types vs committed)
+        run: |
+          set -euo pipefail
+          supabase gen types typescript --local > /tmp/generated-types.ts
+          if ! diff -u src/lib/supabase/types.ts /tmp/generated-types.ts; then
+            echo "::error::TIPI DRIFT: src/lib/supabase/types.ts, migration zinciriyle uyumsuz."
+            echo "::error::Cozum: 'npx supabase gen types typescript --local > src/lib/supabase/types.ts' calistirip dosyayi guncelle."
+            exit 1
+          fi
+          echo "Tip dosyasi migration zinciriyle uyumlu (drift yok)."
 
       # ----------------------------------------------------------
       # SQL QA suretleri: Faz 1 / Faz 2 / Faz 3 / Faz 3.5 / Faz 4.
@@ -350,4 +377,4 @@ jobs:
       - name: Summary
         if: always()
         run: |
-          echo "CI adimlari tamamlandi: tsc, eslint(scope), vitest(unit), supabase start+health, db reset(dinamik zincir), QA f1/f2/f3/f3.5/f4, parallel probe(work+same), rate-limit probe(faz4), vitest(full)."
+          echo "CI adimlari tamamlandi: tsc, eslint(scope), vitest(unit), next build, supabase start+health, tip drift guard, db reset(dinamik zincir), QA f1/f2/f3/f3.5/f4, parallel probe(work+same), rate-limit probe(faz4), vitest(full)."
