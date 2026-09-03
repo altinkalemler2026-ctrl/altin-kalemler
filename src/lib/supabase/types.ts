@@ -7,31 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       academic_weeks: {
@@ -52,6 +27,39 @@ export type Database = {
           ends_at?: string
           starts_at?: string
           week?: number
+        }
+        Relationships: []
+      }
+      admin_audit_log: {
+        Row: {
+          action_code: string
+          actor_user_id: string | null
+          after_data: Json | null
+          before_data: Json | null
+          entity_id: string | null
+          entity_type: string
+          id: string
+          performed_at: string
+        }
+        Insert: {
+          action_code: string
+          actor_user_id?: string | null
+          after_data?: Json | null
+          before_data?: Json | null
+          entity_id?: string | null
+          entity_type: string
+          id?: string
+          performed_at?: string
+        }
+        Update: {
+          action_code?: string
+          actor_user_id?: string | null
+          after_data?: Json | null
+          before_data?: Json | null
+          entity_id?: string | null
+          entity_type?: string
+          id?: string
+          performed_at?: string
         }
         Relationships: []
       }
@@ -10949,6 +10957,10 @@ export type Database = {
         Args: { p_limit: number; p_rpc_name: string; p_window_seconds: number }
         Returns: undefined
       }
+      _faz5_apply_competition_points: {
+        Args: { p_competition_id: string }
+        Returns: undefined
+      }
       academic_calendar_delete_week: {
         Args: { p_week: number; p_year: string }
         Returns: undefined
@@ -10985,6 +10997,27 @@ export type Database = {
       }
       activate_question_for_students: {
         Args: { p_question_id: string; p_reason?: string }
+        Returns: Json
+      }
+      admin_question_edit: {
+        Args: {
+          p_cognitive_type?: string
+          p_correct_answer?: string
+          p_difficulty?: string
+          p_estimated_solve_time_seconds?: number
+          p_has_visual?: boolean
+          p_is_new_generation?: boolean
+          p_option_a?: string
+          p_option_b?: string
+          p_option_c?: string
+          p_option_d?: string
+          p_option_e?: string
+          p_primary_question_type?: string
+          p_quality_level?: string
+          p_question_id: string
+          p_question_text?: string
+          p_secondary_question_type?: string
+        }
         Returns: Json
       }
       advance_competition_progress: {
@@ -11151,6 +11184,14 @@ export type Database = {
         Args: { p_staging_question_id: string }
         Returns: Json
       }
+      get_own_competition_result: {
+        Args: { p_competition_id: string }
+        Returns: Json
+      }
+      get_own_matchmaking_status: {
+        Args: { p_subject_id: string }
+        Returns: Json
+      }
       get_question_base_eligibility: {
         Args: { p_question_id: string }
         Returns: {
@@ -11195,6 +11236,41 @@ export type Database = {
         Args: { p_staging_question_id: string }
         Returns: Json
       }
+      get_student_attempt_trend: {
+        Args: { p_days: number }
+        Returns: {
+          avg_time_ms: number
+          blank: number
+          correct: number
+          day: string
+          pass_timeout: number
+          success_rate: number
+          total: number
+          wrong: number
+        }[]
+      }
+      get_student_dimension_summary: {
+        Args: never
+        Returns: {
+          avg_time_ms: number
+          blank: number
+          correct: number
+          display_name: string
+          last_attempted_at: string
+          pass_timeout: number
+          repeat_correct: number
+          repeat_success_rate: number
+          repeat_total: number
+          scope_key: string
+          scope_type: string
+          subject_id: string
+          subject_name: string
+          success_rate: number
+          total: number
+          total_time_ms: number
+          wrong: number
+        }[]
+      }
       has_admin_permission: {
         Args: { p_permission_code: string; p_user_id: string }
         Returns: boolean
@@ -11220,6 +11296,8 @@ export type Database = {
       }
       is_current_user_admin: { Args: never; Returns: boolean }
       is_current_user_super_admin: { Args: never; Returns: boolean }
+      join_matchmaking_queue: { Args: { p_subject_id: string }; Returns: Json }
+      leave_matchmaking_queue: { Args: never; Returns: Json }
       normalize_excel_answer: { Args: { p_value: string }; Returns: string }
       normalize_excel_cognitive_type: {
         Args: { p_value: string }
@@ -11694,9 +11772,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },

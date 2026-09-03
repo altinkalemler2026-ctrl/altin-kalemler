@@ -140,33 +140,10 @@ export function mapDimensionSummaryRow(
 }
 
 /**
- * 085/086 RPC'leri (training analytics) henüz generated Supabase
- * tiplerinde (Database["public"]["Functions"]) yok; migration dosyaları
- * var ama türler yeniden üretilmedi. Bu yüzden — competition/service.ts
- * Faz-5 079 RPC'lerinde yapıldığı gibi — dar turlu bir client ile bu
- * RPC'leri allowlist'e bağlarız. Bilinmeyen RPC adı compile-time reddedilir.
+ * 085/086 RPC'leri (training analytics) generated Supabase tiplerine
+ * eklendi (supabase gen types); RPC çağrıları artık doğrudan
+ * AnalyticsClient üzerinden tip-güvenli yapılır.
  */
-type MissingRpcName =
-  | "get_student_dimension_summary"
-  | "get_student_attempt_trend"
-
-type MissingRpcArgsMap = {
-  get_student_dimension_summary: Record<string, never>
-  get_student_attempt_trend: { p_days: number }
-}
-
-/** Yalnız yukarıdaki allowlisted exact RPC adlarını kabul eden dar client. */
-interface NarrowMissingRpcClient {
-  rpc<Name extends MissingRpcName>(
-    fn: Name,
-    args: MissingRpcArgsMap[Name]
-  ): Promise<{ data: unknown; error: unknown }>
-}
-
-/** Supabase client'i dar RPC arayüzüne çevirir. */
-function toNarrowClient(client: AnalyticsClient): NarrowMissingRpcClient {
-  return client as unknown as NarrowMissingRpcClient
-}
 
 /**
  * Oturumdaki öğrencinin kendi boyut metrik özetini döndürür
@@ -176,10 +153,7 @@ function toNarrowClient(client: AnalyticsClient): NarrowMissingRpcClient {
 export async function fetchStudentDimensionSummary(
   client: AnalyticsClient
 ): Promise<DimensionSummaryRow[]> {
-  const { data, error } = await toNarrowClient(client).rpc(
-    "get_student_dimension_summary",
-    {}
-  )
+  const { data, error } = await client.rpc("get_student_dimension_summary")
   if (error) throw new AnalyticsError(mapAnalyticsErrorText(error))
 
   const rows = Array.isArray(data) ? data : []
@@ -237,12 +211,9 @@ export async function fetchStudentAttemptTrend(
 ): Promise<AttemptTrendDay[]> {
   const windowDays = validateTrendDays(days)
 
-  const { data, error } = await toNarrowClient(client).rpc(
-    "get_student_attempt_trend",
-    {
-      p_days: windowDays,
-    }
-  )
+  const { data, error } = await client.rpc("get_student_attempt_trend", {
+    p_days: windowDays,
+  })
   if (error) throw new AnalyticsError(mapAnalyticsErrorText(error))
 
   const rows = Array.isArray(data) ? data : []
