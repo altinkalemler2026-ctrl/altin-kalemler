@@ -7,6 +7,8 @@ import {
   hasAdminPermission,
 } from "@/lib/admin/question-edit"
 import {
+  MAX_OPTION_LENGTH,
+  MAX_QUESTION_TEXT_LENGTH,
   QUESTION_PUBLICATION_MESSAGES,
 } from "@/lib/admin/question-edit-errors"
 import {
@@ -104,9 +106,7 @@ export default async function AdminQuestionDetailPage({
   const readinessNeeded = canEdit || canPublish
   const [result, readiness] = await Promise.all([
     getQuestionDetail(id),
-    readinessNeeded && canPublish
-      ? getPublicationReadiness(id)
-      : Promise.resolve(null),
+    readinessNeeded ? getPublicationReadiness(id) : Promise.resolve(null),
   ])
 
   if (result.status === "error") {
@@ -314,6 +314,7 @@ export default async function AdminQuestionDetailPage({
                   name="questionText"
                   rows={4}
                   required
+                  maxLength={MAX_QUESTION_TEXT_LENGTH}
                   defaultValue={question.question_text ?? ""}
                   className={inputClassName}
                 />
@@ -335,13 +336,16 @@ export default async function AdminQuestionDetailPage({
                       className="block text-sm font-medium text-gray-700"
                     >
                       {label} seçeneği
-                      {label === "E" ? " (isteğe bağlı)" : ""}
+                      {label === "E"
+                        ? " (isteğe bağlı — boş bırakılırsa kayıttan kaldırılır)"
+                        : ""}
                     </label>
                     <input
                       id={`edit-option-${label}`}
                       name={`option${label}`}
                       type="text"
                       required={label !== "E"}
+                      maxLength={MAX_OPTION_LENGTH}
                       defaultValue={value ?? ""}
                       className={inputClassName}
                     />
@@ -380,6 +384,41 @@ export default async function AdminQuestionDetailPage({
                 </button>
               </div>
             </form>
+          </section>
+        )}
+
+        {canEdit && !canPublish && readiness?.status === "ok" && (
+          <section
+            aria-label="Yayın durumu"
+            className="mt-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
+          >
+            <h2 className="text-lg font-semibold text-gray-900">
+              Yayın Durumu
+            </h2>
+            {readiness.currentIsActive === true ? (
+              <p className="mt-2 text-sm text-gray-600">
+                Soru şu anda yayında.
+              </p>
+            ) : readiness.blockers.length === 0 ? (
+              <p className="mt-2 text-sm text-emerald-700">
+                {QUESTION_PUBLICATION_MESSAGES.readyTitle}
+              </p>
+            ) : null}
+            {readiness.blockers.length > 0 && (
+              <div className="mt-2">
+                <p className="text-sm font-medium text-gray-700">
+                  {QUESTION_PUBLICATION_MESSAGES.blockersTitle}
+                </p>
+                <ul className="mt-1 list-inside list-disc text-sm text-gray-600">
+                  {readiness.blockers.map((blocker) => (
+                    <li key={blocker.code}>{blocker.message}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <p className="mt-2 text-xs text-gray-400">
+              Yayın/geri çekme işlemleri için onay yetkisi gerekir.
+            </p>
           </section>
         )}
 

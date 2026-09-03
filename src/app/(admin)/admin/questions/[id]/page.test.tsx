@@ -240,8 +240,9 @@ describe("AdminQuestionDetailPage — authorized admin", () => {
     expect(html).toContain('name="questionText"')
     expect(html).toContain('name="correctAnswer"')
     expect(html).toContain('name="optionA"')
-    // E seçeneği isteğe bağlıdır; A-D zorunlu.
-    expect(html).toContain("(isteğe bağlı)")
+    // E seçeneği isteğe bağlıdır ve boş bırakılmasının sonucu belirtilir.
+    expect(html).toContain("isteğe bağlı")
+    expect(html).toContain("boş bırakılırsa kayıttan kaldırılır")
   })
 
   it("questions.approve izni olan admende yayın kontrolü readiness'e göre render edilir", async () => {
@@ -318,6 +319,57 @@ describe("AdminQuestionDetailPage — authorized admin", () => {
     expect(html).toContain(
       "Yayın uygunluk durumu şu anda okunamadı"
     )
+  })
+
+  it("questions.edit yetkisi olan ama onay yetkisi olmayan admende salt-okunur yayın durumu özeti gösterilir", async () => {
+    mockAuthenticated()
+    mockAdminPermission()
+    hasPermissionMock.mockImplementation(async (code: string) => {
+      return code === "questions.edit"
+    })
+    readinessMock.mockResolvedValue({
+      status: "ok",
+      currentIsActive: false,
+      canActivate: false,
+      blockers: [{ code: "question_not_approved", message: "onaylı değil" }],
+      warnings: [],
+    })
+
+    const html = await renderPage()
+
+    expect(html).toContain("Yayın Durumu")
+    expect(html).toContain("onaylı değil")
+    expect(html).toContain("Yayın/geri çekme işlemleri için onay yetkisi gerekir")
+    // Yayın kontrolleri (butonlar) YOK: onay yetkisi olmadan hiç render edilmez.
+    expect(html).not.toContain("Öğrencilere Yayınla")
+    expect(html).not.toContain("Yayından Geri Çek")
+  })
+
+  it("flash parametreleri güvenli banner olarak render edilir (ham mesaj URL'den aynen gelir ama kaçışlanır)", async () => {
+    mockAuthenticated()
+    mockAdminPermission()
+    hasPermissionMock.mockResolvedValue(false)
+
+    getQuestionDetailMock.mockResolvedValue({
+      status: "ok",
+      item: questionDetail(),
+    })
+    const { default: AdminQuestionDetailPage } = await import("./page")
+    const result = await AdminQuestionDetailPage({
+      params: Promise.resolve({ id: "q1" }),
+      searchParams: Promise.resolve({
+        ok: "Soru güncellendi.",
+        error: "Soru bulunamadı; sayfayı yenileyip tekrar deneyin.",
+      }),
+    })
+    const { renderToString } = await import("react-dom/server")
+    const html = renderToString(result)
+
+    // error banner'ı önceliklidir: error varken ok banner'ı gösterilmez.
+    expect(html).toMatch(/role="alert"/)
+    expect(html).toContain("Soru bulunamadı; sayfayı yenileyip tekrar deneyin.")
+    expect(html).not.toMatch(/role="status"/)
+    expect(html).not.toContain("Soru güncellendi.")
   })
 })
 

@@ -18,6 +18,7 @@ import {
   QUESTION_EDIT_ERROR_MESSAGES,
   QUESTION_EDIT_INPUT_MESSAGES,
   QUESTION_PUBLICATION_MESSAGES,
+  formatBlockerFlash,
   mapBlockerMessage,
   mapQuestionEditError,
   validateActivateReason,
@@ -213,6 +214,28 @@ describe("mapBlockerMessage", () => {
     const mapped = mapBlockerMessage("unknown_future_code")
     expect(mapped).toBe(QUESTION_PUBLICATION_MESSAGES.unknownBlocker)
     expect(mapped).not.toContain("activation readiness")
+  })
+})
+
+describe("formatBlockerFlash", () => {
+  it("ilk 3 bloker + kalan sayısı; URL taşmayacak biçimde kırpılır", () => {
+    const formatted = formatBlockerFlash([
+      "engel bir",
+      "engel iki",
+      "engel üç",
+      "engel dört",
+      "engel beş",
+    ])
+    expect(formatted).toContain("engel bir")
+    expect(formatted).toContain("engel üç")
+    expect(formatted).toContain("ve 2 yayın engeli daha.")
+    expect(formatted).not.toContain("engel dört")
+  })
+
+  it("3 ve altı blokerde kırpma/kalan mesajı olmaz", () => {
+    expect(formatBlockerFlash(["a"])).toBe("a")
+    expect(formatBlockerFlash(["a", "b", "c"])).toBe("a b c")
+    expect(formatBlockerFlash([])).toBe("")
   })
 })
 

@@ -53,6 +53,27 @@ export const QUESTION_PUBLICATION_MESSAGES = {
   unknownBlocker: "Bu yayın koşulu açıklanamadı; gerekleri kontrol edin.",
 } as const
 
+/** Flash URL'inde bloker listesi taşınabilir kalsın diye üst sınır. */
+export const MAX_FLASH_BLOCKERS = 3
+
+/** Kırpılan bloker listesindeki kalan engel sayısı için ek mesaj. */
+export function additionalBlockersMessage(count: number): string {
+  return `ve ${count} yayın engeli daha.`
+}
+
+/**
+ * Bloker mesajlarını flash'e taşınabilir tek metne birleştirir: ilk
+ * MAX_FLASH_BLOCKERS mesaj + kalan sayı. URL uzunluğu taşmaz; mesajlar
+ * yalnız mapBlockerMessage'tan gelen sabit Türkçe metinlerdir.
+ */
+export function formatBlockerFlash(messages: string[]): string {
+  const head = messages.slice(0, MAX_FLASH_BLOCKERS)
+  const remaining = messages.length - head.length
+  const parts = [...head]
+  if (remaining > 0) parts.push(additionalBlockersMessage(remaining))
+  return parts.join(" ")
+}
+
 /** Migration 040 readiness blocker/uyarı kodları → Türkçe açıklama. */
 const BLOCKER_MESSAGES: Record<string, string> = {
   question_not_approved:
@@ -125,11 +146,12 @@ const UUID_PATTERN =
 export function isValidQuestionId(value: string): boolean {
   return UUID_PATTERN.test(value)
 }
+/** Doğrulama sınırları; UI maxLength öznitelikleriyle uyumlu tutulur. */
+export const MAX_QUESTION_TEXT_LENGTH = 10_000
 
-const MAX_QUESTION_TEXT_LENGTH = 10_000
-const MAX_OPTION_LENGTH = 2_000
-const MAX_REASON_LENGTH = 500
+export const MAX_OPTION_LENGTH = 2_000
 
+export const MAX_REASON_LENGTH = 500
 export interface QuestionEditRawInput {
   questionId: string
   questionText: string

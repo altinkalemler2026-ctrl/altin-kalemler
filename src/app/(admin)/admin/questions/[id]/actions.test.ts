@@ -357,6 +357,64 @@ describe("activateQuestionAction", () => {
     )
   })
 
+  it("questions.approve yok ama ai.manage varsa yayın izni verilir (fallback)", async () => {
+    hasPermissionMock.mockImplementation(async (code: string) => {
+      return code === "ai.manage"
+    })
+
+    await expect(
+      activateQuestionAction(makeFormData({ questionId: UUID }))
+    ).rejects.toThrow("NEXT_REDIRECT")
+
+    expect(rpcMock).toHaveBeenCalledWith("activate_question_for_students", {
+      p_question_id: UUID,
+    })
+    expect(lastFlashParams().get("ok")).toBe(
+      QUESTION_EDIT_SUCCESS_MESSAGES.activate
+    )
+  })
+
+  it("readiness PASS değilse bloker listesi kırparak gösterilir (URL taşmaz)", async () => {
+    readinessOk({
+      canActivate: false,
+      blockers: [
+        { code: "question_not_approved", message: "engel bir" },
+        { code: "missing_subject", message: "engel iki" },
+        { code: "restricted_license", message: "engel üç" },
+        { code: "full_ai_readiness_missing", message: "engel dört" },
+        { code: "valid_visual_asset_missing", message: "engel beş" },
+      ],
+    })
+
+    await expect(
+      activateQuestionAction(makeFormData({ questionId: UUID }))
+    ).rejects.toThrow("NEXT_REDIRECT")
+
+    expect(rpcMock).not.toHaveBeenCalled()
+    const error = lastFlashParams().get("error") ?? ""
+    expect(error).toContain("engel bir")
+    expect(error).toContain("engel üç")
+    expect(error).toContain("ve 2 yayın engeli daha.")
+    expect(error).not.toContain("engel dört")
+    expect(error).not.toContain("engel beş")
+  })
+
+  it("activate generic RPC hatası Türkçe mesaja düşer; ham metin sızmaz", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { message: "internal: cannot connect to pg_catalog" },
+    })
+
+    await expect(
+      activateQuestionAction(makeFormData({ questionId: UUID }))
+    ).rejects.toThrow("NEXT_REDIRECT")
+
+    expect(lastFlashParams().get("error")).toBe(
+      QUESTION_EDIT_ERROR_MESSAGES.generic
+    )
+    expect(lastFlashUrl()).not.toContain("pg_catalog")
+  })
+
   it("RPC izin hatası Türkçeye çevrilir; ham mesaj sızmaz", async () => {
     rpcMock.mockResolvedValue({
       data: null,

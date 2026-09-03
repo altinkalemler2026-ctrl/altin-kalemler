@@ -27,6 +27,7 @@ import {
   QUESTION_EDIT_SUCCESS_MESSAGES,
   QUESTION_PUBLICATION_MESSAGES,
   QUESTION_PUBLICATION_STATUS_MESSAGES,
+  formatBlockerFlash,
   isValidQuestionId,
   mapQuestionEditError,
   validateActivateReason,
@@ -187,9 +188,9 @@ export async function activateQuestionAction(
     flash(
       questionId,
       "error",
-      `${QUESTION_PUBLICATION_MESSAGES.blockedTitle} ${readiness.blockers
-        .map((blocker) => blocker.message)
-        .join(" ")}`
+      `${QUESTION_PUBLICATION_MESSAGES.blockedTitle} ${formatBlockerFlash(
+        readiness.blockers.map((blocker) => blocker.message)
+      )}`
     )
   }
 
