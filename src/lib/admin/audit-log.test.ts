@@ -36,9 +36,9 @@ function makeBuilder(
 ) {
   const state = { head: false }
   const builder = {
-    eq: vi.fn(() => builder),
-    order: vi.fn(() => builder),
-    range: vi.fn(() => builder),
+    eq: vi.fn((..._args: unknown[]) => builder),
+    order: vi.fn((..._args: unknown[]) => builder),
+    range: vi.fn((..._args: unknown[]) => builder),
     select: vi.fn((...args: unknown[]) => {
       const opts = args[1] as { head?: boolean } | undefined
       state.head = Boolean(opts?.head)
