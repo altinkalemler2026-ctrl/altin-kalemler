@@ -1,4 +1,4 @@
-﻿-- ============================================================
+-- ============================================================
 -- scripts/qa_scoring_v1_094_local.sql
 -- Altin Kalemler - Migration 094 yerel QA suite
 -- (Yarisma puanlama sozlesmesi V1)
