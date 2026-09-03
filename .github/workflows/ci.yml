@@ -178,10 +178,10 @@ jobs:
       - name: Supabase type drift guard (gen types vs committed)
         run: |
           set -euo pipefail
-          supabase gen types typescript --local > /tmp/generated-types.ts
+          supabase gen types typescript --local --schema public > /tmp/generated-types.ts
           if ! diff -u src/lib/supabase/types.ts /tmp/generated-types.ts; then
             echo "::error::TIPI DRIFT: src/lib/supabase/types.ts, migration zinciriyle uyumsuz."
-            echo "::error::Cozum: 'npx supabase gen types typescript --local > src/lib/supabase/types.ts' calistirip dosyayi guncelle."
+            echo "::error::Cozum: 'npx supabase gen types typescript --local --schema public > src/lib/supabase/types.ts' calistirip dosyayi guncelle."
             exit 1
           fi
           echo "Tip dosyasi migration zinciriyle uyumlu (drift yok)."
