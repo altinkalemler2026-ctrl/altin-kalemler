@@ -11103,6 +11103,14 @@ export type Database = {
         Args: { p_vault_id: string }
         Returns: string
       }
+      equip_student_character: {
+        Args: { p_character_id: string }
+        Returns: Json
+      }
+      equip_student_cosmetic: {
+        Args: { p_cosmetic_item_id: string; p_equip?: boolean }
+        Returns: Json
+      }
       evaluate_ai_question_readiness: {
         Args: { p_staging_question_id: string }
         Returns: Json
@@ -11644,6 +11652,7 @@ export type Database = {
         Args: { p_permission_code: string }
         Returns: boolean
       }
+      unequip_student_character: { Args: never; Returns: Json }
     }
     Enums: {
       [_ in never]: never
