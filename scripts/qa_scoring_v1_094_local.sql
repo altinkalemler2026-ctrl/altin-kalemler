@@ -1081,20 +1081,16 @@ begin
     execute 'set local role authenticated';
     perform set_config('request.jwt.claims',
       '{"sub":"94000000-0000-0000-0000-000000000091","role":"authenticated"}', true);
-    -- U1 icin bilincsiz yanlis sik: dogru sikdan farkli ilk secenek.
-    select case
-             when correct_answer = 'A' then 'B'
-             else 'A'
-           end
-      into v_wrong
-      from public.questions
-     where id = (select question_id from public.competition_questions
-                  where id = v_rel);
+    -- U1 icin bilincsiz yanlis sik: dogru siklar A..E sirasinda
+    -- oldugundan donusum B,C,D,E,A daima yanlistir (tablo okumasi
+    -- gerektirmez; istemci korumali tablolara erisemez).
+    v_wrong := (array['B','C','D','E','A'])[v_comp2];
     select public.submit_competition_answer(v_rel, v_wrong) into v_res;
     perform set_config('request.jwt.claims',
       '{"sub":"94000000-0000-0000-0000-000000000092","role":"authenticated"}', true);
     select public.submit_competition_answer(v_rel,
       (array['A','B','C','D','E'])[v_comp2]) into v_res;
+    perform set_config('request.claims', '', true);
     perform set_config('request.jwt.claims', '', true);
     execute 'reset role';
   end loop;
