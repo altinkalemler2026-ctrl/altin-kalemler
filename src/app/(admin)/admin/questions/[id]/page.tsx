@@ -72,7 +72,30 @@ export default async function AdminQuestionDetailPage({
   }
 
   const { id } = await params
-  const question = await getQuestionDetail(id)
+  const result = await getQuestionDetail(id)
+
+  if (result.status === "error") {
+    return (
+      <main className="min-h-screen bg-gray-50 p-4 sm:p-8">
+        <div className="mx-auto max-w-3xl">
+          <Link
+            href="/admin/questions"
+            className="mb-4 inline-block rounded-xl border border-gray-300 bg-white px-4 py-2 font-medium text-gray-700 hover:bg-gray-100"
+          >
+            {M.backToList}
+          </Link>
+          <p
+            role="alert"
+            className="rounded-2xl border border-amber-200 bg-amber-50 px-6 py-10 text-amber-800"
+          >
+            {M.detailError}
+          </p>
+        </div>
+      </main>
+    )
+  }
+
+  const question = result.item
 
   if (!question) {
     return (

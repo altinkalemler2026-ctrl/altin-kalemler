@@ -115,7 +115,7 @@ describe("AdminUserDetailPage — authorized admin", () => {
   it("users.manage yetkisiyle getUserDetail çağrılır", async () => {
     mockAuthenticated()
     mockAdminPermission()
-    getUserDetailMock.mockResolvedValue(null)
+    getUserDetailMock.mockResolvedValue({ status: "ok", item: null })
 
     await AdminUserDetailPage({ params: Promise.resolve({ id: "u1" }) })
 
@@ -126,11 +126,11 @@ describe("AdminUserDetailPage — authorized admin", () => {
   })
 })
 
-describe("AdminUserDetailPage — not found", () => {
-  it("kullanıcı bulunamadığında mesaj gösterilir", async () => {
+describe("AdminUserDetailPage — hata/bulunamadı ayrımı", () => {
+  it("kullanıcı bulunamadığında 'bulunamadı' mesajı gösterilir", async () => {
     mockAuthenticated()
     mockAdminPermission()
-    getUserDetailMock.mockResolvedValue(null)
+    getUserDetailMock.mockResolvedValue({ status: "ok", item: null })
 
     const result = await AdminUserDetailPage({
       params: Promise.resolve({ id: "nonexistent" }),
@@ -140,6 +140,25 @@ describe("AdminUserDetailPage — not found", () => {
     const html = renderToString(result)
 
     expect(html).toContain("Kullanıcı bulunamadı")
+    expect(html).not.toContain("okunamadı")
+  })
+
+  it("veri kaynağı hatasında ayrı hata mesajı gösterilir (ham mesaj sızmaz)", async () => {
+    mockAuthenticated()
+    mockAdminPermission()
+    getUserDetailMock.mockResolvedValue({ status: "error", item: null })
+
+    const result = await AdminUserDetailPage({
+      params: Promise.resolve({ id: "u1" }),
+    })
+
+    const { renderToString } = await import("react-dom/server")
+    const html = renderToString(result)
+
+    expect(html).toContain("Kullanıcı bilgileri şu anda okunamadı")
+    expect(html).not.toContain("Kullanıcı bulunamadı")
+    expect(html).not.toContain("db down")
+    expect(html).not.toContain("permission denied")
   })
 })
 
@@ -148,23 +167,26 @@ describe("AdminUserDetailPage — PII/secret non-leakage", () => {
     mockAuthenticated()
     mockAdminPermission()
     getUserDetailMock.mockResolvedValue({
-      id: "u1",
-      nickname: "testuser",
-      grade_level: 8,
-      created_at: "2026-01-01T00:00:00Z",
-      updated_at: "2026-06-01T00:00:00Z",
-      is_visible: true,
-      total_points: 200,
-      monthly_points: 50,
-      avatar_key: "av.png",
-      character_key: "knight",
-      league_code: "gold",
-      email: "secret@example.com",
-      phone: "+905551234567",
-      password_hash: "$2b$10$secret",
-      metadata: { email: "x" },
-      schedule_profile_id: "secret",
-      raw_user_meta_data: { provider: "google" },
+      status: "ok",
+      item: {
+        id: "u1",
+        nickname: "testuser",
+        grade_level: 8,
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-06-01T00:00:00Z",
+        is_visible: true,
+        total_points: 200,
+        monthly_points: 50,
+        avatar_key: "av.png",
+        character_key: "knight",
+        league_code: "gold",
+        email: "secret@example.com",
+        phone: "+905551234567",
+        password_hash: "$2b$10$secret",
+        metadata: { email: "x" },
+        schedule_profile_id: "secret",
+        raw_user_meta_data: { provider: "google" },
+      },
     })
 
     const result = await AdminUserDetailPage({

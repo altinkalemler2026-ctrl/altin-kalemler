@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 import {
   GRADES,
+  SORT_OPTIONS,
   USER_PAGE_SIZE,
   countUsers,
   getUserDetail,
@@ -9,6 +10,7 @@ import {
   mapUserListItem,
   parseGrade,
   parsePage,
+  parseSort,
 } from "./admin-users"
 
 const createClientMock = vi.hoisted(() => vi.fn())
@@ -215,6 +217,40 @@ describe("parsePage", () => {
   })
 })
 
+describe("parseSort", () => {
+  it("boş/geçersiz girdiler varsayılan 'newest'e düşer", () => {
+    for (const bad of [undefined, "", "abc", "OLDEST", "ascending"]) {
+      expect(parseSort(bad)).toBe("newest")
+    }
+  })
+
+  it("yalnızca allowlist değerlerini kabul eder", () => {
+    expect(parseSort("oldest")).toBe("oldest")
+    expect(parseSort("newest")).toBe("newest")
+    expect(SORT_OPTIONS).toEqual(["newest", "oldest"])
+  })
+})
+
+describe("listUsers — sıralama", () => {
+  it("varsayılan sıralama created_at DESC'tir", async () => {
+    const builder = makeQueryMock({ data: [], error: null, count: 60 })
+    createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
+    await listUsers({ sort: "newest" }, 1)
+    expect(builder.order).toHaveBeenCalledWith("created_at", {
+      ascending: false,
+    })
+  })
+
+  it("oldest sıralama created_at ASC'e çevrilir", async () => {
+    const builder = makeQueryMock({ data: [], error: null, count: 60 })
+    createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
+    await listUsers({ sort: "oldest" }, 1)
+    expect(builder.order).toHaveBeenCalledWith("created_at", {
+      ascending: true,
+    })
+  })
+})
+
 describe("listUsers — sayfalama ve fail-closed", () => {
   it("count hatasında status:'error' döner (boş liste ≠ hata)", async () => {
     const builder = makeQueryMock({
@@ -334,20 +370,24 @@ describe("listUsers — sayfalama ve fail-closed", () => {
   })
 })
 
-describe("getUserDetail — sorgu hattı (fail-closed)", () => {
-  it("veri kaynağı hatasında null döner", async () => {
+describe("getUserDetail — sorgu hattı (hata/bulunamadı ayrımı)", () => {
+  it("veri kaynağı hatasında status:'error' döner", async () => {
     const builder = makeQueryMock({
       data: null,
       error: { message: "db down" },
     })
     createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
-    await expect(getUserDetail("u1")).resolves.toBeNull()
+    const result = await getUserDetail("u1")
+    expect(result.status).toBe("error")
+    expect(result.item).toBeNull()
   })
 
-  it("bulunamayan kullanıcıda null döner", async () => {
+  it("bulunamayan kullanıcıda ok + null döner (hata ile karışmaz)", async () => {
     const builder = makeQueryMock({ data: null, error: null })
     createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
-    await expect(getUserDetail("u1")).resolves.toBeNull()
+    const result = await getUserDetail("u1")
+    expect(result.status).toBe("ok")
+    expect(result.item).toBeNull()
   })
 
   it("başarılı cevabı detay DTO'suna çevirir", async () => {
@@ -370,9 +410,11 @@ describe("getUserDetail — sorgu hattı (fail-closed)", () => {
     }
     const builder = makeQueryMock({ data: row, error: null })
     createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
-    const detail = await getUserDetail("u1")
-    expect(detail?.character_key).toBe("knight")
-    expect(detail?.league_code).toBe("silver")
-    expect(detail?.avatar_key).toBeNull()
+    const result = await getUserDetail("u1")
+    expect(result.status).toBe("ok")
+    expect(result.item?.nickname).toBe("ali")
+    expect(result.item?.character_key).toBe("knight")
+    expect(result.item?.league_code).toBe("silver")
+    expect(result.item?.avatar_key).toBeNull()
   })
 })

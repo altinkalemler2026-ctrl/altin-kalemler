@@ -41,12 +41,14 @@ vi.mock("@/lib/admin/question-bank", async () => {
     listSubjects: listSubjectsMock,
     parseGrade: actual.parseGrade,
     parsePage: actual.parsePage,
+    parseSort: actual.parseSort,
     parseUuid: actual.parseUuid,
     sanitizeSearchQuery: actual.sanitizeSearchQuery,
     EXAM_TRACKS: actual.EXAM_TRACKS,
     GRADES: actual.GRADES,
     DIFFICULTIES: actual.DIFFICULTIES,
     APPROVAL_STATUSES: actual.APPROVAL_STATUSES,
+    SORT_OPTIONS: actual.SORT_OPTIONS,
   }
 })
 
@@ -64,9 +66,12 @@ beforeEach(() => {
     page: 1,
     totalPages: 1,
   })
-  listSubjectsMock.mockResolvedValue([
-    { id: "bbbbbbb1-0000-4000-8000-000000000001", name: "Matematik" },
-  ])
+  listSubjectsMock.mockResolvedValue({
+    status: "ok",
+    subjects: [
+      { id: "bbbbbbb1-0000-4000-8000-000000000001", name: "Matematik" },
+    ],
+  })
 
   createClientMock.mockImplementation(async () => ({
     auth: { getUser: getUserMock },
@@ -183,6 +188,7 @@ describe("AdminQuestionsPage — authorized admin ve sayfalama", () => {
         approvalStatus: undefined,
         isActive: undefined,
         query: undefined,
+        sort: "newest",
       },
       1,
     )
@@ -275,6 +281,36 @@ describe("AdminQuestionsPage — authorized admin ve sayfalama", () => {
       1,
     )
   })
+
+  it("geçerli sort parametresi geçirilir", async () => {
+    mockAuthenticated()
+    mockAdminPermission()
+
+    await AdminQuestionsPage({
+      searchParams: Promise.resolve({ sort: "oldest" }),
+    })
+
+    expect(listQuestionsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ sort: "oldest" }),
+      1,
+    )
+  })
+
+  it("geçersiz sort güvenli varsayılana düşer", async () => {
+    mockAuthenticated()
+    mockAdminPermission()
+
+    for (const bad of ["abc", "ASC", "", "difficulty"]) {
+      listQuestionsMock.mockClear()
+      await AdminQuestionsPage({
+        searchParams: Promise.resolve({ sort: bad }),
+      })
+      expect(listQuestionsMock).toHaveBeenCalledWith(
+        expect.objectContaining({ sort: "newest" }),
+        1,
+      )
+    }
+  })
 })
 
 describe("AdminQuestionsPage — hata ve boş durum ayrımı", () => {
@@ -314,6 +350,28 @@ describe("AdminQuestionsPage — hata ve boş durum ayrımı", () => {
     expect(html).not.toContain("Bu filtrelerle eşleşen soru bulunamadı")
     expect(html).not.toContain("db down")
     expect(html).not.toContain("permission denied")
+  })
+})
+
+describe("AdminQuestionsPage — ders listesi hata durumu", () => {
+  it("ders listesi hatasında uyarı gösterilir, seçici devre dışı kalır ve liste çalışmayı sürdürür", async () => {
+    mockAuthenticated()
+    mockAdminPermission()
+    listSubjectsMock.mockResolvedValue({ status: "error", subjects: [] })
+    listQuestionsMock.mockResolvedValue(
+      okResult({ items: [questionItem()], total: 1 }),
+    )
+
+    const result = await AdminQuestionsPage({
+      searchParams: Promise.resolve({}),
+    })
+    const { renderToString } = await import("react-dom/server")
+    const html = renderToString(result)
+
+    expect(html).toContain("Ders listesi şu anda okunamadı")
+    expect(html).toContain("disabled")
+    expect(html).not.toContain('value="bbbbbbb1-0000-4000-8000-000000000001"')
+    expect(html).toContain("TYT-MAT-001")
   })
 })
 
@@ -364,8 +422,12 @@ describe("AdminQuestionsPage — sayfalama gezinmesi", () => {
     const { renderToString } = await import("react-dom/server")
     const html = renderToString(result)
 
-    expect(html).toContain(`subject=${SUBJECT_ID}&amp;query=t%C3%BCrev&amp;page=1`)
-    expect(html).toContain(`subject=${SUBJECT_ID}&amp;query=t%C3%BCrev&amp;page=3`)
+    expect(html).toContain(
+      `subject=${SUBJECT_ID}&amp;query=t%C3%BCrev&amp;sort=newest&amp;page=1`,
+    )
+    expect(html).toContain(
+      `subject=${SUBJECT_ID}&amp;query=t%C3%BCrev&amp;sort=newest&amp;page=3`,
+    )
   })
 
   it("son sayfada 'Sonraki' devre dışıdır", async () => {

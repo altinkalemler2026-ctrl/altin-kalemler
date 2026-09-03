@@ -32,6 +32,8 @@ export type QuestionFilter = {
   approvalStatus?: string
   isActive?: boolean
   query?: string
+  /** Allowlist'li sıralama; undefined -> newest. */
+  sort?: SortOption
 }
 
 /** Liste sorgularının sabit güvenli üst sınırı. */
@@ -63,6 +65,34 @@ export function parsePage(value: string | undefined): number {
   const n = Number(value)
   if (!Number.isInteger(n) || n < 1) return 1
   return n > MAX_PAGE ? MAX_PAGE : n
+}
+
+/** Allowlist'li sıralama seçenekleri (yalnızca güvenli sütun). */
+export const SORT_OPTIONS = ["newest", "oldest"] as const
+
+export type SortOption = (typeof SORT_OPTIONS)[number]
+
+/** Sıralama parametresi; geçersiz/boş girdi güvenli varsayılana düşer. */
+export function parseSort(value: string | undefined): SortOption {
+  return (SORT_OPTIONS as readonly string[]).includes(value ?? "")
+    ? (value as SortOption)
+    : "newest"
+}
+
+/**
+ * Tekil kayıt sonucu. `status: "error"` veri kaynağının OKUNAMADIĞINI
+ * belirtir ve "bulunamadı" (ok + item null) durumundan AYRI gösterilir;
+ * ham Supabase hata metni asla taşınmaz.
+ */
+export interface DetailResult<T> {
+  status: "ok" | "error"
+  item: T | null
+}
+
+/** Ders listesi sonucu; filtre seçicisinin hatayla birlikte devre dışı kalmasını sağlar. */
+export interface SubjectListResult {
+  status: "ok" | "error"
+  subjects: SubjectRow[]
 }
 
 /** PostgREST `or` filtre dilbilgisini bozan karakterler (ayraç/parantez). */
@@ -209,15 +239,18 @@ export function mapQuestionDetail(row: Record<string, unknown>): QuestionDetail 
   }
 }
 
-export async function listSubjects(): Promise<SubjectRow[]> {
+export async function listSubjects(): Promise<SubjectListResult> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("subjects")
     .select("id, name")
     .order("sort_order", { ascending: true })
 
-  if (error) return []
-  return (data ?? []) as SubjectRow[]
+  if (error) return { status: "error", subjects: [] }
+  return {
+    status: "ok",
+    subjects: (data ?? []) as SubjectRow[],
+  }
 }
 
 const QUESTION_LIST_COLUMNS =
@@ -270,10 +303,11 @@ export async function listQuestions(
   }
 
   const from = (safePage - 1) * QUESTION_PAGE_SIZE
+  const ascending = (filter.sort ?? "newest") === "oldest"
   let dataQuery = supabase
     .from("questions")
     .select(QUESTION_LIST_COLUMNS)
-    .order("created_at", { ascending: false })
+    .order("created_at", { ascending })
     .range(from, from + QUESTION_PAGE_SIZE - 1)
   if (filter.examTrack) {
     dataQuery = dataQuery.eq("exam_track", filter.examTrack)
@@ -317,7 +351,7 @@ export async function listQuestions(
 
 export async function getQuestionDetail(
   id: string
-): Promise<QuestionDetail | null> {
+): Promise<DetailResult<QuestionDetail>> {
   const supabase = await createClient()
 
   const { data, error } = await supabase
@@ -328,7 +362,8 @@ export async function getQuestionDetail(
     .eq("id", id)
     .maybeSingle()
 
-  if (error || !data) return null
+  if (error) return { status: "error", item: null }
+  if (!data) return { status: "ok", item: null }
 
-  return mapQuestionDetail(data as unknown as Record<string, unknown>)
+  return { status: "ok", item: mapQuestionDetail(data as unknown as Record<string, unknown>) }
 }

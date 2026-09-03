@@ -38,7 +38,9 @@ vi.mock("@/lib/admin/admin-users", async () => {
     listUsers: listUsersMock,
     parseGrade: actual.parseGrade,
     parsePage: actual.parsePage,
+    parseSort: actual.parseSort,
     GRADES: actual.GRADES,
+    SORT_OPTIONS: actual.SORT_OPTIONS,
     countUsers: vi.fn(),
     getUserDetail: vi.fn(),
     mapUserListItem: vi.fn(),
@@ -147,7 +149,7 @@ describe("AdminUsersPage — authorized admin", () => {
       p_permission_code: "users.manage",
     })
     expect(listUsersMock).toHaveBeenCalledWith(
-      { grade: undefined, query: undefined },
+      { grade: undefined, query: undefined, sort: "newest" },
       1,
     )
   })
@@ -160,7 +162,10 @@ describe("AdminUsersPage — authorized admin", () => {
       searchParams: Promise.resolve({ grade: "7", query: "ali" }),
     })
 
-    expect(listUsersMock).toHaveBeenCalledWith({ grade: 7, query: "ali" }, 1)
+    expect(listUsersMock).toHaveBeenCalledWith(
+      { grade: 7, query: "ali", sort: "newest" },
+      1,
+    )
   })
 
   it("page parametresi sayıya çevrilip geçirilir", async () => {
@@ -170,7 +175,7 @@ describe("AdminUsersPage — authorized admin", () => {
     await AdminUsersPage({ searchParams: Promise.resolve({ page: "2" }) })
 
     expect(listUsersMock).toHaveBeenCalledWith(
-      { grade: undefined, query: undefined },
+      { grade: undefined, query: undefined, sort: "newest" },
       2,
     )
   })
@@ -183,7 +188,7 @@ describe("AdminUsersPage — authorized admin", () => {
       listUsersMock.mockClear()
       await AdminUsersPage({ searchParams: Promise.resolve({ page: bad }) })
       expect(listUsersMock).toHaveBeenCalledWith(
-        { grade: undefined, query: undefined },
+        { grade: undefined, query: undefined, sort: "newest" },
         1,
       )
     }
@@ -198,9 +203,35 @@ describe("AdminUsersPage — authorized admin", () => {
     })
 
     expect(listUsersMock).toHaveBeenCalledWith(
-      { grade: undefined, query: undefined },
+      { grade: undefined, query: undefined, sort: "newest" },
       1_000_000,
     )
+  })
+
+  it("geçerli sort parametresi geçirilir", async () => {
+    mockAuthenticated()
+    mockAdminPermission()
+
+    await AdminUsersPage({ searchParams: Promise.resolve({ sort: "oldest" }) })
+
+    expect(listUsersMock).toHaveBeenCalledWith(
+      { grade: undefined, query: undefined, sort: "oldest" },
+      1,
+    )
+  })
+
+  it("geçersiz sort güvenli varsayılana düşer", async () => {
+    mockAuthenticated()
+    mockAdminPermission()
+
+    for (const bad of ["abc", "ASC", "", "points"]) {
+      listUsersMock.mockClear()
+      await AdminUsersPage({ searchParams: Promise.resolve({ sort: bad }) })
+      expect(listUsersMock).toHaveBeenCalledWith(
+        { grade: undefined, query: undefined, sort: "newest" },
+        1,
+      )
+    }
   })
 })
 
@@ -330,8 +361,8 @@ describe("AdminUsersPage — sayfalama gezinmesi", () => {
     const { renderToString } = await import("react-dom/server")
     const html = renderToString(result)
 
-    expect(html).toContain("grade=7&amp;query=ali&amp;page=1")
-    expect(html).toContain("grade=7&amp;query=ali&amp;page=3")
+    expect(html).toContain("grade=7&amp;query=ali&amp;sort=newest&amp;page=1")
+    expect(html).toContain("grade=7&amp;query=ali&amp;sort=newest&amp;page=3")
   })
 
   it("ilk sayfada 'Önceki' devre dışıdır", async () => {

@@ -5,8 +5,11 @@ import {
   listUsers,
   parseGrade,
   parsePage,
+  parseSort,
+  SORT_OPTIONS,
   GRADES,
   type ListPageResult,
+  type SortOption,
   type UserListItem,
 } from "@/lib/admin/admin-users"
 import { ADMIN_USERS_MESSAGES as M } from "@/lib/admin/admin-panel-messages"
@@ -20,6 +23,7 @@ type SearchParams = Promise<{
   grade?: string
   query?: string
   page?: string
+  sort?: string
 }>
 
 /** Deterministik tarih gösterimi (GG.AA.YYYY); bozuk girdide "-". */
@@ -36,12 +40,13 @@ function formatDate(value: string): string {
 
 /** Filtreleri koruyarak güvenli kodlanmış sayfa bağlantısı üretir. */
 function pageHref(
-  current: { grade?: string; query?: string },
+  current: { grade?: string; query?: string; sort?: string },
   page: number
 ): string {
   const sp = new URLSearchParams()
   if (current.grade) sp.set("grade", current.grade)
   if (current.query) sp.set("query", current.query)
+  if (current.sort) sp.set("sort", current.sort)
   sp.set("page", String(page))
   return `/admin/users?${sp.toString()}`
 }
@@ -51,7 +56,7 @@ function PaginationNav({
   current,
 }: {
   result: ListPageResult<UserListItem>
-  current: { grade?: string; query?: string }
+  current: { grade?: string; query?: string; sort?: string }
 }) {
   const hasPrev = result.page > 1
   const hasNext = result.page < result.totalPages
@@ -124,17 +129,20 @@ export default async function AdminUsersPage({
   const grade = parseGrade(params.grade)
   const query = params.query?.trim() || undefined
   const page = parsePage(params.page)
+  const sort = parseSort(params.sort)
 
   const result = await listUsers(
     {
       grade: grade ?? undefined,
       query,
+      sort,
     },
     page
   )
   const currentFilters = {
     grade: grade !== null ? String(grade) : undefined,
     query,
+    sort,
   }
 
   return (
@@ -181,6 +189,23 @@ export default async function AdminUsersPage({
               {GRADES.map((g) => (
                 <option key={g} value={g}>
                   {g}. {M.classYears}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-medium text-gray-700">
+              {M.sortLabel}
+            </span>
+            <select
+              name="sort"
+              defaultValue={sort}
+              className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-gray-900 outline-none focus:border-gray-500"
+            >
+              {SORT_OPTIONS.map((s: SortOption) => (
+                <option key={s} value={s}>
+                  {s === "oldest" ? M.sortOldest : M.sortNewest}
                 </option>
               ))}
             </select>

@@ -11,12 +11,15 @@ import { describe, expect, it, vi } from "vitest"
 import {
   GRADES,
   QUESTION_PAGE_SIZE,
+  SORT_OPTIONS,
+  getQuestionDetail,
   listQuestions,
   listSubjects,
   mapQuestionDetail,
   mapQuestionListItem,
   parseGrade,
   parsePage,
+  parseSort,
   parseUuid,
   sanitizeSearchQuery,
 } from "./question-bank"
@@ -267,6 +270,71 @@ describe("parsePage", () => {
   })
 })
 
+describe("parseSort", () => {
+  it("boş/geçersiz girdiler varsayılan 'newest'e düşer", () => {
+    for (const bad of [undefined, "", "abc", "OLDEST", "ascending"]) {
+      expect(parseSort(bad)).toBe("newest")
+    }
+  })
+
+  it("yalnızca allowlist değerlerini kabul eder", () => {
+    expect(parseSort("oldest")).toBe("oldest")
+    expect(parseSort("newest")).toBe("newest")
+    expect(SORT_OPTIONS).toEqual(["newest", "oldest"])
+  })
+})
+
+describe("listQuestions — sıralama", () => {
+  it("varsayılan sıralama created_at DESC'tir", async () => {
+    const builder = makeQueryMock({ data: [], error: null, count: 60 })
+    createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
+    await listQuestions({ sort: "newest" }, 1)
+    expect(builder.order).toHaveBeenCalledWith("created_at", {
+      ascending: false,
+    })
+  })
+
+  it("oldest sıralama created_at ASC'e çevrilir", async () => {
+    const builder = makeQueryMock({ data: [], error: null, count: 60 })
+    createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
+    await listQuestions({ sort: "oldest" }, 1)
+    expect(builder.order).toHaveBeenCalledWith("created_at", {
+      ascending: true,
+    })
+  })
+})
+
+describe("getQuestionDetail — hata/bulunamadı ayrımı", () => {
+  it("veri kaynağı hatasında status:'error' döner", async () => {
+    const builder = makeQueryMock({
+      data: null,
+      error: { message: "db down" },
+    })
+    createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
+    const result = await getQuestionDetail("q1")
+    expect(result.status).toBe("error")
+    expect(result.item).toBeNull()
+  })
+
+  it("bulunamayan soruda ok + null döner (hata ile karışmaz)", async () => {
+    const builder = makeQueryMock({ data: null, error: null })
+    createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
+    const result = await getQuestionDetail("q1")
+    expect(result.status).toBe("ok")
+    expect(result.item).toBeNull()
+  })
+
+  it("başarılı cevabı detay DTO'suna çevirir", async () => {
+    const builder = makeQueryMock({ data: rawRow(), error: null })
+    createClientMock.mockResolvedValue({ from: vi.fn(() => builder) })
+    const result = await getQuestionDetail("q1")
+    expect(result.status).toBe("ok")
+    expect(result.item?.question_code).toBe("TYT-MAT-001")
+    expect(result.item?.license_status).toBe("approved")
+    expect(result.item?.subject_name).toBe("Matematik")
+  })
+})
+
 describe("listQuestions — sayfalama ve fail-closed", () => {
   it("count hatasında status:'error' döner (boş liste ≠ hata)", async () => {
     const builder = makeQueryMock({
@@ -377,12 +445,14 @@ describe("listQuestions — sayfalama ve fail-closed", () => {
   })
 })
 
-describe("listSubjects — sorgu hattı (fail-closed)", () => {
-  it("veri kaynağı hatasında boş liste döner", async () => {
+describe("listSubjects — sorgu hattı (hata/başarı ayrımı)", () => {
+  it("veri kaynağı hatasında status:'error' + boş liste döner", async () => {
     createClientMock.mockResolvedValue({
       from: vi.fn(() => makeQueryMock({ data: null, error: { message: "db down" } })),
     })
-    await expect(listSubjects()).resolves.toEqual([])
+    const result = await listSubjects()
+    expect(result.status).toBe("error")
+    expect(result.subjects).toEqual([])
   })
 
   it("başarılı cevabı ders listesine çevirir", async () => {
@@ -394,7 +464,9 @@ describe("listSubjects — sorgu hattı (fail-closed)", () => {
     })
     const from = vi.fn(() => builder)
     createClientMock.mockResolvedValue({ from })
-    await expect(listSubjects()).resolves.toEqual([
+    const result = await listSubjects()
+    expect(result.status).toBe("ok")
+    expect(result.subjects).toEqual([
       { id: "bbbbbbb1-0000-4000-8000-000000000001", name: "Matematik" },
     ])
   })

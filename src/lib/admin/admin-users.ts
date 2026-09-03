@@ -18,6 +18,8 @@ export const GRADES = [5, 6, 7, 8, 9, 10, 11, 12] as const
 export type UserFilter = {
   grade?: number
   query?: string
+  /** Allowlist'li sıralama; undefined -> newest. */
+  sort?: SortOption
 }
 
 /** Kullanıcı listesi DTO — yalnızca izinli alanlar. */
@@ -139,6 +141,28 @@ export function parsePage(value: string | undefined): number {
   return n > MAX_PAGE ? MAX_PAGE : n
 }
 
+/** Allowlist'li sıralama seçenekleri (yalnızca güvenli sütun). */
+export const SORT_OPTIONS = ["newest", "oldest"] as const
+
+export type SortOption = (typeof SORT_OPTIONS)[number]
+
+/** Sıralama parametresi; geçersiz/boş girdi güvenli varsayılana düşer. */
+export function parseSort(value: string | undefined): SortOption {
+  return (SORT_OPTIONS as readonly string[]).includes(value ?? "")
+    ? (value as SortOption)
+    : "newest"
+}
+
+/**
+ * Tekil kayıt sonucu. `status: "error"` veri kaynağının OKUNAMADIĞINI
+ * belirtir ve "bulunamadı" (ok + item null) durumundan AYRI gösterilir;
+ * ham Supabase hata metni asla taşınmaz.
+ */
+export interface DetailResult<T> {
+  status: "ok" | "error"
+  item: T | null
+}
+
 /**
  * Kullanıcı sayısı — admin SELECT politikası üzerinden student_profiles
  * satır sayısı. Hata veya okunamayan sayı `null` döner (0 değil); UI
@@ -188,12 +212,13 @@ export async function listUsers(
   }
 
   const from = (safePage - 1) * USER_PAGE_SIZE
+  const ascending = (filter.sort ?? "newest") === "oldest"
   let dataQuery = supabase
     .from("student_profiles")
     .select(
       "id, nickname, grade_level, created_at, student_public_profiles(is_visible, total_points, monthly_points, avatar_key)",
     )
-    .order("created_at", { ascending: false })
+    .order("created_at", { ascending })
     .range(from, from + USER_PAGE_SIZE - 1)
 
   if (filter.grade !== undefined && filter.grade !== null) {
@@ -225,10 +250,12 @@ export async function listUsers(
 
 /**
  * Tekil kullanıcı detayı — student_profiles + student_public_profiles.
+ * Hata durumu `status: "error"` ile ayrıştırılır; okunamayan kayıt
+ * asla "bulunamadı" gibi gösterilmez.
  */
 export async function getUserDetail(
   id: string,
-): Promise<UserDetail | null> {
+): Promise<DetailResult<UserDetail>> {
   const supabase = await createClient()
 
   const { data, error } = await supabase
@@ -239,12 +266,13 @@ export async function getUserDetail(
     .eq("id", id)
     .maybeSingle()
 
-  if (error || !data) return null
+  if (error) return { status: "error", item: null }
+  if (!data) return { status: "ok", item: null }
 
   const r = data as Record<string, unknown>
   const pub = Array.isArray(r.student_public_profiles)
     ? (r.student_public_profiles[0] as Record<string, unknown> | undefined)
     : null
 
-  return mapUserDetail(r, pub ?? null)
+  return { status: "ok", item: mapUserDetail(r, pub ?? null) }
 }

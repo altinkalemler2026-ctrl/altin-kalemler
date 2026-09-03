@@ -6,13 +6,16 @@ import {
   DIFFICULTIES,
   EXAM_TRACKS,
   GRADES,
+  SORT_OPTIONS,
   listQuestions,
   listSubjects,
   parseGrade,
   parsePage,
+  parseSort,
   parseUuid,
   type ListPageResult,
   type QuestionListItem,
+  type SortOption,
 } from "@/lib/admin/question-bank"
 import {
   ADMIN_QUESTIONS_MESSAGES as M,
@@ -32,6 +35,7 @@ type SearchParams = Promise<{
   isActive?: string
   query?: string
   page?: string
+  sort?: string
 }>
 
 type CurrentFilters = {
@@ -42,6 +46,7 @@ type CurrentFilters = {
   approvalStatus?: string
   isActive?: string
   query?: string
+  sort?: string
 }
 
 /** Filtreleri koruyarak güvenli kodlanmış sayfa bağlantısı üretir. */
@@ -168,6 +173,7 @@ export default async function AdminQuestionsPage({
     isActiveParam === "true" ? true : isActiveParam === "false" ? false : undefined
   const query = params.query?.trim() || undefined
   const page = parsePage(params.page)
+  const sort = parseSort(params.sort)
 
   const validatedFilters = {
     examTrack:
@@ -187,12 +193,14 @@ export default async function AdminQuestionsPage({
         : undefined,
     isActive,
     query,
+    sort,
   }
 
-  const [result, subjects] = await Promise.all([
+  const [result, subjectsResult] = await Promise.all([
     listQuestions(validatedFilters, page),
     listSubjects(),
   ])
+  const subjects = subjectsResult.subjects
 
   const currentFilters: CurrentFilters = {
     examTrack: validatedFilters.examTrack,
@@ -207,6 +215,7 @@ export default async function AdminQuestionsPage({
           ? "false"
           : undefined,
     query: validatedFilters.query,
+    sort: validatedFilters.sort,
   }
 
   return (
@@ -272,7 +281,8 @@ export default async function AdminQuestionsPage({
             <select
               name="subject"
               defaultValue={subjectId ?? ""}
-              className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-gray-900 outline-none focus:border-gray-500"
+              disabled={subjectsResult.status === "error"}
+              className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-gray-900 outline-none focus:border-gray-500 disabled:bg-gray-100 disabled:text-gray-400"
             >
               <option value="">{M.allSubjects}</option>
               {subjects.map((s) => (
@@ -281,6 +291,11 @@ export default async function AdminQuestionsPage({
                 </option>
               ))}
             </select>
+            {subjectsResult.status === "error" && (
+              <span role="alert" className="mt-1 block text-xs text-amber-700">
+                {M.subjectLoadError}
+              </span>
+            )}
           </label>
 
           <label className="block">
@@ -344,6 +359,23 @@ export default async function AdminQuestionsPage({
               placeholder={M.questionCode}
               className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-gray-900 outline-none focus:border-gray-500"
             />
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-medium text-gray-700">
+              {M.sortLabel}
+            </span>
+            <select
+              name="sort"
+              defaultValue={sort}
+              className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-gray-900 outline-none focus:border-gray-500"
+            >
+              {SORT_OPTIONS.map((s: SortOption) => (
+                <option key={s} value={s}>
+                  {s === "oldest" ? M.sortOldest : M.sortNewest}
+                </option>
+              ))}
+            </select>
           </label>
 
           <div className="sm:col-span-2 lg:col-span-5">

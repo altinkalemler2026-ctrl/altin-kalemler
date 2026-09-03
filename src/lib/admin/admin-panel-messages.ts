@@ -85,6 +85,13 @@ export const ADMIN_QUESTIONS_MESSAGES = {
   searchLabel: "Ara (soru kodu veya metni)",
   listError:
     "Soru listesi şu anda okunamadı. Lütfen daha sonra tekrar deneyin.",
+  detailError:
+    "Soru bilgileri şu anda okunamadı. Lütfen daha sonra tekrar deneyin.",
+  subjectLoadError:
+    "Ders listesi şu anda okunamadı; ders filtresi geçici olarak kullanılamıyor.",
+  sortLabel: "Sıralama",
+  sortNewest: "En yeni",
+  sortOldest: "En eski",
   paginationLabel: "Sayfalama",
   prevPage: "Önceki",
   nextPage: "Sonraki",
@@ -95,6 +102,8 @@ export const ADMIN_QUESTIONS_MESSAGES = {
 
 export const ADMIN_QUESTION_DETAIL_MESSAGES = {
   notFound: "Soru bulunamadı.",
+  detailError:
+    "Soru bilgileri şu anda okunamadı. Lütfen daha sonra tekrar deneyin.",
   backToList: "Soru listesine dön",
   optionsTitle: "Seçenekler",
   metadataTitle: "Künye",
@@ -157,6 +166,11 @@ export const ADMIN_USERS_MESSAGES = {
   classYears: "Sınıf",
   listError:
     "Kullanıcı listesi şu anda okunamadı. Lütfen daha sonra tekrar deneyin.",
+  detailError:
+    "Kullanıcı bilgileri şu anda okunamadı. Lütfen daha sonra tekrar deneyin.",
+  sortLabel: "Sıralama",
+  sortNewest: "En yeni",
+  sortOldest: "En eski",
   paginationLabel: "Sayfalama",
   prevPage: "Önceki",
   nextPage: "Sonraki",
