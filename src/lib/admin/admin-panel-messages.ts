@@ -51,6 +51,11 @@ export const ADMIN_NAV_ITEMS = [
     description: "Öğretmen inceleme akışına erişin.",
     href: "/admin/teacher-reviews",
   },
+  {
+    title: "Denetim Kaydı",
+    description: "Soru düzenleme işlemlerinin denetim kaydı (salt okunur).",
+    href: "/admin/audit",
+  },
 ] as const
 
 export const ADMIN_QUESTIONS_MESSAGES = {
@@ -129,6 +134,27 @@ export const ADMIN_QUESTION_DETAIL_MESSAGES = {
   activeYes: "Aktif",
   activeNo: "Pasif",
   noQuestionText: "Soru metni yok",
+} as const
+
+export const ADMIN_AUDIT_MESSAGES = {
+  title: "Denetim Kaydı",
+  subtitle:
+    "Soru düzenleme işlemlerinin eklemsel, değiştirilemez denetim kaydı. Salt-okunur görünüm.",
+  backToDashboard: "Panele dön",
+  empty: "Bu filtrelerle eşleşen denetim kaydı bulunamadı.",
+  listError:
+    "Denetim kaydı şu anda okunamadı. Lütfen daha sonra tekrar deneyin.",
+  filterLabel: "Filtrele",
+  allActions: "Tüm işlemler",
+  actionLabel: "İşlem",
+  entityLabel: "Kayıt türü",
+  entityIdLabel: "Kayıt kimliği",
+  actorLabel: "İşlemi yapan",
+  performedAtLabel: "Zaman",
+  noActor: "Bilinmiyor",
+  paginationLabel: "Sayfalama",
+  prevPage: "Önceki",
+  nextPage: "Sonraki",
 } as const
 
 export const ADMIN_USERS_MESSAGES = {
