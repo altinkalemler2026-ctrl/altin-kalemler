@@ -1,6 +1,31 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
+import {
+  AnalyticsError,
+  analyticsReferenceNow,
+  computeTopicPriorities,
+  fetchStudentAttemptTrend,
+  fetchStudentDimensionSummary,
+  type AnalyticsClient,
+} from "@/lib/analytics/service"
+import type {
+  AttemptTrendDay,
+  PriorityTopicDto,
+} from "@/lib/analytics/types"
+import StudentAnalytics from "@/components/student/StudentAnalytics"
+
+/** Trend isteği başarısızsa boş listeyle düşer; hatayı yutar. */
+async function safeTrend(
+  client: AnalyticsClient,
+  days: number
+): Promise<AttemptTrendDay[]> {
+  try {
+    return await fetchStudentAttemptTrend(client, days)
+  } catch {
+    return []
+  }
+}
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -29,6 +54,24 @@ export default async function DashboardPage() {
       </main>
     )
   }
+
+  let priorities: PriorityTopicDto[] = []
+  let analyticsError: string | null = null
+
+  try {
+    const dimensionRows = await fetchStudentDimensionSummary(supabase)
+    priorities = computeTopicPriorities(dimensionRows, analyticsReferenceNow())
+  } catch (error) {
+    analyticsError =
+      error instanceof AnalyticsError
+        ? error.message
+        : "Analiz verisi şu anda yüklenemedi."
+  }
+
+  const [trend7, trend30] = await Promise.all([
+    safeTrend(supabase, 7),
+    safeTrend(supabase, 30),
+  ])
 
   return (
     <main className="mx-auto w-full max-w-5xl p-6">
@@ -82,6 +125,25 @@ export default async function DashboardPage() {
           </div>
         </div>
       </section>
+
+      {analyticsError ? (
+        <section
+          aria-labelledby="analytics-error-title"
+          className="mt-8 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-900"
+          role="alert"
+        >
+          <h2 id="analytics-error-title" className="font-semibold">
+            Çalışma önerileri şu anda yüklenemedi
+          </h2>
+          <p className="mt-1 text-sm">{analyticsError}</p>
+        </section>
+      ) : (
+        <StudentAnalytics
+          priorities={priorities}
+          trend7={trend7}
+          trend30={trend30}
+        />
+      )}
     </main>
   )
 }
