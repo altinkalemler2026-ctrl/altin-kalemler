@@ -61,7 +61,7 @@ export const ADMIN_NAV_ITEMS = [
 export const ADMIN_QUESTIONS_MESSAGES = {
   title: "Soru Bankası",
   subtitle:
-    "Yetkili yönetici için tüm soru yaşam döngüsü durumları. Salt-okunur görünüm; düzenleme bu fazda yapılmaz.",
+    "Yetkili yönetici için tüm soru yaşam döngüsü durumları. Soru düzenleme ve yayın kontrolü yetkiye bağlıdır.",
   backToDashboard: "Panele dön",
   empty: "Bu filtrelerle eşleşen soru bulunamadı.",
   filterLabel: "Filtrele",

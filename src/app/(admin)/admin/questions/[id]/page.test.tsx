@@ -332,13 +332,15 @@ describe("AdminQuestionDetailPage — authorized admin", () => {
       currentIsActive: false,
       canActivate: false,
       blockers: [{ code: "question_not_approved", message: "onaylı değil" }],
-      warnings: [],
+      warnings: [{ code: "ownership_unknown", message: "sahiplik belirsiz" }],
     })
 
     const html = await renderPage()
 
     expect(html).toContain("Yayın Durumu")
     expect(html).toContain("onaylı değil")
+    expect(html).toContain(QUESTION_PUBLICATION_MESSAGES.warningsTitle)
+    expect(html).toContain("sahiplik belirsiz")
     expect(html).toContain("Yayın/geri çekme işlemleri için onay yetkisi gerekir")
     // Yayın kontrolleri (butonlar) YOK: onay yetkisi olmadan hiç render edilmez.
     expect(html).not.toContain("Öğrencilere Yayınla")

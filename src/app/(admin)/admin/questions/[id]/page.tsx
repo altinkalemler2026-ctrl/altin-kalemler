@@ -416,6 +416,18 @@ export default async function AdminQuestionDetailPage({
                 </ul>
               </div>
             )}
+            {readiness.warnings.length > 0 && (
+              <div className="mt-2">
+                <p className="text-sm font-medium text-amber-800">
+                  {QUESTION_PUBLICATION_MESSAGES.warningsTitle}
+                </p>
+                <ul className="mt-1 list-inside list-disc text-sm text-amber-700">
+                  {readiness.warnings.map((warning) => (
+                    <li key={warning.code}>{warning.message}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <p className="mt-2 text-xs text-gray-400">
               Yayın/geri çekme işlemleri için onay yetkisi gerekir.
             </p>
