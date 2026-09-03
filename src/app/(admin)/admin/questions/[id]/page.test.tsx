@@ -7,10 +7,14 @@
  * - Authorized admin + not found → "Soru bulunamadı" message
  * - Authorized admin + data source error → distinct "okunamadı" message
  * - DTO allowlist enforced: no PII/secrets in rendered output
- * - No mutation imports: page is strictly read-only
+ * - Edit form is permission-gated: rendered ONLY for questions.edit,
+ *   fail-closed (never rendered for unauthorized admins)
+ * - Publication controls gated by questions.approve/ai.manage and the
+ *   server-side readiness result
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { QUESTION_PUBLICATION_MESSAGES } from "@/lib/admin/question-edit-errors"
 
 const getUserMock = vi.hoisted(() => vi.fn())
 const rpcMock = vi.hoisted(() => vi.fn())
@@ -21,9 +25,15 @@ const redirectMock = vi.hoisted(() =>
   }),
 )
 const getQuestionDetailMock = vi.hoisted(() => vi.fn())
+const hasPermissionMock = vi.hoisted(() => vi.fn())
+const readinessMock = vi.hoisted(() => vi.fn())
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => redirectMock(url),
+}))
+
+vi.mock("next/cache", () => ({
+  revalidatePath: vi.fn(),
 }))
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -41,13 +51,28 @@ vi.mock("@/lib/admin/question-bank", () => ({
   sanitizeSearchQuery: vi.fn(),
 }))
 
+vi.mock("@/lib/admin/question-edit", () => ({
+  hasAdminPermission: hasPermissionMock,
+  getPublicationReadiness: readinessMock,
+}))
+
 beforeEach(() => {
   getUserMock.mockReset()
   rpcMock.mockReset()
   createClientMock.mockReset()
   redirectMock.mockClear()
   getQuestionDetailMock.mockReset()
+  hasPermissionMock.mockReset()
+  readinessMock.mockReset()
   getQuestionDetailMock.mockResolvedValue({ status: "ok", item: null })
+  hasPermissionMock.mockResolvedValue(false)
+  readinessMock.mockResolvedValue({
+    status: "ok",
+    currentIsActive: false,
+    canActivate: false,
+    blockers: [],
+    warnings: [],
+  })
 
   createClientMock.mockImplementation(async () => ({
     auth: { getUser: getUserMock },
@@ -104,14 +129,37 @@ function questionDetail(overrides: Record<string, unknown> = {}) {
   }
 }
 
-import AdminQuestionDetailPage from "./page"
+async function renderPage(options: {
+  question?: Record<string, unknown> | null
+  status?: "ok" | "error"
+} = {}) {
+  const question =
+    options.question === undefined ? questionDetail() : options.question
+  getQuestionDetailMock.mockResolvedValue({
+    status: options.status ?? "ok",
+    item: question,
+  })
+
+  const { default: AdminQuestionDetailPage } = await import("./page")
+  const result = await AdminQuestionDetailPage({
+    params: Promise.resolve({ id: "q1" }),
+    searchParams: Promise.resolve({}),
+  })
+
+  const { renderToString } = await import("react-dom/server")
+  return renderToString(result)
+}
 
 describe("AdminQuestionDetailPage — auth gates", () => {
   it("unauthenticated → /login redirect", async () => {
     mockUnauthenticated()
 
+    const { default: AdminQuestionDetailPage } = await import("./page")
     await expect(
-      AdminQuestionDetailPage({ params: Promise.resolve({ id: "q1" }) }),
+      AdminQuestionDetailPage({
+        params: Promise.resolve({ id: "q1" }),
+        searchParams: Promise.resolve({}),
+      }),
     ).rejects.toThrow("REDIRECT:/login")
 
     expect(rpcMock).not.toHaveBeenCalled()
@@ -122,8 +170,12 @@ describe("AdminQuestionDetailPage — auth gates", () => {
     mockAuthenticated()
     mockPermissionError()
 
+    const { default: AdminQuestionDetailPage } = await import("./page")
     await expect(
-      AdminQuestionDetailPage({ params: Promise.resolve({ id: "q1" }) }),
+      AdminQuestionDetailPage({
+        params: Promise.resolve({ id: "q1" }),
+        searchParams: Promise.resolve({}),
+      }),
     ).rejects.toThrow("REDIRECT:/dashboard")
 
     expect(getQuestionDetailMock).not.toHaveBeenCalled()
@@ -133,8 +185,12 @@ describe("AdminQuestionDetailPage — auth gates", () => {
     mockAuthenticated()
     mockNoPermission()
 
+    const { default: AdminQuestionDetailPage } = await import("./page")
     await expect(
-      AdminQuestionDetailPage({ params: Promise.resolve({ id: "q1" }) }),
+      AdminQuestionDetailPage({
+        params: Promise.resolve({ id: "q1" }),
+        searchParams: Promise.resolve({}),
+      }),
     ).rejects.toThrow("REDIRECT:/dashboard")
 
     expect(getQuestionDetailMock).not.toHaveBeenCalled()
@@ -145,26 +201,123 @@ describe("AdminQuestionDetailPage — authorized admin", () => {
   it("questions.view yetkisiyle getQuestionDetail çağrılır ve künye render edilir", async () => {
     mockAuthenticated()
     mockAdminPermission()
-    getQuestionDetailMock.mockResolvedValue({
-      status: "ok",
-      item: questionDetail(),
-    })
 
-    const result = await AdminQuestionDetailPage({
-      params: Promise.resolve({ id: "q1" }),
-    })
+    const html = await renderPage()
 
     expect(rpcMock).toHaveBeenCalledWith("teacher_review_admin_has_permission", {
       p_permission_code: "questions.view",
     })
     expect(getQuestionDetailMock).toHaveBeenCalledWith("q1")
 
-    const { renderToString } = await import("react-dom/server")
-    const html = renderToString(result)
-
     expect(html).toContain("TYT-MAT-001")
     expect(html).toContain("1 + 1 kaç eder?")
     expect(html).toContain("Lisans durumu")
+  })
+
+  it("questions.edit izni olmayan admende düzenleme formu HİÇ render edilmez (fail-closed)", async () => {
+    mockAuthenticated()
+    mockAdminPermission()
+    hasPermissionMock.mockResolvedValue(false)
+
+    const html = await renderPage()
+
+    expect(html).not.toContain("Soruyu Düzenle")
+    expect(html).not.toContain('name="questionText"')
+    expect(html).not.toContain("Yayın Kontrolü")
+  })
+
+  it("questions.edit izni olan admende düzenleme formu render edilir", async () => {
+    mockAuthenticated()
+    mockAdminPermission()
+    hasPermissionMock.mockImplementation(async (code: string) => {
+      return code === "questions.edit"
+    })
+
+    const html = await renderPage()
+
+    expect(hasPermissionMock).toHaveBeenCalledWith("questions.edit")
+    expect(html).toContain("Soruyu Düzenle")
+    expect(html).toContain('name="questionText"')
+    expect(html).toContain('name="correctAnswer"')
+    expect(html).toContain('name="optionA"')
+    // E seçeneği isteğe bağlıdır; A-D zorunlu.
+    expect(html).toContain("(isteğe bağlı)")
+  })
+
+  it("questions.approve izni olan admende yayın kontrolü readiness'e göre render edilir", async () => {
+    mockAuthenticated()
+    mockAdminPermission()
+    hasPermissionMock.mockImplementation(async (code: string) => {
+      return code === "questions.approve"
+    })
+    readinessMock.mockResolvedValue({
+      status: "ok",
+      currentIsActive: false,
+      canActivate: false,
+      blockers: [{ code: "question_not_approved", message: "onaylı değil" }],
+      warnings: [],
+    })
+
+    const html = await renderPage()
+
+    expect(readinessMock).toHaveBeenCalledWith("q1")
+    expect(html).toContain("Yayın Kontrolü")
+    expect(html).toContain("onaylı değil")
+    // Yayına uygun değil: aktivasyon düğmesi devre dışı.
+    expect(html).toMatch(/disabled[^>]*>\s*Öğrencilere Yayınla|Öğrencilere Yayınla[\s\S]{0,200}disabled/)
+  })
+
+  it("readiness PASS ise aktivasyon düğmesi etkindir; geri çekme devre dışıdır", async () => {
+    mockAuthenticated()
+    mockAdminPermission()
+    hasPermissionMock.mockImplementation(async (code: string) => {
+      return code === "questions.approve"
+    })
+    readinessMock.mockResolvedValue({
+      status: "ok",
+      currentIsActive: false,
+      canActivate: true,
+      blockers: [],
+      warnings: [],
+    })
+
+    const html = await renderPage()
+
+    expect(html).toContain(QUESTION_PUBLICATION_MESSAGES.readyTitle)
+    const activateIdx = html.indexOf("Öğrencilere Yayınla")
+    const deactivateIdx = html.indexOf("Yayından Geri Çek")
+    expect(activateIdx).toBeGreaterThan(-1)
+    expect(deactivateIdx).toBeGreaterThan(-1)
+    // Aktivasyon düğmesi disabled içermez; geri çekme içerir.
+    const activateButton = html.slice(
+      Math.max(0, activateIdx - 600),
+      activateIdx
+    )
+    const deactivateButton = html.slice(
+      Math.max(0, deactivateIdx - 600),
+      deactivateIdx
+    )
+    expect(activateButton).not.toContain("disabled")
+    expect(deactivateButton).toContain("disabled")
+  })
+
+  it("readiness okunamazsa yayına özel 'okunamadı' mesajı gösterilir", async () => {
+    mockAuthenticated()
+    mockAdminPermission()
+    hasPermissionMock.mockResolvedValue(true)
+    readinessMock.mockResolvedValue({
+      status: "error",
+      currentIsActive: null,
+      canActivate: false,
+      blockers: [],
+      warnings: [],
+    })
+
+    const html = await renderPage()
+
+    expect(html).toContain(
+      "Yayın uygunluk durumu şu anda okunamadı"
+    )
   })
 })
 
@@ -172,14 +325,8 @@ describe("AdminQuestionDetailPage — hata/bulunamadı ayrımı", () => {
   it("soru bulunamadığında 'bulunamadı' mesajı gösterilir", async () => {
     mockAuthenticated()
     mockAdminPermission()
-    getQuestionDetailMock.mockResolvedValue({ status: "ok", item: null })
 
-    const result = await AdminQuestionDetailPage({
-      params: Promise.resolve({ id: "missing" }),
-    })
-
-    const { renderToString } = await import("react-dom/server")
-    const html = renderToString(result)
+    const html = await renderPage({ question: null })
 
     expect(html).toContain("Soru bulunamadı")
     expect(html).not.toContain("okunamadı")
@@ -188,14 +335,8 @@ describe("AdminQuestionDetailPage — hata/bulunamadı ayrımı", () => {
   it("veri kaynağı hatasında ayrı hata mesajı gösterilir (ham mesaj sızmaz)", async () => {
     mockAuthenticated()
     mockAdminPermission()
-    getQuestionDetailMock.mockResolvedValue({ status: "error", item: null })
 
-    const result = await AdminQuestionDetailPage({
-      params: Promise.resolve({ id: "q1" }),
-    })
-
-    const { renderToString } = await import("react-dom/server")
-    const html = renderToString(result)
+    const html = await renderPage({ status: "error" })
 
     expect(html).toContain("Soru bilgileri şu anda okunamadı")
     expect(html).not.toContain("Soru bulunamadı")
@@ -208,22 +349,18 @@ describe("AdminQuestionDetailPage — PII/secret non-leakage", () => {
   it("hiçbir sensitive alan detail sonucundan geçmez", async () => {
     mockAuthenticated()
     mockAdminPermission()
-    getQuestionDetailMock.mockResolvedValue({
-      status: "ok",
-      item: questionDetail({
+    hasPermissionMock.mockImplementation(async (code: string) => {
+      return code === "questions.edit"
+    })
+
+    const html = await renderPage({
+      question: questionDetail({
         nickname: "ANA-NICK-GIZLI",
         email: "soru-detay-pii@test.local",
         solution: "ANA-COZUM-GIZLI",
         explanation: "ANA-ACIKLAMA-GIZLI",
       }),
     })
-
-    const result = await AdminQuestionDetailPage({
-      params: Promise.resolve({ id: "q1" }),
-    })
-
-    const { renderToString } = await import("react-dom/server")
-    const html = renderToString(result)
 
     expect(html).not.toContain("ANA-NICK-GIZLI")
     expect(html).not.toContain("soru-detay-pii@test.local")
@@ -232,13 +369,5 @@ describe("AdminQuestionDetailPage — PII/secret non-leakage", () => {
     expect(html).not.toContain("nickname")
     expect(html).not.toContain("solution")
     expect(html).not.toContain("explanation")
-  })
-})
-
-describe("AdminQuestionDetailPage — no mutation capability", () => {
-  it("sayfa mutation fonksiyonu import etmez", async () => {
-    const pageModule = await import("./page")
-    const source = Object.keys(pageModule)
-    expect(source).toEqual(["default"])
   })
 })

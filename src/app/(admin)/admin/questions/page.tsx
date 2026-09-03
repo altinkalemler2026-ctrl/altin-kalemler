@@ -36,6 +36,7 @@ type SearchParams = Promise<{
   query?: string
   page?: string
   sort?: string
+  error?: string
 }>
 
 type CurrentFilters = {
@@ -233,6 +234,15 @@ export default async function AdminQuestionsPage({
             {M.backToDashboard}
           </Link>
         </div>
+
+        {params.error && (
+          <div
+            role="alert"
+            className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-800"
+          >
+            {params.error}
+          </div>
+        )}
 
         <form
           method="get"
