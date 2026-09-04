@@ -107,12 +107,12 @@ export default async function DashboardPage() {
             href="/competition"
             className="flex min-h-11 flex-col rounded-2xl border border-gray-200 p-5 transition hover:border-gray-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900"
           >
-            <h2 className="font-semibold text-gray-900">Yarismalar</h2>
+            <h2 className="font-semibold text-gray-900">Yarışmalar</h2>
             <p className="mt-2 text-sm text-gray-600">
-              Rakiplerle bilgi yarismalarina katil.
+              Rakiplerle bilgi yarışmalarına katıl.
             </p>
             <span className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-gray-900">
-              Yarismaya basla
+              Yarışmaya başla
               <span aria-hidden="true">&rarr;</span>
             </span>
           </Link>

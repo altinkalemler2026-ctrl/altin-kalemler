@@ -182,4 +182,50 @@ describe("Auth callback GET", () => {
       expect.objectContaining({ onConflict: "id" })
     )
   })
+
+  it("next=/reset-password izinliyse reset-password'a redirect", async () => {
+    setupClient({
+      id: "u5",
+      user_metadata: { nickname: "resetuser", grade_level: 7 },
+    })
+    const req = makeRequest(
+      "http://localhost:3000/auth/callback?code=abc123&next=/reset-password"
+    )
+
+    const res = await GET(req)
+
+    expect(res.headers.get("location")).toContain("/reset-password")
+  })
+
+  it("izinli olmayan next degeri yok sayilir, /dashboard'a redirect", async () => {
+    setupClient({
+      id: "u6",
+      user_metadata: { nickname: "hacker", grade_level: 9 },
+    })
+    const req = makeRequest(
+      "http://localhost:3000/auth/callback?code=abc123&next=/admin/users"
+    )
+
+    const res = await GET(req)
+
+    expect(res.headers.get("location")).toContain("/dashboard")
+    expect(res.headers.get("location")).not.toContain("/admin")
+  })
+
+  it("open redirect denemesi (//evil.com) yok sayilir", async () => {
+    setupClient({
+      id: "u7",
+      user_metadata: { nickname: "openredirect", grade_level: 5 },
+    })
+    const req = makeRequest(
+      "http://localhost:3000/auth/callback?code=abc123&next=//evil.com"
+    )
+
+    const res = await GET(req)
+
+    const location = res.headers.get("location") ?? ""
+
+    expect(location).toContain("/dashboard")
+    expect(location).not.toContain("evil.com")
+  })
 })

@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 
+const ALLOWED_NEXT_PATHS = ["/reset-password"] as const
+
+function safeNextPath(requestUrl: URL): string {
+  const next = requestUrl.searchParams.get("next")
+
+  if (next && (ALLOWED_NEXT_PATHS as readonly string[]).includes(next)) {
+    return next
+  }
+
+  return "/dashboard"
+}
+
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get("code")
@@ -75,5 +87,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.redirect(new URL("/dashboard", requestUrl.origin))
+  return NextResponse.redirect(
+    new URL(safeNextPath(requestUrl), requestUrl.origin)
+  )
 }
