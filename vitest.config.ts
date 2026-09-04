@@ -18,6 +18,9 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
     testTimeout: 30_000,
-    hookTimeout: 30_000,
+    // Entegrasyon hook'lari admin kullanici olusturma + fixture
+    // yukleme + auth girisi yapar; CI runner'inda 30 sn asilabilir.
+    // CI'daki Supabase DB hazirlik penceresiyle ayni sinir: 120 sn.
+    hookTimeout: 120_000,
   },
 })
