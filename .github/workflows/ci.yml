@@ -370,14 +370,52 @@ jobs:
           require_marker /tmp/rl_cleanup.log CLEANUP_OK rl-cleanup
 
       # ----------------------------------------------------------
-      # Tam test paketi: integration dahil (calisan local Supabase
-      # uzerinden gercek RPC akisi).
+      # API hazirlik kapisi: supabase start yalniz DB sagligini
+      # garanti etmez. Vitest full, Kong/GoTrue/PostgREST API
+      # katmanina ilk kez dokunan adimdir; "soguk API" penceresinde
+      # ilk RPC cagrilari arada dustugu gozlemlendi (nondeterministik
+      # CI failure). Burada auth ve REST uc noktalari 200 donene
+      # kadar beklenir; sinir 120 saniyedir.
       # ----------------------------------------------------------
 
+      - name: API readiness check (GoTrue + PostgREST)
+        run: |
+          set -euo pipefail
+          API_URL=$(supabase status -o env | grep '^API_URL=' | cut -d= -f2 | tr -d '"')
+          ANON_KEY=$(supabase status -o env | grep '^ANON_KEY=' | cut -d= -f2 | tr -d '"')
+          ok=0
+          for i in $(seq 1 60); do
+            auth_code=$(curl -s -o /dev/null -w '%{http_code}' "$API_URL/auth/v1/health" || true)
+            rest_code=$(curl -s -o /dev/null -w '%{http_code}' "$API_URL/rest/v1/" -H "apikey: $ANON_KEY" || true)
+            if [ "$auth_code" = "200" ] && [ "$rest_code" = "200" ]; then
+              ok=1
+              echo "API hazir (deneme $i): auth=$auth_code rest=$rest_code"
+              break
+            fi
+            echo "API hazir degil (deneme $i): auth=$auth_code rest=$rest_code"
+            sleep 2
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo "::error::API katmani 120 saniye icinde hazir olmadı."
+            exit 1
+          fi
+
+      # ----------------------------------------------------------
+      # Tam test paketi: integration dahil (calisan local Supabase
+      # uzerinden gercek RPC akisi).
+      #
+      # Unit paket once tekrar koar (integration HARIC); ardindan iki
+      # entegrasyon dosyasi --no-file-parallelism ile SIRALI koar:
+      # CI runner'inin sinirli vCPU'sunda 39 jsdom fork'uyla paralel
+      # kosan gercek-I/O testleri arada yarista RPC hatasi uretebiliyor.
+      # ------------------------------------------------------------
+
       - name: Vitest full (integration dahil)
-        run: npm test
+        run: |
+          npx vitest run --exclude "**/*.local.test.ts"
+          npx vitest run src/lib/training/integration.local.test.ts src/lib/analytics/integration.local.test.ts --no-file-parallelism
 
       - name: Summary
         if: always()
         run: |
-          echo "CI adimlari tamamlandi: tsc, eslint(scope), vitest(unit), next build, supabase start+health, tip drift guard, db reset(dinamik zincir), QA f1/f2/f3/f3.5/f4, parallel probe(work+same), rate-limit probe(faz4), vitest(full)."
+          echo "CI adimlari tamamlandi: tsc, eslint(scope), vitest(unit), next build, supabase start+health, tip drift guard, db reset(dinamik zincir), QA f1/f2/f3/f3.5/f4, parallel probe(work+same), rate-limit probe(faz4), API readiness(auth+rest), vitest(unit tekrar)+integration(sirali)."
