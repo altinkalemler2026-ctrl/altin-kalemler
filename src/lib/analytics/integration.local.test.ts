@@ -51,12 +51,28 @@ let publishableKey = ""
 let serviceKey = ""
 let session: Session | null = null
 
+function supabaseStatusEnv(): string {
+  // CI'da setup-cli ile PATH'e kurulan CLI tercih edilir (npx indirmesi
+  // takılabilir). Yerelde CLI PATH'te yoksa npx yedegi kullanılır.
+  // Her iki yolda da sınırsız askıya karşı hard timeout uygulanır.
+  try {
+    return execFileSync("supabase", ["status", "-o", "env"], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      timeout: 60_000,
+    })
+  } catch {
+    return execFileSync("npx", ["supabase", "status", "-o", "env"], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      shell: true,
+      timeout: 60_000,
+    })
+  }
+}
+
 function readLocalConfig(): void {
-  const raw = execFileSync("npx", ["supabase", "status", "-o", "env"], {
-    cwd: process.cwd(),
-    encoding: "utf8",
-    shell: true,
-  })
+  const raw = supabaseStatusEnv()
 
   const values = new Map<string, string>()
   for (const line of raw.split(/\r?\n/)) {
