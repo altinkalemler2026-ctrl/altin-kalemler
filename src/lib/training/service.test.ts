@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest"
 import {
   clampQuestionLimit,
   clampTimeMs,
+  listTrainingOutcomes,
+  listTrainingTopics,
   mapQuestionPayload,
   mapSubmitResult,
   mapWeeklyUsage,
@@ -276,6 +278,150 @@ describe("selectTrainingQuestions", () => {
 
     await expect(
       selectTrainingQuestions(client, "430903f3-527e-4e12-b7e8-ac0afdb784aa")
+    ).rejects.toThrow(/akademik donem bulunamadi/i)
+  })
+
+  it("konu filtresi p_topic_id olarak gönderilir; p_outcome_id null kalır", async () => {
+    const { client, calls } = createRpcCaptureClient({
+      data: { questions: [], new_count: 0, repeat_count: 0, reason: null, weekly: {} },
+    })
+
+    await selectTrainingQuestions(
+      client,
+      "430903f3-527e-4e12-b7e8-ac0afdb784aa",
+      10,
+      { topicId: "11111111-1111-4111-8111-000000000001" }
+    )
+
+    expect(calls[0].args?.p_topic_id).toBe(
+      "11111111-1111-4111-8111-000000000001"
+    )
+    expect(calls[0].args?.p_outcome_id).toBeNull()
+  })
+
+  it("kazanım filtresi p_outcome_id olarak gönderilir; p_topic_id null kalır", async () => {
+    const { client, calls } = createRpcCaptureClient({
+      data: { questions: [], new_count: 0, repeat_count: 0, reason: null, weekly: {} },
+    })
+
+    await selectTrainingQuestions(
+      client,
+      "430903f3-527e-4e12-b7e8-ac0afdb784aa",
+      10,
+      { outcomeId: "22222222-2222-4222-8222-000000000001" }
+    )
+
+    expect(calls[0].args?.p_outcome_id).toBe(
+      "22222222-2222-4222-8222-000000000001"
+    )
+    expect(calls[0].args?.p_topic_id).toBeNull()
+  })
+
+  it("filtresiz çağrıda her iki parametre null'dur", async () => {
+    const { client, calls } = createRpcCaptureClient({
+      data: { questions: [], new_count: 0, repeat_count: 0, reason: null, weekly: {} },
+    })
+
+    await selectTrainingQuestions(
+      client,
+      "430903f3-527e-4e12-b7e8-ac0afdb784aa"
+    )
+
+    expect(calls[0].args?.p_topic_id).toBeNull()
+    expect(calls[0].args?.p_outcome_id).toBeNull()
+  })
+
+  it("konu + kazanım birlikte verilirse reddedilir", async () => {
+    const { client, calls } = createRpcCaptureClient({ data: null })
+
+    await expect(
+      selectTrainingQuestions(
+        client,
+        "430903f3-527e-4e12-b7e8-ac0afdb784aa",
+        10,
+        {
+          topicId: "11111111-1111-4111-8111-000000000001",
+          outcomeId: "22222222-2222-4222-8222-000000000001",
+        }
+      )
+    ).rejects.toThrow("Konu ve kazanım filtresi aynı anda kullanılamaz.")
+
+    expect(calls).toHaveLength(0)
+  })
+
+  it("geçersiz UUID filtre TrainingValidationError fırlatır ve RPC çağrılmaz", async () => {
+    const { client, calls } = createRpcCaptureClient({ data: null })
+
+    await expect(
+      selectTrainingQuestions(
+        client,
+        "430903f3-527e-4e12-b7e8-ac0afdb784aa",
+        10,
+        { topicId: "not-a-uuid" }
+      )
+    ).rejects.toBeInstanceOf(TrainingValidationError)
+
+    expect(calls).toHaveLength(0)
+  })
+})
+
+describe("listTrainingTopics / listTrainingOutcomes", () => {
+  it("konu listesini güvenli DTO'ya çevirir; bozuk satır düşer", async () => {
+    const { client } = createRpcCaptureClient({
+      data: [
+        {
+          topic_id: "11111111-1111-4111-8111-000000000001",
+          topic_name: "Kesirler",
+        },
+        { topic_id: "bozuk", topic_name: "X" },
+        { topic_id: "11111111-1111-4111-8111-000000000002", topic_name: "  " },
+        "garbage",
+      ],
+    })
+
+    const topics = await listTrainingTopics(
+      client,
+      "430903f3-527e-4e12-b7e8-ac0afdb784aa"
+    )
+
+    expect(topics).toEqual([
+      {
+        topicId: "11111111-1111-4111-8111-000000000001",
+        topicName: "Kesirler",
+      },
+    ])
+  })
+
+  it("kazanım listesini güvenli DTO'ya çevirir", async () => {
+    const { client } = createRpcCaptureClient({
+      data: [
+        {
+          outcome_id: "22222222-2222-4222-8222-000000000001",
+          outcome_text: "Ondalık gösterimde kesirleri çözer.",
+        },
+      ],
+    })
+
+    const outcomes = await listTrainingOutcomes(
+      client,
+      "430903f3-527e-4e12-b7e8-ac0afdb784aa"
+    )
+
+    expect(outcomes).toEqual([
+      {
+        outcomeId: "22222222-2222-4222-8222-000000000001",
+        outcomeText: "Ondalık gösterimde kesirleri çözer.",
+      },
+    ])
+  })
+
+  it("RPC hatasını fırlatır (fail-closed)", async () => {
+    const { client } = createRpcCaptureClient({
+      error: { message: "Gecerli akademik donem bulunamadi." },
+    })
+
+    await expect(
+      listTrainingTopics(client, "430903f3-527e-4e12-b7e8-ac0afdb784aa")
     ).rejects.toThrow(/akademik donem bulunamadi/i)
   })
 })

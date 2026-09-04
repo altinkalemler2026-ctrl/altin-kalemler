@@ -87,6 +87,24 @@ export interface QuestionSelection {
   reason: string | null
 }
 
+/** list_training_topics satırı — öğrencinin kendi sınıf/dönem kapsamı. */
+export interface TrainingTopicOption {
+  topicId: string
+  topicName: string
+}
+
+/** list_training_outcomes satırı — öğrencinin kendi sınıf/dönem kapsamı. */
+export interface TrainingOutcomeOption {
+  outcomeId: string
+  outcomeText: string
+}
+
+/** Antrenman kapsam filtresi; konu ve kazanım aynı anda kullanılamaz. */
+export interface TrainingScopeFilter {
+  topicId?: string
+  outcomeId?: string
+}
+
 export interface SubmitAnswerInput {
   questionId: string
   /**

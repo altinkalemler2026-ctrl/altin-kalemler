@@ -11306,6 +11306,8 @@ export type Database = {
       is_current_user_super_admin: { Args: never; Returns: boolean }
       join_matchmaking_queue: { Args: { p_subject_id: string }; Returns: Json }
       leave_matchmaking_queue: { Args: never; Returns: Json }
+      list_training_outcomes: { Args: { p_subject_id: string }; Returns: Json }
+      list_training_topics: { Args: { p_subject_id: string }; Returns: Json }
       normalize_excel_answer: { Args: { p_value: string }; Returns: string }
       normalize_excel_cognitive_type: {
         Args: { p_value: string }
@@ -11451,7 +11453,12 @@ export type Database = {
         Returns: string
       }
       select_training_questions: {
-        Args: { p_limit?: number; p_subject_id: string }
+        Args: {
+          p_limit?: number
+          p_outcome_id?: string
+          p_subject_id: string
+          p_topic_id?: string
+        }
         Returns: Json
       }
       set_competition_player_ready: {

@@ -16,7 +16,9 @@ import { afterAll, beforeAll, expect, it } from "vitest"
 
 import {
   fetchWeeklyUsage,
+  listTrainingOutcomes,
   listTrainingSubjects,
+  listTrainingTopics,
   selectTrainingQuestions,
   submitTrainingAttempt,
 } from "./service"
@@ -41,6 +43,13 @@ const QUESTION_IDS = [
   "aaaaaaa9-0000-4000-8000-000000000004",
   "aaaaaaa9-0000-4000-8000-000000000005",
 ]
+
+// Faz 5: kapsam filtresi / kasa ayrılığı / sınıf ayrılığı fixture'ları.
+const QUESTION_F5_COMP_ID = "aaaaaaa9-0000-4000-8000-000000000101"
+const QUESTION_F5_G5_ID = "aaaaaaa9-0000-4000-8000-000000000102"
+const QUESTION_F5_T2_ID = "aaaaaaa9-0000-4000-8000-000000000103"
+const TOPIC_F5_ID = "aaaaaaa4-0000-4000-8000-000000000104"
+const VAULT_F5_COMP_ID = "aaaaaaa7-0000-4000-8000-000000000105"
 
 let apiUrl = ""
 let publishableKey = ""
@@ -143,7 +152,7 @@ delete from public.question_vaults where id = '${VAULT_ID}' or vault_code like '
 delete from public.questions where question_code like 'TUI-%';
 delete from public.curriculum_schedule_items where schedule_profile_id = '${PROFILE_ID}';
 delete from public.subtopics where id = '${SUBTOPIC_ID}';
-delete from public.topics where id = '${TOPIC_ID}';
+delete from public.topics where id in ('${TOPIC_ID}', '${TOPIC_F5_ID}');
 delete from public.curriculum_outcomes where id = '${OUTCOME_ID}';
 delete from public.academic_weeks where academic_year = '${YEAR}';
 delete from public.student_profiles where id = '${USER_ID}';
@@ -266,11 +275,73 @@ from unnest(array['${q[0]}','${q[1]}','${q[2]}','${q[3]}','${q[4]}']::uuid[]) as
   )
 }
 
+/** Faz 5: filtre / kasa ayrılığı / sınıf ayrılığı fixture'ları. */
+function insertFaz5Fixtures(): void {
+  runSql(
+    "tui_faz5_fixture",
+    `
+-- Filtre için ikinci konu (aynı ders, grade 12, aynı sürüm).
+insert into public.topics (id, subject_id, grade_level, name, slug, curriculum_version_id)
+values ('${TOPIC_F5_ID}', '${SUBJECT_ID}', 12, 'TUI F5 Konu', 'tui-f5-konu', '${VERSION_ID}');
+
+-- Konu ancak işlenmişse (dönem kapılı) listelenir ve filtrede geçerlidir.
+insert into public.curriculum_schedule_items
+  (schedule_profile_id, grade_level, subject_id, topic_id, start_week, end_week)
+values ('${PROFILE_ID}', 12, '${SUBJECT_ID}', '${TOPIC_F5_ID}', 1, 3);
+
+-- Yalnız COMPETITION kasada olan soru (practice_eligible=true bile olsa
+-- vault_type='competition' oldugu icin antrenmana GIREMEMELI).
+insert into public.questions
+  (id, question_code, grade_level, subject_id, approval_status, is_active,
+   difficulty, cognitive_type, primary_question_type,
+   question_text, option_a, option_b, option_c, option_d, option_e,
+   correct_answer, estimated_solve_time_seconds, legacy_question_key)
+values
+  ('${QUESTION_F5_COMP_ID}', 'TUI-F5-COMP', 12, '${SUBJECT_ID}', 'approved', true,
+   'easy', 'learning', 'coktan_secmeli',
+   'TUI F5: yarisma kasasi sorusu', 'a', 'b', 'c', 'd', 'e',
+   'B', 30, '${SECRET_SENTINEL}-F5COMP'),
+  ('${QUESTION_F5_G5_ID}', 'TUI-F5-G5', 5, '${SUBJECT_ID}', 'approved', true,
+   'easy', 'learning', 'coktan_secmeli',
+   'TUI F5: baska sinif sorusu', 'a', 'b', 'c', 'd', 'e',
+   'C', 30, '${SECRET_SENTINEL}-F5G5'),
+  ('${QUESTION_F5_T2_ID}', 'TUI-F5-T2', 12, '${SUBJECT_ID}', 'approved', true,
+   'easy', 'learning', 'coktan_secmeli',
+   'TUI F5: ikinci konu sorusu', 'a', 'b', 'c', 'd', 'e',
+   'D', 30, '${SECRET_SENTINEL}-F5T2');
+
+insert into public.question_curriculum_mappings
+  (question_id, curriculum_version_id, topic_id, review_status)
+values
+  ('${QUESTION_F5_COMP_ID}', '${VERSION_ID}', '${TOPIC_ID}', 'approved'),
+  ('${QUESTION_F5_G5_ID}', '${VERSION_ID}', '${TOPIC_ID}', 'approved'),
+  ('${QUESTION_F5_T2_ID}', '${VERSION_ID}', '${TOPIC_F5_ID}', 'approved');
+
+-- Yarisma kasasi + yalniz competition uyeligi.
+insert into public.question_vaults
+  (id, vault_code, name, vault_type, grade_level, subject_id)
+values ('${VAULT_F5_COMP_ID}', 'TUI-V-F5COMP', 'TUI F5 Yarisma Kasa', 'competition', 12, '${SUBJECT_ID}');
+
+insert into public.question_vault_memberships
+  (vault_id, question_id, membership_status, competition_eligible, practice_eligible)
+values ('${VAULT_F5_COMP_ID}', '${QUESTION_F5_COMP_ID}', 'active', true, true);
+
+-- G5 ve T2 practice kasada.
+insert into public.question_vault_memberships
+  (vault_id, question_id, membership_status, practice_eligible)
+values
+  ('${VAULT_ID}', '${QUESTION_F5_G5_ID}', 'active', true),
+  ('${VAULT_ID}', '${QUESTION_F5_T2_ID}', 'active', true);
+`
+  )
+}
+
 beforeAll(async () => {
   readLocalConfig()
   cleanupFixtures()
   await adminCreateUser("tui-student@test.local", "Tui-Test-1234!")
   await insertFixtures()
+  insertFaz5Fixtures()
 
   const authClient = createClient<Database>(apiUrl, publishableKey)
   const { data, error } = await authClient.auth.signInWithPassword({
@@ -306,7 +377,11 @@ it(
     expect(subjects.some((s) => s.id === SUBJECT_ID)).toBe(true)
 
     // 2) Soru kuyruğu: gerçek RPC; gizli alan sızmaz.
-    const selection = await selectTrainingQuestions(client, SUBJECT_ID, 10)
+    //    Faz 5 konu filtresi ile YALNIZ ana konu (TOPIC_ID) seçilir;
+    //    F5 ikinci konu sorusu bu akışa karışmaz.
+    const selection = await selectTrainingQuestions(client, SUBJECT_ID, 10, {
+      topicId: TOPIC_ID,
+    })
     expect(selection.questions).toHaveLength(5)
     expect(selection.weekly.newQuestionsUsed).toBe(5)
     expect(selection.reason).toBeNull()
@@ -398,6 +473,70 @@ begin
 end $$;
 `
     )
+  }
+)
+
+it(
+  "Faz 5: kapsam listeleri ve filtreler; kasa/sınıf ayrılığı RPC düzeyinde",
+  { timeout: 120_000 },
+  async () => {
+    const client = authenticatedServiceClient()
+
+    // 1) Kapsam listeleri: YALNIZ kendi sınıf/dönem konuları.
+    const topics = await listTrainingTopics(client, SUBJECT_ID)
+    const topicIds = topics.map((t) => t.topicId)
+    expect(topicIds).toContain(TOPIC_ID)
+    expect(topicIds).toContain(TOPIC_F5_ID)
+
+    const outcomes = await listTrainingOutcomes(client, SUBJECT_ID)
+    expect(outcomes.map((o) => o.outcomeId)).toContain(OUTCOME_ID)
+
+    // 2) Konu filtresi: yalnız filtrelenen konunun soruları döner.
+    const filtered = await selectTrainingQuestions(client, SUBJECT_ID, 50, {
+      topicId: TOPIC_F5_ID,
+    })
+    expect(filtered.reason).toBeNull()
+    expect(filtered.questions).toHaveLength(1)
+    expect(filtered.questions[0]?.questionCode).toBe("TUI-F5-T2")
+    expect(JSON.stringify(filtered)).not.toContain(SECRET_SENTINEL)
+
+    // 3) Filtresiz geniş seçim: yarisma kasasindaki soru ASLA donmez
+    //    (kasa ayriligi), baska sinif (grade 5) soru ASLA donmez
+    //    (sinif ayriligi) — practice_eligible=true olsa bile.
+    const wide = await selectTrainingQuestions(client, SUBJECT_ID, 50)
+    const wideCodes = wide.questions.map((q) => q.questionCode)
+
+    expect(wideCodes).toContain("TUI-F5-T2")
+    expect(wideCodes).not.toContain("TUI-F5-COMP")
+    expect(wideCodes).not.toContain("TUI-F5-G5")
+
+    const wideSerialized = JSON.stringify(wide)
+    expect(wideSerialized).not.toContain("correct_answer")
+    expect(wideSerialized).not.toContain("solution")
+
+    // 4) Geçersiz kapsam filtresi FAIL-CLOSED: boş liste + reason.
+    const stale = await selectTrainingQuestions(client, SUBJECT_ID, 10, {
+      topicId: "aaaaaaa4-0000-4000-8000-000000000999",
+    })
+    expect(stale.questions).toHaveLength(0)
+    expect(stale.reason).toBe("gecersiz_kapsam")
+
+    const staleOutcome = await selectTrainingQuestions(client, SUBJECT_ID, 10, {
+      outcomeId: "aaaaaaa6-0000-4000-8000-000000000999",
+    })
+    expect(staleOutcome.questions).toHaveLength(0)
+    expect(staleOutcome.reason).toBe("gecersiz_kapsam")
+
+    // 5) Kazanım filtresi: yalnız o kazanıma eşlenen sorular (q5 + yoksa
+    //    faz5 kazanımları); q5 eşlemesi OUTCOME_ID üzerindedir.
+    const byOutcome = await selectTrainingQuestions(client, SUBJECT_ID, 50, {
+      outcomeId: OUTCOME_ID,
+    })
+    expect(byOutcome.reason).toBeNull()
+    expect(byOutcome.questions.length).toBeGreaterThanOrEqual(1)
+    for (const q of byOutcome.questions) {
+      expect(wideCodes).toContain(q.questionCode)
+    }
   }
 )
 

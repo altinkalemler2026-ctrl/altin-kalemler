@@ -16,7 +16,12 @@ import {
   submitTrainingAttempt,
   TrainingValidationError,
 } from "@/lib/training/service"
-import type { QuestionSelection, SubmitAnswerInput, SubmitResult } from "@/lib/training/types"
+import type {
+  QuestionSelection,
+  SubmitAnswerInput,
+  SubmitResult,
+  TrainingScopeFilter,
+} from "@/lib/training/types"
 
 export type ActionResponse<T> =
   | { ok: true; data: T }
@@ -47,7 +52,8 @@ export async function submitTrainingAttemptAction(
 /** Soru kuyruğu yenileme (oturum içinde tekrar yükleme için). */
 export async function selectTrainingQuestionsAction(
   subjectId: string,
-  limit: number = DEFAULT_QUESTION_LIMIT
+  limit: number = DEFAULT_QUESTION_LIMIT,
+  scopeFilter: TrainingScopeFilter = {}
 ): Promise<ActionResponse<QuestionSelection>> {
   const supabase = await createClient()
 
@@ -57,7 +63,7 @@ export async function selectTrainingQuestionsAction(
   if (!user) return { ok: false, message: SESSION_EXPIRED_MESSAGE }
 
   try {
-    const data = await selectTrainingQuestions(supabase, subjectId, limit)
+    const data = await selectTrainingQuestions(supabase, subjectId, limit, scopeFilter)
     return { ok: true, data }
   } catch (error) {
     if (error instanceof TrainingValidationError) {

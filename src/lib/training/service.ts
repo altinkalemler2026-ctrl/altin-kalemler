@@ -26,7 +26,10 @@ import {
   type SubmitAnswerInput,
   type SubmitOutcome,
   type SubmitResult,
+  type TrainingOutcomeOption,
   type TrainingQuestion,
+  type TrainingScopeFilter,
+  type TrainingTopicOption,
   type WeeklyUsage,
   type WeeklyUsageSnapshot,
 } from "./types"
@@ -227,18 +230,42 @@ export async function fetchWeeklyUsage(
 /**
  * Soru kuyruğu seçimi (select_training_questions).
  * Dönem yoksa DB P0001 fırlatır; çağıran mapTrainingError ile çevirir.
+ *
+ * Faz 5: opsiyonel kapsam filtresi (konu VEYA kazanım; ikisi birden
+ * kullanılamaz). DB, filtre değerini öğrencinin kendi dönem kapılı
+ * kapsamında doğrular; kapsam dışı değer fail-closed boş liste döner.
  */
 export async function selectTrainingQuestions(
   client: TrainingClient,
   subjectId: string,
-  limit: number = DEFAULT_QUESTION_LIMIT
+  limit: number = DEFAULT_QUESTION_LIMIT,
+  scopeFilter: TrainingScopeFilter = {}
 ): Promise<QuestionSelection> {
   assertUuid(subjectId, "subjectId")
 
-  const { data, error } = await client.rpc("select_training_questions", {
+  const topicId = scopeFilter.topicId
+  const outcomeId = scopeFilter.outcomeId
+
+  if (topicId !== undefined && outcomeId !== undefined) {
+    throw new TrainingValidationError(
+      "Konu ve kazanım filtresi aynı anda kullanılamaz."
+    )
+  }
+
+  if (topicId !== undefined) assertUuid(topicId, "topicId")
+  if (outcomeId !== undefined) assertUuid(outcomeId, "outcomeId")
+
+  const args = {
     p_subject_id: subjectId,
     p_limit: clampQuestionLimit(limit),
-  })
+    p_topic_id: topicId ?? null,
+    p_outcome_id: outcomeId ?? null,
+  }
+
+  const { data, error } = await client.rpc(
+    "select_training_questions",
+    args as unknown as Database["public"]["Functions"]["select_training_questions"]["Args"]
+  )
   if (error) throw error
 
   const record =
@@ -258,6 +285,90 @@ export async function selectTrainingQuestions(
     weekly: mapWeeklySnapshot(record.weekly),
     reason: typeof record.reason === "string" ? record.reason : null,
   }
+}
+
+/** list_training_topics satırının sıkı allowlist eşleyicisi. */
+export function mapTrainingTopicOption(raw: unknown): TrainingTopicOption | null {
+  if (typeof raw !== "object" || raw === null) return null
+
+  const record = raw as Record<string, unknown>
+  const topicId = record.topic_id
+  const topicName = record.topic_name
+
+  if (typeof topicId !== "string" || !UUID_PATTERN.test(topicId)) return null
+  if (typeof topicName !== "string" || topicName.trim().length === 0) {
+    return null
+  }
+
+  return { topicId, topicName }
+}
+
+/**
+ * Öğrencinin kendi sınıf/dönem kapılı işlenmiş konu listesi
+ * (list_training_topics). Kullanıcı parametresi almaz.
+ */
+export async function listTrainingTopics(
+  client: TrainingClient,
+  subjectId: string
+): Promise<TrainingTopicOption[]> {
+  assertUuid(subjectId, "subjectId")
+
+  const { data, error } = await client.rpc("list_training_topics", {
+    p_subject_id: subjectId,
+  })
+  if (error) throw error
+
+  const rows = Array.isArray(data) ? data : []
+  const result: TrainingTopicOption[] = []
+  for (const raw of rows) {
+    const mapped = mapTrainingTopicOption(raw)
+    if (mapped) result.push(mapped)
+  }
+  return result
+}
+
+/** list_training_outcomes satırının sıkı allowlist eşleyicisi. */
+export function mapTrainingOutcomeOption(
+  raw: unknown
+): TrainingOutcomeOption | null {
+  if (typeof raw !== "object" || raw === null) return null
+
+  const record = raw as Record<string, unknown>
+  const outcomeId = record.outcome_id
+  const outcomeText = record.outcome_text
+
+  if (typeof outcomeId !== "string" || !UUID_PATTERN.test(outcomeId)) {
+    return null
+  }
+  if (typeof outcomeText !== "string" || outcomeText.trim().length === 0) {
+    return null
+  }
+
+  return { outcomeId, outcomeText }
+}
+
+/**
+ * Öğrencinin kendi sınıf/dönem kapılı işlenmiş kazanım listesi
+ * (list_training_outcomes). Kullanıcı parametresi almaz.
+ */
+export async function listTrainingOutcomes(
+  client: TrainingClient,
+  subjectId: string
+): Promise<TrainingOutcomeOption[]> {
+  assertUuid(subjectId, "subjectId")
+
+  const { data, error } = await client.rpc("list_training_outcomes", {
+    p_subject_id: subjectId,
+  })
+  if (error) throw error
+
+  const rows = Array.isArray(data) ? data : []
+  const result: TrainingOutcomeOption[] = []
+  for (const raw of rows) {
+    const mapped = mapTrainingOutcomeOption(raw)
+    if (mapped) result.push(mapped)
+  }
+  return result
 }
 
 /**

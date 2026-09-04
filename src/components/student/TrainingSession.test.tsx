@@ -122,6 +122,27 @@ describe("TrainingSession — render ve güvenlik", () => {
     expect(screen.getByText(/Kalan süre/)).toBeInTheDocument()
   })
 
+  it("matematik gösterimi erişilebilir alternatiflerle render edilir", () => {
+    const mathQ: TrainingQuestion = {
+      ...Q1,
+      questionText: "2^10 ile 3/4 karşılaştırması",
+      options: { A: "1/2", B: "Ankara" },
+    }
+
+    render(
+      <TrainingSession
+        subjectName="Matematik"
+        questions={[mathQ]}
+        submitAction={createSubmitAction()}
+      />
+    )
+
+    expect(screen.getByText("2 üzeri 10")).toBeInTheDocument()
+    expect(screen.getByLabelText("3 bölü 4")).toBeInTheDocument()
+    expect(screen.getByLabelText("1 bölü 2")).toBeInTheDocument()
+    expect(screen.getByLabelText(/Ankara/)).toBeInTheDocument()
+  })
+
   it("seçili şıkta görünür seçili durum stili bulunur (has-[:checked])", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     render(
@@ -365,6 +386,29 @@ describe("TrainingSession — pas/boş/süre davranışı", () => {
     const input = submitAction.mock.calls[0][0]
     expect(input.action).toBe("timeout")
     expect(input.choice).toBeUndefined()
+  })
+
+  it("timeout tek gönderim üretir; çift tetikleme yeni gönderim yapmaz (idempotent)", async () => {
+    const submitAction = createSubmitAction()
+    render(
+      <TrainingSession
+        subjectName="Matematik"
+        questions={[Q1]}
+        submitAction={submitAction}
+      />
+    )
+
+    await vi.advanceTimersByTimeAsync(31_000)
+    await waitFor(() => expect(submitAction).toHaveBeenCalledTimes(1))
+
+    const input = submitAction.mock.calls[0][0]
+    expect(input.action).toBe("timeout")
+    expect(input.choice).toBeUndefined()
+
+    // Aşırı durum: süre zaten doldu; ikinci tetikleme (retry/timer yarışı)
+    // yeni attempt üretmemeli — submittingRef + tek client_key koruması.
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(submitAction).toHaveBeenCalledTimes(1)
   })
 
   it("tüm sorular yanıtlanınca özet görünür ve sayaçlar doğru toplanır", async () => {

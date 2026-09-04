@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 
+import MathText from "@/components/student/MathText"
 import {
   CHOICE_LETTERS,
   type AttemptAction,
@@ -335,7 +336,7 @@ export default function TrainingSession({
         </header>
 
         <h1 className="mt-4 text-lg font-semibold leading-relaxed text-gray-900">
-          {question?.questionText ?? "Soru metni bulunamadı."}
+          <MathText text={question?.questionText ?? "Soru metni bulunamadı."} />
         </h1>
 
         <fieldset className="mt-5" disabled={submitting}>
@@ -371,7 +372,7 @@ export default function TrainingSession({
                   >
                     {letter}
                   </span>
-                  <span className="text-gray-900">{optionText}</span>
+                  <MathText text={optionText} />
                 </label>
               )
             })}
