@@ -3,6 +3,11 @@
 import { FormEvent, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+
+import { Alert } from "@/components/ui/Alert"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
+import { Card } from "@/components/ui/Card"
 import { createClient } from "@/lib/supabase/client"
 
 export default function RegisterPage() {
@@ -93,158 +98,106 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="w-full max-w-md">
-      <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
-        <div className="mb-6 text-center">
-          <h1 className="text-2xl font-bold text-gray-900">
-            Altın Kalemler
-          </h1>
+    <Card className="w-full max-w-md" padding="lg">
+      <div className="mb-6 text-center">
+        <h1 className="text-2xl font-bold text-ink">Altın Kalemler</h1>
 
-          <p className="mt-2 text-sm text-gray-600">
-            Yeni öğrenci hesabı oluştur
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label
-              htmlFor="nickname"
-              className="mb-1.5 block text-sm font-medium text-gray-700"
-            >
-              Kullanıcı adı
-            </label>
-
-            <input
-              id="nickname"
-              type="text"
-              autoComplete="nickname"
-              value={nickname}
-              onChange={(event) => setNickname(event.target.value)}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none transition focus:border-gray-500"
-              placeholder="Örneğin: altinkalem42"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="gradeLevel"
-              className="mb-1.5 block text-sm font-medium text-gray-700"
-            >
-              Sınıf
-            </label>
-
-            <select
-              id="gradeLevel"
-              value={gradeLevel}
-              onChange={(event) => setGradeLevel(event.target.value)}
-              className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-gray-500"
-            >
-              <option value="">Sınıfını seç</option>
-
-              {Array.from({ length: 12 }, (_, index) => index + 1).map(
-                (grade) => (
-                  <option key={grade} value={grade}>
-                    {grade}. Sınıf
-                  </option>
-                )
-              )}
-            </select>
-          </div>
-
-          <div>
-            <label
-              htmlFor="email"
-              className="mb-1.5 block text-sm font-medium text-gray-700"
-            >
-              E-posta
-            </label>
-
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none transition focus:border-gray-500"
-              placeholder="ornek@email.com"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="password"
-              className="mb-1.5 block text-sm font-medium text-gray-700"
-            >
-              Şifre
-            </label>
-
-            <input
-              id="password"
-              type="password"
-              autoComplete="new-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none transition focus:border-gray-500"
-              placeholder="En az 8 karakter"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="passwordAgain"
-              className="mb-1.5 block text-sm font-medium text-gray-700"
-            >
-              Şifre tekrar
-            </label>
-
-            <input
-              id="passwordAgain"
-              type="password"
-              autoComplete="new-password"
-              value={passwordAgain}
-              onChange={(event) => setPasswordAgain(event.target.value)}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none transition focus:border-gray-500"
-              placeholder="Şifreni tekrar yaz"
-            />
-          </div>
-
-          {error && (
-            <div
-              role="alert"
-              className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700"
-            >
-              {error}
-            </div>
-          )}
-
-          {success && (
-            <div
-              role="status"
-              className="rounded-xl bg-green-50 px-4 py-3 text-sm text-green-700"
-            >
-              {success}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-xl bg-gray-900 px-4 py-3 font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {loading ? "Kayıt oluşturuluyor..." : "Kayıt Ol"}
-          </button>
-        </form>
-
-        <p className="mt-6 text-center text-sm text-gray-600">
-          Zaten hesabın var mı?{" "}
-          <Link
-            href="/login"
-            className="font-semibold text-gray-900 underline-offset-4 hover:underline"
-          >
-            Giriş Yap
-          </Link>
+        <p className="mt-2 text-sm text-ink-muted">
+          Yeni öğrenci hesabı oluştur
         </p>
       </div>
-    </main>
+
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <Input
+          label="Kullanıcı adı"
+          type="text"
+          autoComplete="nickname"
+          value={nickname}
+          onChange={(event) => setNickname(event.target.value)}
+          placeholder="Örneğin: altinkalem42"
+        />
+
+        <div className="w-full">
+          <label
+            htmlFor="gradeLevel"
+            className="mb-1.5 block text-sm font-medium text-ink"
+          >
+            Sınıf
+          </label>
+
+          <select
+            id="gradeLevel"
+            value={gradeLevel}
+            onChange={(event) => setGradeLevel(event.target.value)}
+            className="min-h-11 w-full rounded-xl border border-border bg-surface px-4 py-2.5 text-ink outline-none transition focus:ring-2 focus:ring-teal-600 focus:ring-offset-1"
+          >
+            <option value="">Sınıfını seç</option>
+
+            {Array.from({ length: 12 }, (_, index) => index + 1).map(
+              (grade) => (
+                <option key={grade} value={grade}>
+                  {grade}. Sınıf
+                </option>
+              )
+            )}
+          </select>
+        </div>
+
+        <Input
+          label="E-posta"
+          type="email"
+          autoComplete="email"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          placeholder="ornek@email.com"
+        />
+
+        <Input
+          label="Şifre"
+          type="password"
+          autoComplete="new-password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          placeholder="En az 8 karakter"
+          hint="En az 8 karakter olmalıdır."
+        />
+
+        <Input
+          label="Şifre tekrar"
+          type="password"
+          autoComplete="new-password"
+          value={passwordAgain}
+          onChange={(event) => setPasswordAgain(event.target.value)}
+          placeholder="Şifreni tekrar yaz"
+        />
+
+        {error && <Alert variant="danger">{error}</Alert>}
+
+        {success && (
+          <Alert variant="success" role="status">
+            {success}
+          </Alert>
+        )}
+
+        <Button
+          type="submit"
+          size="lg"
+          loading={loading}
+          className="w-full"
+        >
+          {loading ? "Kayıt oluşturuluyor..." : "Kayıt Ol"}
+        </Button>
+      </form>
+
+      <p className="mt-6 text-center text-sm text-ink-muted">
+        Zaten hesabın var mı?{" "}
+        <Link
+          href="/login"
+          className="font-semibold text-ink underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+        >
+          Giriş Yap
+        </Link>
+      </p>
+    </Card>
   )
 }

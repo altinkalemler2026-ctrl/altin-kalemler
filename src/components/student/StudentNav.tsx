@@ -16,12 +16,12 @@ function isActive(pathname: string, href: string): boolean {
 }
 
 const LINK_CLASS =
-  "flex min-h-11 min-w-11 items-center justify-center rounded-xl text-sm font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900"
+  "flex min-h-11 min-w-11 items-center justify-center rounded-xl text-sm font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
 
 function linkClass(active: boolean): string {
   return active
-    ? `${LINK_CLASS} bg-gray-900 text-white`
-    : `${LINK_CLASS} text-gray-700 hover:bg-gray-100`
+    ? `${LINK_CLASS} bg-navy-800 text-white`
+    : `${LINK_CLASS} text-ink hover:bg-surface-muted`
 }
 
 export default function StudentNav({
@@ -35,15 +35,15 @@ export default function StudentNav({
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-gray-200 bg-white">
+      <header className="sticky top-0 z-40 border-b border-border bg-surface">
         <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-4 py-3">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="text-base font-bold text-gray-900">
+            <span className="text-base font-bold text-navy-800">
               Altın Kalemler
             </span>
 
             <span
-              className="hidden truncate text-sm text-gray-600 sm:inline"
+              className="hidden truncate text-sm text-ink-muted sm:inline"
               aria-label={`Giriş yapan: ${nickname}`}
             >
               @{nickname}
@@ -68,7 +68,7 @@ export default function StudentNav({
             <form action={logout}>
               <button
                 type="submit"
-                className="min-h-11 rounded-xl px-3 text-sm font-medium text-red-700 transition hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900"
+                className="min-h-11 rounded-xl px-3 text-sm font-medium text-danger-700 transition hover:bg-danger-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
               >
                 Çıkış Yap
               </button>
@@ -79,7 +79,7 @@ export default function StudentNav({
 
       <nav
         aria-label="Öğrenci menüsü"
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)] sm:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] sm:hidden"
       >
         <div className="flex items-stretch justify-around px-1 py-1">
           {NAV_ITEMS.map((item) => {
@@ -90,14 +90,14 @@ export default function StudentNav({
                 key={item.href}
                 href={item.href}
                 aria-current={active ? "page" : undefined}
-                className={`flex flex-1 flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-[11px] font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 ${
-                  active ? "text-gray-900" : "text-gray-500"
+                className={`flex flex-1 flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-[11px] font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 ${
+                  active ? "text-navy-800" : "text-ink-muted"
                 }`}
               >
                 <span
                   aria-hidden="true"
                   className={`h-1.5 w-6 rounded-full ${
-                    active ? "bg-gray-900" : "bg-transparent"
+                    active ? "bg-navy-800" : "bg-transparent"
                   }`}
                 />
                 {item.label}

@@ -1,3 +1,6 @@
+import { Alert } from "@/components/ui/Alert"
+import { EmptyState } from "@/components/ui/EmptyState"
+
 export const metadata = {
   title: "Lig | Altın Kalemler",
 }
@@ -5,22 +8,25 @@ export const metadata = {
 export default function LeaguePage() {
   return (
     <main className="mx-auto w-full max-w-5xl p-6">
-      <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
-        <h1 className="text-2xl font-bold text-gray-900">Lig</h1>
+      <h1 className="text-2xl font-bold text-ink">Lig</h1>
 
-        <p className="mt-2 text-gray-600">
-          Aynı sınıf düzeyindeki öğrencilerle yapılacak lig maçları ve
-          sıralamalar bu sayfada yer alacak.
-        </p>
+      <p className="mt-2 text-ink-muted">
+        Aynı sınıf düzeyindeki öğrencilerle yapılacak lig maçları ve
+        sıralamalar bu sayfada yer alacak.
+      </p>
 
-        <p
-          role="status"
-          aria-live="polite"
-          className="mt-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900"
-        >
-          Ligler yakında — şu anda bu bölüm pasif.
-        </p>
-      </section>
+      <div className="mt-6">
+        <EmptyState
+          title="Ligler yakında"
+          description="Lig bölümü şu anda pasif. Hazır olduğunda burada göreceksin."
+        />
+      </div>
+
+      <div className="mt-4">
+        <Alert variant="info" role="status">
+          Lig özelliği hazırlanıyor; bu bölüm şu anda kullanılamaz.
+        </Alert>
+      </div>
     </main>
   )
 }

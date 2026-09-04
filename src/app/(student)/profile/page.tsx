@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
 
+import { Card } from "@/components/ui/Card"
 import { createClient } from "@/lib/supabase/server"
 
 export const metadata = {
@@ -26,43 +27,41 @@ export default async function ProfilePage() {
   if (profileError || !profile) {
     return (
       <main className="mx-auto w-full max-w-3xl p-6">
-        <div
-          role="alert"
-          aria-live="assertive"
-          className="rounded-2xl border border-red-200 bg-red-50 p-5 text-red-700"
-        >
-          Profil bilgilerin şu anda görüntülenemiyor.
-        </div>
+        <Card>
+          <p role="alert" className="font-medium text-danger-700">
+            Profil bilgilerin şu anda görüntülenemiyor.
+          </p>
+        </Card>
       </main>
     )
   }
 
   return (
     <main className="mx-auto w-full max-w-3xl p-6">
-      <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
-        <h1 className="text-2xl font-bold text-gray-900">Profilim</h1>
+      <h1 className="text-2xl font-bold text-ink">Profilim</h1>
 
-        <dl className="mt-6 space-y-4">
-          <div className="rounded-2xl border border-gray-200 p-4">
-            <dt className="text-sm font-medium text-gray-500">Takma ad</dt>
-            <dd className="mt-1 text-lg font-semibold text-gray-900">
+      <Card className="mt-6">
+        <dl className="space-y-4">
+          <div className="rounded-xl border border-border p-4">
+            <dt className="text-sm font-medium text-ink-muted">Takma ad</dt>
+            <dd className="mt-1 text-lg font-semibold text-ink">
               {profile.nickname}
             </dd>
           </div>
 
-          <div className="rounded-2xl border border-gray-200 p-4">
-            <dt className="text-sm font-medium text-gray-500">Sınıf</dt>
-            <dd className="mt-1 text-lg font-semibold text-gray-900">
+          <div className="rounded-xl border border-border p-4">
+            <dt className="text-sm font-medium text-ink-muted">Sınıf</dt>
+            <dd className="mt-1 text-lg font-semibold text-ink">
               {profile.grade_level}. Sınıf
             </dd>
           </div>
         </dl>
 
-        <p className="mt-6 text-sm text-gray-600">
+        <p className="mt-6 text-sm text-ink-muted">
           Sınıfın, kendi eğitim içeriğini belirler. Profil ekranından sınıf
           değiştirilemez.
         </p>
-      </section>
+      </Card>
     </main>
   )
 }

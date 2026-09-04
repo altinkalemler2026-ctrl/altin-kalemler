@@ -1,26 +1,56 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/*
+ * Altın Kalemler tasarım sistemi — açık tema (tek tema).
+ *
+ * Marka renkleri: lacivert (navy), altın (gold), turkuaz (teal).
+ * Hex değerlerinin tek doğruluk kaynağı src/lib/ui/tokens.ts dosyasıdır;
+ * kontrast çiftleri WCAG AA olarak test edilir (src/lib/ui/tokens.test.ts).
+ * Koyu tema ayrı bir fazda tamamlanacaktır; bu nedenle tema seçici yoktur.
+ */
+@theme {
+  --color-navy-900: #16233f;
+  --color-navy-800: #1b2a4a;
+  --color-navy-700: #24365e;
+  --color-navy-100: #e3e8f2;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-gold-500: #c9a227;
+  --color-gold-300: #e4c65b;
+  --color-gold-100: #f7ecd0;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-teal-700: #0e6e66;
+  --color-teal-600: #0f766e;
+  --color-teal-100: #d6efec;
+
+  --color-surface: #ffffff;
+  --color-surface-muted: #f5f7fa;
+
+  --color-ink: #1f2937;
+  --color-ink-muted: #4b5563;
+
+  --color-border: #d7dce4;
+  --color-border-strong: #b6bfcc;
+
+  --color-danger-700: #b91c1c;
+  --color-danger-800: #991b1b;
+  --color-danger-100: #fee2e2;
+
+  --color-success-700: #15803d;
+  --color-success-100: #dcfce7;
+
+  --color-warning-900: #854d0e;
+  --color-warning-100: #fef3c7;
+
+  /* Tek font sistemi: yalnız Geist Sans. */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-card: 1rem;
+  --shadow-card: 0 1px 2px rgb(22 35 63 / 0.06), 0 4px 12px rgb(22 35 63 / 0.08);
+  --shadow-modal: 0 8px 32px rgb(22 35 63 / 0.24);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
 }
