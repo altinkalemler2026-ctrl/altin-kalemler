@@ -4,7 +4,10 @@
 --
 -- Kapsam (_faz4_consume_rate_limit 075 + RPC baglantisi 076):
 --   T-01     : anon -> helper EXECUTE-denied (internal-only)
---   T-02..03 : istemci rolleri rpc_rate_limits'e dogrudan erisemez
+--   T-02..03 : istemci rolleri rpc_rate_limits icerigini GOREMEZ
+--              (grant'siz ortamda 42501; grant'li ortamda RLS-deny
+--              bos sonuc — _qa4_expect_env ile ortam-toleransli,
+--              af7f74f kalibi)
 --   T-04..06 : gecersiz ic yapilandirma fail-closed (P0001)
 --   T-07..09 : dogal tuketim: limit dolusu OK, fazlasi RED,
 --              reddedilen istek kota TUKETMEZ
@@ -15,8 +18,9 @@
 --              hata mesajlarindan ONCE devreye girdigi kanitlanir
 --   T-16..20 : submit zinciri: K1 happy path + sayac=1, replay
 --              duplicate=true ve KOTA TUKETMEZ, yeni anahtar RED
---   T-21..22 : ACL drift guard: helper EXECUTE kapali, tablo
---              grant'siz (075 son durumu)
+--   T-21..22 : ACL drift guard: helper EXECUTE kapali, istemci
+--              tablo erisimi kapali (grant yok YA DA RLS+policy-yok
+--              deny — her iki ortamda da ayni guvence)
 --
 -- Calistirma (LOCAL ONLY):
 --   docker cp scripts/qa_faz4_local_validation.sql supabase_db_yarisma-programi:/tmp/
@@ -86,6 +90,58 @@ begin
 end;
 $qa$;
 
+create function public._qa4_expect_env(
+  p_label text, p_title text, p_sql text
+)
+returns void
+language plpgsql
+security invoker
+as $qa$
+declare
+  v_state     text;
+  v_msg       text;
+  v_cnt       integer;
+  v_rls       boolean;
+  v_policies  integer;
+begin
+  begin
+    execute p_sql into v_cnt;
+
+    -- Grant'li ortam (yerel stack): RLS acik + policy yok -> istemci
+    -- hicbir satiri GOREMEZ (0 doner). Guvenlik ozelligi aynidir;
+    -- yalniz hata tipi (42501 vs bos sonuc) ortama gore degisir.
+    select relrowsecurity into v_rls
+      from pg_class where oid = 'public.rpc_rate_limits'::regclass;
+
+    select count(*) into v_policies
+      from pg_policies
+     where schemaname = 'public' and tablename = 'rpc_rate_limits';
+
+    if v_cnt = 0 and v_rls and v_policies = 0 then
+      insert into public._qa_faz4_results
+      values (p_label, p_title, 'PASS',
+              'grantli ortam: RLS-deny bos (cnt=0, policy=0)');
+    else
+      insert into public._qa_faz4_results
+      values (p_label, p_title, 'FAIL',
+              format('grantli ortam: cnt=%s rls=%s policy=%s',
+                     v_cnt, v_rls, v_policies));
+    end if;
+
+  exception when insufficient_privilege then
+    -- Grant'siz ortam (CI): dogrudan 42501 -> beklenen davranis.
+    insert into public._qa_faz4_results
+    values (p_label, p_title, 'PASS',
+            '42501 insufficient_privilege (grant yok)');
+  when others then
+    get stacked diagnostics v_state = returned_sqlstate, v_msg = message_text;
+    insert into public._qa_faz4_results
+    values (p_label, p_title, 'FAIL',
+            'sqlstate=' || v_state || ' | ' || left(v_msg, 200));
+  end;
+end;
+$qa$;
+
 create function public._qa4_expect_msg(
   p_label text, p_title text, p_sql text,
   p_state text, p_msg_pattern text
@@ -135,6 +191,10 @@ $qa$;
 
 grant execute
   on function public._qa4_expect(text, text, text, text)
+  to anon, authenticated, service_role;
+
+grant execute
+  on function public._qa4_expect_env(text, text, text)
   to anon, authenticated, service_role;
 
 grant execute
@@ -271,25 +331,24 @@ begin
     '42501',
     $sql$select public._faz4_consume_rate_limit('qa_x', 1, 60)$sql$);
 
-  perform public._qa4_expect('T-02',
-    'anon: rpc_rate_limits dogrudan OKUNAMAZ (grant yok)',
-    '42501',
+  perform public._qa4_expect_env('T-02',
+    'anon: rpc_rate_limits icerigi GOREMEZ (42501 ya da RLS-deny)',
     $sql$select count(*) from public.rpc_rate_limits$sql$);
+end;
+$blk$;
 
-  execute 'reset role';
-  perform set_config('request.jwt.claims', '', true);
-
+do $blk$
+begin
   execute 'set local role authenticated';
   perform set_config('request.jwt.claims',
     '{"sub":"99999999-9999-9999-9999-999999999923","role":"authenticated"}', true);
 
-  perform public._qa4_expect('T-03',
-    'authenticated: rpc_rate_limits dogrudan OKUNAMAZ (grant yok)',
-    '42501',
+  perform public._qa4_expect_env('T-03',
+    'authenticated: rpc_rate_limits icerigi GOREMEZ (42501 ya da RLS-deny)',
     $sql$select count(*) from public.rpc_rate_limits$sql$);
 
-  execute 'reset role';
   perform set_config('request.jwt.claims', '', true);
+  execute 'reset role';
 end;
 $blk$;
 
@@ -566,6 +625,9 @@ select set_config('request.jwt.claims', '', true);
 -- ============================================================
 
 do $blk$
+declare
+  v_rls      boolean;
+  v_policies integer;
 begin
   perform public._qa4_true('T-21',
     'drift guard: helper EXECUTE anon/authenticated KAPALI',
@@ -575,12 +637,24 @@ begin
       'public._faz4_consume_rate_limit(text,integer,integer)', 'EXECUTE'),
     null);
 
+  -- Grant'siz ortam (CI): tablo grant YOK beklenir. Grant'li ortam
+  -- (yerel stack): RLS acik + policy YOK -> istemci SELECT/INSERT
+  -- erisimi RLS-deny ile butunler; ozellik (icerik gorunmez/yazilamaz)
+  -- her iki ortamda da korunur.
+  select relrowsecurity into v_rls
+    from pg_class where oid = 'public.rpc_rate_limits'::regclass;
+
+  select count(*) into v_policies
+    from pg_policies
+   where schemaname = 'public' and tablename = 'rpc_rate_limits';
+
   perform public._qa4_true('T-22',
-    'drift guard: rpc_rate_limits tablosunda istemci grant YOK',
-    not has_table_privilege('anon', 'public.rpc_rate_limits', 'SELECT')
+    'drift guard: rpc_rate_limits istemcilere KAPALI (grant yok YA DA RLS+policy-yok deny)',
+    (not has_table_privilege('anon', 'public.rpc_rate_limits', 'SELECT')
       and not has_table_privilege('authenticated', 'public.rpc_rate_limits', 'SELECT')
-      and not has_table_privilege('anon', 'public.rpc_rate_limits', 'INSERT'),
-    null);
+      and not has_table_privilege('anon', 'public.rpc_rate_limits', 'INSERT'))
+    or (v_rls and v_policies = 0),
+    format('rls=%s policy=%s', v_rls::text, v_policies::text));
 end;
 $blk$;
 

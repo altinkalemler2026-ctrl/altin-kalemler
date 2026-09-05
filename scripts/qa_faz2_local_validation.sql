@@ -470,7 +470,8 @@ $blk$;
 -- ============================================================
 -- T-01d..m: 071 sonrasi Faz 2 RPC EXECUTE matrisi
 -- Imzalar pg_get_function_identity_arguments ile dogrulandi:
---   select_training_questions(uuid,integer) / get_my_weekly_usage() /
+--   select_training_questions(uuid,integer,uuid,uuid) [096 kapsam
+--   filtreleriyle genisletildi] / get_my_weekly_usage() /
 --   prepare_competition_pack(uuid)
 -- Beklenen: public=false, anon=false, authenticated=true;
 --   prepare_competition_pack icin 082 sonrasi authenticated=false,
@@ -482,19 +483,19 @@ begin
   perform public._qa_true('T-01d',
     'public: select_training_questions EXECUTE yetkisi yok',
     not has_function_privilege('public',
-      'public.select_training_questions(uuid,integer)', 'EXECUTE'),
+      'public.select_training_questions(uuid,integer,uuid,uuid)', 'EXECUTE'),
     null);
 
   perform public._qa_true('T-01e',
     'anon: select_training_questions EXECUTE yetkisi yok',
     not has_function_privilege('anon',
-      'public.select_training_questions(uuid,integer)', 'EXECUTE'),
+      'public.select_training_questions(uuid,integer,uuid,uuid)', 'EXECUTE'),
     null);
 
   perform public._qa_true('T-01f',
     'authenticated: select_training_questions EXECUTE izni var',
     has_function_privilege('authenticated',
-      'public.select_training_questions(uuid,integer)', 'EXECUTE'),
+      'public.select_training_questions(uuid,integer,uuid,uuid)', 'EXECUTE'),
     null);
 
   perform public._qa_true('T-01g',
