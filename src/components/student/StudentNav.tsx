@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation"
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Ana Sayfa" },
   { href: "/training", label: "Antrenman" },
+  { href: "/tekrar", label: "Tekrar" },
   { href: "/competition", label: "Yarışma" },
   { href: "/league", label: "Lig" },
   { href: "/profile", label: "Profil" },

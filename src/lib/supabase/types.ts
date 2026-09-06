@@ -11244,6 +11244,7 @@ export type Database = {
         Args: { p_staging_question_id: string }
         Returns: Json
       }
+      get_outcome_review_plan: { Args: { p_subject_id: string }; Returns: Json }
       get_student_attempt_trend: {
         Args: { p_days: number }
         Returns: {
@@ -11451,6 +11452,10 @@ export type Database = {
           p_subject_id?: string
         }
         Returns: string
+      }
+      select_targeted_review_questions: {
+        Args: { p_limit?: number; p_outcome_id: string; p_subject_id: string }
+        Returns: Json
       }
       select_training_questions: {
         Args: {

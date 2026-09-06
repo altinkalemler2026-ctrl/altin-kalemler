@@ -1,7 +1,7 @@
 /**
  * StudentNav testleri (Client Component).
  *
- * - Beş baglantiyi icerir: Ana Sayfa, Antrenman, Yarisma, Lig, Profil
+ * - Altı baglantiyi icerir: Ana Sayfa, Antrenman, Tekrar, Yarisma, Lig, Profil
  * - Aktif route aria-current="page" ile vurgulanir
  * - Takma ad gorunur
  * - Logout formu logout action cagirir
@@ -31,6 +31,7 @@ describe("StudentNav", () => {
     for (const label of [
       "Ana Sayfa",
       "Antrenman",
+      "Tekrar",
       "Yarışma",
       "Lig",
       "Profil",

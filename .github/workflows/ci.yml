@@ -248,6 +248,7 @@ jobs:
           run_suite grade093 scripts/qa_grade_hardening_093_local.sql parsed
           run_suite scoring094 scripts/qa_scoring_v1_094_local.sql parsed
           run_suite boundary095 scripts/qa_data_boundary_095_local.sql parsed
+          run_suite faz6 scripts/qa_faz6_targeted_review_local.sql parsed
 
       # ----------------------------------------------------------
       # Faz 2 paralel sayaç probe'u: iki AYRI docker exec sureci ile
@@ -418,4 +419,4 @@ jobs:
       - name: Summary
         if: always()
         run: |
-          echo "CI adimlari tamamlandi: tsc, eslint(scope), vitest(unit), next build, supabase start+health, tip drift guard, db reset(dinamik zincir), QA f1/f2/f3/f3.5/f4, parallel probe(work+same), rate-limit probe(faz4), API readiness(auth+rest), vitest(unit tekrar)+integration(sirali)."
+          echo "CI adimlari tamamlandi: tsc, eslint(scope), vitest(unit), next build, supabase start+health, tip drift guard, db reset(dinamik zincir), QA f1/f2/f3/f3.5/f4/grade093/scoring094/boundary095/faz6, parallel probe(work+same), rate-limit probe(faz4), API readiness(auth+rest), vitest(unit tekrar)+integration(sirali)."
