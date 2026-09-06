@@ -89,7 +89,7 @@ describe("MatchmakingQueue — queued", () => {
 
     await user.click(screen.getByRole("button", { name: /siraya katil/i }))
 
-    expect(screen.getByText(/eslesme araniyor/i)).toBeDefined()
+    expect(await screen.findByText(/eslesme araniyor/i)).toBeDefined()
     expect(
       screen.getByRole("button", { name: /kuyruktan cik/i })
     ).toBeDefined()
@@ -107,7 +107,7 @@ describe("MatchmakingQueue — error", () => {
 
     await user.click(screen.getByRole("button", { name: /siraya katil/i }))
 
-    expect(screen.getByRole("alert")).toBeDefined()
+    expect(await screen.findByRole("alert")).toBeDefined()
     expect(screen.getByText(/ders bulunamadi/i)).toBeDefined()
     expect(
       screen.getByRole("button", { name: /tekrar dene/i })
@@ -123,10 +123,10 @@ describe("MatchmakingQueue — error", () => {
     renderQueue()
 
     await user.click(screen.getByRole("button", { name: /siraya katil/i }))
-    await user.click(screen.getByRole("button", { name: /tekrar dene/i }))
+    await user.click(await screen.findByRole("button", { name: /tekrar dene/i }))
 
     expect(
-      screen.getByRole("button", { name: /siraya katil/i })
+      await screen.findByRole("button", { name: /siraya katil/i })
     ).toBeDefined()
   })
 })
