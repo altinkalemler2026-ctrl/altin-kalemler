@@ -117,6 +117,26 @@ describe("mapLeagueRanking — allowlist", () => {
     expect(dto.entries[0].rating).toBe(64)
   })
 
+  it("sunucu-ici tie-break anahtari (user_id) satirdan dusurulur, DTO'ya donmez", () => {
+    const row = mapRankedStudent({
+      rank: 1,
+      is_current_student: false,
+      nickname: "QA-TIE",
+      avatar_key: null,
+      league_code: "bronze",
+      league_name: "Bronz Lig",
+      rating: 55,
+      // Sunucu-içi deterministik tie-break anahtarı istemciye sızmaz.
+      user_id: "8f800000-0000-0000-0000-000000000006",
+    })
+
+    expect(row).not.toBeNull()
+    expect(Object.keys(row ?? {})).not.toContain(
+      "user_id"
+    )
+    expect(JSON.stringify(row)).not.toContain("8f800000")
+  })
+
   it("grade uyuşmazligi reddedilir (baska sinif verisi gecemez)", () => {
     expect(() =>
       mapLeagueRanking(poisonedRankingPayload(), 7)

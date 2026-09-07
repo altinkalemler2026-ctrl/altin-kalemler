@@ -1229,7 +1229,97 @@ $blk$;
 
 
 -- ============================================================
--- T-41..T-51: SEZON
+-- T-59 (K-B): TAM DETERMINISTIK SIRALAMA — rating + entered_at +
+-- nickname uclusu esitken son sunucu-ici benzersiz anahtar
+-- (membership/entry user_id) siralamayi belirler. Anahtar DTO'ya
+-- donmez. Geçici fixture kullanilir ve GERI YUKLENIR.
+-- ============================================================
+
+do $blk$
+declare
+  v_f_points integer;
+  v_f_ent timestamptz;
+  v_b_points integer;
+  v_b_ent timestamptz;
+  v_json1 jsonb;
+  v_json2 jsonb;
+  v_tie_nick text := 'QA8-TIE-NICK';
+  v_tie_ts timestamptz;
+begin
+  -- Orijinal degerleri sakla.
+  select m.current_points, m.entered_at
+    into v_f_points, v_f_ent
+    from public.student_league_memberships m
+   where m.user_id = '8f800000-0000-0000-0000-000000000006'
+     and m.is_current;
+  select m.current_points, m.entered_at
+    into v_b_points, v_b_ent
+    from public.student_league_memberships m
+   where m.user_id = '8f800000-0000-0000-0000-000000000002'
+     and m.is_current;
+
+  -- F ve B: ayni lig (bronze), ayni rating, ayni entered_at,
+  -- ayni nickname -> yalniz user_id tie-break kalir.
+  v_tie_ts := now() - interval '30 seconds';
+
+  update public.student_public_profiles
+     set nickname = v_tie_nick
+   where user_id in ('8f800000-0000-0000-0000-000000000006',
+                     '8f800000-0000-0000-0000-000000000002');
+
+  update public.student_league_memberships
+     set current_points = 55, entered_at = v_tie_ts
+   where user_id = '8f800000-0000-0000-0000-000000000006' and is_current;
+
+  update public.student_league_memberships
+     set current_points = 55, entered_at = v_tie_ts
+   where user_id = '8f800000-0000-0000-0000-000000000002' and is_current;
+
+  execute 'set local role authenticated';
+  perform set_config('request.jwt.claims',
+    '{"sub":"8f800000-0000-0000-0000-000000000006","role":"authenticated"}', true);
+
+  select public.get_my_league_ranking(100) into v_json1;
+  select public.get_my_league_ranking(100) into v_json2;
+
+  perform public._qa8_true('T-59a',
+    'K-B determinizm: esit uclude iki cagri birebir ayni jsonb',
+    v_json1 = v_json2,
+    'ayni-siralama');
+
+  perform public._qa8_true('T-59b',
+    'K-B: esit nickli iki satir sirada (rank 1 ve 2); UUID DTO''da yok',
+    (select count(*) from jsonb_array_elements(v_json1 -> 'entries') el
+      where el ->> 'nickname' = v_tie_nick) = 2
+      and (select count(distinct el ->> 'rank')
+             from jsonb_array_elements(v_json1 -> 'entries') el
+            where el ->> 'nickname' = v_tie_nick) = 2
+      and v_json1::text not like '%8f800000%',
+    'tie-iki-satir');
+
+  perform set_config('request.jwt.claims', '', true);
+  execute 'reset role';
+
+  -- GERI YUKLE: sonraki testlerin fixture'i bozulmasin.
+  update public.student_public_profiles
+     set nickname = 'QA8-NICK-F'
+   where user_id = '8f800000-0000-0000-0000-000000000006';
+  update public.student_public_profiles
+     set nickname = 'QA8-NICK-B'
+   where user_id = '8f800000-0000-0000-0000-000000000002';
+
+  update public.student_league_memberships
+     set current_points = v_f_points, entered_at = v_f_ent
+   where user_id = '8f800000-0000-0000-0000-000000000006' and is_current;
+  update public.student_league_memberships
+     set current_points = v_b_points, entered_at = v_b_ent
+   where user_id = '8f800000-0000-0000-0000-000000000002' and is_current;
+end;
+$blk$;
+
+
+-- ============================================================
+-- T-41..T-52: SEZON
 -- ============================================================
 
 -- T-41: upcoming sezon siralama verisi uretmez (S1 kapatilir).
@@ -1349,7 +1439,83 @@ begin
 end;
 $blk$;
 
--- T-45..T-48: ILK KAPANIS (S40 matrisi) + idempotency.
+-- ============================================================
+-- T-57/T-58 (K-A CUTGUARD): ends_at sonrasi + close oncesi
+-- finalize edilen sonuc ESKI SEZON rating/entry/history'yi
+-- DEGISTIREMEZ; yeni hedefe (ara donem null-sezon uyeligi) yazar.
+-- (T-43 ile ends_at gecmise alinmisti; close henuz cagrilmadi.)
+-- ============================================================
+
+do $blk$
+declare
+  v_comp uuid;
+  v_hist_a_before integer;
+begin
+  select count(*) into v_hist_a_before
+    from public.student_league_history
+   where user_id = '8f800000-0000-0000-0000-000000000001';
+
+  insert into public.competitions
+    (competition_code, competition_type, grade_level,
+     subject_id, scoring_rule_set_id, status, question_count,
+     winner_user_id)
+  values
+    ('F8-QA-C10', 'one_vs_one', 7,
+     '430903f3-527e-4e12-b7e8-ac0afdb784aa',
+     (select id from public.scoring_rule_sets
+       where rule_set_code = 'faz5_default'), 'completed', 5,
+     '8f800000-0000-0000-0000-000000000001')
+  returning id into v_comp;
+
+  insert into public.competition_players
+    (competition_id, user_id, player_slot, total_points, status)
+  values
+    (v_comp, '8f800000-0000-0000-0000-000000000001', 1, 100, 'finished'),
+    (v_comp, '8f800000-0000-0000-0000-000000000002', 2, 10, 'finished');
+
+  insert into public.competition_results
+    (competition_id, winner_user_id, result_type,
+     player_results, calculated_at)
+  values
+    (v_comp, '8f800000-0000-0000-0000-000000000001', 'win_loss',
+     '[]'::jsonb, now());
+
+  -- ends_at SONRASI, close ONCESI finalize.
+  perform public._faz5_apply_competition_points(v_comp);
+
+  perform public._qa8_true('T-57',
+    'cutoff: A''nin eski sezon (Silver 1022) uyeligi DEGISMEZ',
+    (select max(m.current_points) from public.student_league_memberships m
+      where m.user_id = '8f800000-0000-0000-0000-000000000001'
+        and m.season_id = '8f820000-0000-0000-0000-000000000011') = 1022
+      and not exists (
+        select 1 from public.student_league_memberships m
+         where m.user_id = '8f800000-0000-0000-0000-000000000001'
+           and m.season_id = '8f820000-0000-0000-0000-000000000011'
+           and m.is_current = true),
+    'eski-sezon-sabit');
+
+  perform public._qa8_true('T-58',
+    'cutoff: eski sezon entry 1022; post-cutoff 24 ara donemde; history degismedi',
+    (select e.points from public.leaderboard_entries e
+      where e.user_id = '8f800000-0000-0000-0000-000000000001'
+        and e.season_id = '8f820000-0000-0000-0000-000000000011'
+        and e.scope_type = 'league') = 1022
+      and exists (
+        select 1 from public.student_league_memberships m
+         where m.user_id = '8f800000-0000-0000-0000-000000000001'
+           and m.is_current = true
+           and m.membership_scope = 'general'
+           and m.season_id is null
+           and m.current_points = 24)
+      and (select count(*) from public.student_league_history
+            where user_id = '8f800000-0000-0000-0000-000000000001')
+          = v_hist_a_before,
+    format('entry=1022 ara=24 hist_once=%s', v_hist_a_before));
+end;
+$blk$;
+
+-- T-45..T-50: ILK KAPANIS + idempotency (cutoff uyumlu sayilar).
 do $blk$
 declare
   v_res jsonb;
@@ -1365,9 +1531,9 @@ begin
   v_closed := (v_res ->> 'membership_close_count')::int;
 
   perform public._qa8_true('T-45',
-    'kapanis: status=closed; 7 snapshot entry; 7 uyelik kapanir',
+    'kapanis: status=closed; 7 snapshot entry; 5 uyelik close (A/B rollover)',
     v_res ->> 'status' = 'closed'
-      and v_snap = 7 and v_closed = 7,
+      and v_snap = 7 and v_closed = 5,
     format('snap=%s closed=%s', v_snap, v_closed));
 
   perform public._qa8_true('T-46',
@@ -1381,7 +1547,7 @@ begin
          where season_id = '8f820000-0000-0000-0000-000000000011'));
 
   perform public._qa8_true('T-47',
-    'snapshot: A(Silver 1022) rank=1; B(Bronz 0) rank=3; C gizli de kayitli',
+    'snapshot: A(Silver 1022) rank=1; B(Bronz 0) rank=3; post-cutoff sizmaz',
     exists (
       select 1 from public.leaderboard_entries e
        where e.season_id = '8f820000-0000-0000-0000-000000000011'
@@ -1398,14 +1564,30 @@ begin
       and exists (
         select 1 from public.leaderboard_entries e
          where e.season_id = '8f820000-0000-0000-0000-000000000011'
-           and e.user_id = '8f800000-0000-0000-0000-000000000003'));
+           and e.user_id = '8f800000-0000-0000-0000-000000000003')
+      and not exists (
+        select 1 from public.leaderboard_entries e
+         where e.season_id = '8f820000-0000-0000-0000-000000000011'
+           and e.user_id = '8f800000-0000-0000-0000-000000000001'
+           and e.points in (24, 1046)),
+    format('A=%s B=%s',
+      (select coalesce(max(e.points)::text,'yok') from public.leaderboard_entries e
+        where e.season_id = '8f820000-0000-0000-0000-000000000011'
+          and e.user_id = '8f800000-0000-0000-0000-000000000001'),
+      (select coalesce(string_agg(e.rank_position::text || ':' || e.points::text, ','),'yok')
+         from public.leaderboard_entries e
+        where e.season_id = '8f820000-0000-0000-0000-000000000011'
+          and e.user_id = '8f800000-0000-0000-0000-000000000002')));
 
   perform public._qa8_true('T-48',
-    'yeni sezon uyelikleri: 7 ogrenci Bronz rating 0, sezon S2',
+    'yeni sezon uyelikleri: 7 ogrenci S2''de; A''nin post-cutoff 24''u tasınır',
     (select count(*) from public.student_league_memberships m
       where m.season_id = '8f820000-0000-0000-0000-000000000012'
-        and m.is_current
-        and m.current_points = 0) = 7
+        and m.is_current) = 7
+      and (select count(*) from public.student_league_memberships m
+            where m.season_id = '8f820000-0000-0000-0000-000000000012'
+              and m.is_current
+              and m.current_points = 0) = 6
       and exists (
         select 1
           from public.student_league_memberships m
@@ -1413,6 +1595,7 @@ begin
          where m.user_id = '8f800000-0000-0000-0000-000000000001'
            and m.season_id = '8f820000-0000-0000-0000-000000000012'
            and m.is_current
+           and m.current_points = 24
            and l.league_code = 'bronze'));
 
   perform public._qa8_true('T-49',
@@ -1484,14 +1667,14 @@ begin
   perform public._faz5_apply_competition_points(v_comp);
 
   perform public._qa8_true('T-51',
-    'cutoff determinizmi: kapanis sonrasi sonuc S2 (yeni sezon) uyeligine yazar',
+    'cutoff determinizmi: kapanis sonrasi sonuc S2 uyeligine yazar (24+24=48)',
     exists (
       select 1
         from public.student_league_memberships m
        where m.user_id = '8f800000-0000-0000-0000-000000000001'
          and m.season_id = '8f820000-0000-0000-0000-000000000012'
          and m.is_current
-         and m.current_points = 24
+         and m.current_points = 48
          and m.membership_scope = 'general'));
 end;
 $blk$;
