@@ -5662,6 +5662,48 @@ export type Database = {
         }
         Relationships: []
       }
+      league_season_close_results: {
+        Row: {
+          closed_at: string
+          membership_close_count: number
+          metadata: Json
+          next_season_id: string | null
+          season_id: string
+          snapshot_entry_count: number
+        }
+        Insert: {
+          closed_at?: string
+          membership_close_count?: number
+          metadata?: Json
+          next_season_id?: string | null
+          season_id: string
+          snapshot_entry_count?: number
+        }
+        Update: {
+          closed_at?: string
+          membership_close_count?: number
+          metadata?: Json
+          next_season_id?: string | null
+          season_id?: string
+          snapshot_entry_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "league_season_close_results_next_season_id_fkey"
+            columns: ["next_season_id"]
+            isOneToOne: false
+            referencedRelation: "leaderboard_seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "league_season_close_results_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: true
+            referencedRelation: "leaderboard_seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       league_transition_rules: {
         Row: {
           configuration: Json
@@ -10961,6 +11003,15 @@ export type Database = {
         Args: { p_competition_id: string }
         Returns: undefined
       }
+      _faz8_season_status: {
+        Args: {
+          p_ends_at: string
+          p_is_active: boolean
+          p_is_closed: boolean
+          p_starts_at: string
+        }
+        Returns: string
+      }
       academic_calendar_delete_week: {
         Args: { p_week: number; p_year: string }
         Returns: undefined
@@ -11074,6 +11125,7 @@ export type Database = {
         Args: { p_lease_seconds?: number; p_worker_name: string }
         Returns: Json
       }
+      close_league_season: { Args: { p_season_id: string }; Returns: Json }
       create_missing_competition_timeouts: {
         Args: { p_competition_question_id: string }
         Returns: number
@@ -11187,6 +11239,10 @@ export type Database = {
         Returns: string
       }
       get_latest_competition_pool_report: { Args: never; Returns: Json }
+      get_my_league_ranking: {
+        Args: { p_limit?: number; p_offset?: number }
+        Returns: Json
+      }
       get_my_weekly_usage: { Args: never; Returns: Json }
       get_originality_verification_report: {
         Args: { p_staging_question_id: string }
