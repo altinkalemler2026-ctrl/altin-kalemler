@@ -38,6 +38,23 @@ export interface QueueLeaveResult {
   cancelled: number
 }
 
+/** 084 get_own_matchmaking_status durumları. */
+export type OwnMatchmakingStatusValue =
+  | "not_queued"
+  | "waiting"
+  | "matched"
+
+/**
+ * 084 get_own_matchmaking_status cevabi — kullanıcının KENDİ kuyruk
+ * durumu. Rakip verisi icERMEZ; competition bilgileri yalnizca
+ * matched durumunda ve yalnizca kullanici katilimciysa doner.
+ */
+export interface OwnMatchmakingStatus {
+  status: OwnMatchmakingStatusValue
+  competitionId: string | null
+  competitionCode: string | null
+}
+
 export interface CompetitionMatchResult {
   queueId: string
   competitionId: string
@@ -103,8 +120,22 @@ export interface AnswerSubmitResult {
 }
 
 /**
+ * Yarisma sonucu ogrencinin KENDİ sonucu — 099 my_result alanı.
+ * winnerUserId ham değeri ASLA taşınmaz; sunucu tarafında türetilir.
+ */
+export type OwnCompetitionOutcome =
+  | "win"
+  | "loss"
+  | "draw"
+  | "forfeit_win"
+  | "forfeit_loss"
+  | "no_contest"
+
+/**
  * Kisinin kendi yarisma sonucu — rakip verisi icERMEZ.
  * winnerUserId, players dizisi veya rakip bilgisi bulunmaz.
+ * Soru bazında yalnizca KENDİ answer_result/submitted_answer bulunur;
+ * doğru cevap veya rakibin cevabı ASLA bulunmaz (099 sözleşmesi).
  */
 export interface OwnCompetitionResult {
   competitionId: string
@@ -114,6 +145,7 @@ export interface OwnCompetitionResult {
   subjectId: string
   questionCount: number
   resultType: string
+  myResult: OwnCompetitionOutcome
   myPlayerSlot: number
   myTotalPoints: number
   myCorrectCount: number
@@ -126,6 +158,8 @@ export interface OwnCompetitionResult {
     difficulty: string
     pointsAwarded: number
     timeMs: number
+    answerResult: string
+    submittedAnswer: string | null
   }>
   startedAt: string | null
   completedAt: string | null

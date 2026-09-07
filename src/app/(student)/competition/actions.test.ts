@@ -29,6 +29,7 @@ import {
   submitAnswerAction,
   setPlayerReadyAction,
   getOwnCompetitionResultAction,
+  getOwnMatchmakingStatusAction,
 } from "./actions"
 
 import { SESSION_EXPIRED_MESSAGE } from "@/lib/competition/errors"
@@ -551,6 +552,74 @@ describe("getOwnCompetitionResultAction", () => {
     if (!result.ok) {
       expect(result.message).not.toContain("pg_restore")
       expect(result.message).not.toContain("12345")
+    }
+  })
+})
+
+describe("getOwnMatchmakingStatusAction", () => {
+  it("oturum yoksa SESSION_EXPIRED_MESSAGE doner", async () => {
+    getUserMock.mockResolvedValue({ data: { user: null } })
+    const result = await getOwnMatchmakingStatusAction(
+      "33333333-3333-3333-3333-333333333333"
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.message).toBe(SESSION_EXPIRED_MESSAGE)
+    }
+    expect(rpcMock).not.toHaveBeenCalled()
+  })
+
+  it("basarili durum dondurur ve 084 RPC'sini dogru cagirir", async () => {
+    getUserMock.mockResolvedValue({
+      data: { user: { id: "99999999-8888-4000-8000-000000000901" } },
+    })
+    rpcMock.mockResolvedValue({
+      data: {
+        status: "matched",
+        competition_id: "55555555-5555-5555-5555-555555555555",
+        competition_code: "F5-STATUS",
+      },
+      error: null,
+    })
+
+    const result = await getOwnMatchmakingStatusAction(
+      "33333333-3333-3333-3333-333333333333"
+    )
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.data.status).toBe("matched")
+      expect(result.data.competitionId).toBe(
+        "55555555-5555-5555-5555-555555555555"
+      )
+      expect(result.data.competitionCode).toBe("F5-STATUS")
+    }
+
+    expect(rpcMock).toHaveBeenCalledTimes(1)
+    const [fn, args] = rpcMock.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ]
+    expect(fn).toBe("get_own_matchmaking_status")
+    expect(args).toEqual({
+      p_subject_id: "33333333-3333-3333-3333-333333333333",
+    })
+  })
+
+  it("ham DB hatasi sizmaz", async () => {
+    getUserMock.mockResolvedValue({
+      data: { user: { id: "99999999-8888-4000-8000-000000000901" } },
+    })
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: new Error("kimlik dogrulamasi gerekli"),
+    })
+
+    const result = await getOwnMatchmakingStatusAction(
+      "33333333-3333-3333-3333-333333333333"
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.message).not.toContain("kimlik dogrulamasi gerekli")
     }
   })
 })

@@ -96,6 +96,7 @@ describe("CompetitionResultPage", () => {
       subjectId: "22222222-2222-2222-2222-222222222222",
       questionCount: 5,
       resultType: "win_loss",
+      myResult: "win",
       myPlayerSlot: 1,
       myTotalPoints: 300,
       myCorrectCount: 3,
@@ -109,6 +110,16 @@ describe("CompetitionResultPage", () => {
           difficulty: "easy",
           pointsAwarded: 100,
           timeMs: 5000,
+          answerResult: "correct",
+          submittedAnswer: "B",
+        },
+        {
+          questionOrder: 2,
+          difficulty: "hard",
+          pointsAwarded: 0,
+          timeMs: 0,
+          answerResult: "wrong",
+          submittedAnswer: "A",
         },
       ],
       startedAt: "2025-01-01T00:00:00Z",
@@ -124,13 +135,33 @@ describe("CompetitionResultPage", () => {
     render(element)
 
     expect(screen.getByText("300")).toBeDefined()
-    expect(screen.getByText("F5-TEST")).toBeDefined()
+    expect(screen.getByText(/F5-TEST/)).toBeDefined()
+
+    // 099: sunucudan turetilen my_result rozeti dogal Turkce gosterilir.
+    expect(screen.getByText("Kazandın!")).toBeDefined()
+
+    // Hata inceleme: kendi answer_result/submitted_answer gosterilir.
+    expect(screen.getByText("Hata inceleme")).toBeDefined()
+    expect(screen.getAllByText(/Yanlış/).length).toBeGreaterThan(0)
+    expect(screen.getByText(/Seçtiğin: B/)).toBeDefined()
+    expect(screen.getByText(/Seçtiğin: A/)).toBeDefined()
+
+    // Tekrar yarış girisi sunulur.
+    expect(screen.getByText("Tekrar yarış")).toBeDefined()
 
     const bodyText = document.body.textContent ?? ""
     expect(bodyText).not.toContain("AAAAAAAA")
     expect(bodyText).not.toContain("winnerUserId")
     expect(bodyText).not.toContain("winner_user_id")
     expect(bodyText).not.toContain("player_slot")
+
+    // Emergent kalintisi yok: sabit 100 puan / +20 XP gosterilmez.
+    expect(bodyText).not.toContain("+20")
+    expect(bodyText).not.toContain("XP")
+
+    // Dogru cevap anahtari ASLA gosterilmez.
+    expect(bodyText).not.toContain("Doğru cevap")
+    expect(bodyText).not.toContain("Cevap anahtarı")
   })
 
   it("getOwnResult hatasinda oturum sayfasina redirect", async () => {

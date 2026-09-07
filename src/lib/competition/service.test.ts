@@ -20,7 +20,9 @@ import {
   mapSessionState,
   mapAnswerSubmitResult,
   mapOwnCompetitionResult,
+  mapOwnMatchmakingStatus,
   CompetitionValidationError,
+  syncCompetitionState,
 } from "./service"
 
 describe("mapQueueJoinResult", () => {
@@ -149,7 +151,9 @@ describe("mapQuestionResult", () => {
     expect(result.competitionId).toBe("11111111-1111-1111-1111-111111111111")
     expect(result.questionAvailable).toBe(true)
     expect(result.payload).not.toBeNull()
-    expect(result.payload?.id).toBe("33333333-3333-3333-3333-333333333333")
+    // payload.id = competition_question_id (submit FK hedefi);
+    // soru bankasi kimligi (question.id) ASLA kullanilmaz.
+    expect(result.payload?.id).toBe("22222222-2222-2222-2222-222222222222")
     expect(result.payload?.stemHtml).toBe("<p>Soru metni</p>")
     expect(result.payload?.options.A).toBe("<p>Secenek A</p>")
     expect(result.payload?.options.B).toBe("<p>Secenek B</p>")
@@ -248,6 +252,69 @@ describe("mapSessionState", () => {
   it("null response null doner", () => {
     const result = mapSessionState(null)
     expect(result).toBeNull()
+  })
+})
+
+// ------------------------------------------------------------
+// syncCompetitionState — RPC (023) competition_id dondurmaz;
+// cagiranin bildigi p_competition_id ile enjekte edilmelidir.
+// ------------------------------------------------------------
+
+describe("syncCompetitionState", () => {
+  const COMP_ID = "44444444-4444-4444-4444-444444444444"
+
+  it("RPC competition_id icermese de DTO doldurulur (023 sozlesmesi)", async () => {
+    const mockClient = {
+      rpc: (name: string, args: Record<string, unknown>) => {
+        expect(name).toBe("sync_competition_state")
+        expect(args.p_competition_id).toBe(COMP_ID)
+        return Promise.resolve({
+          data: {
+            // 023 gercek yaniti: competition_id YOKTUR
+            status: "active",
+            current_question_order: 1,
+            has_answered_current_question: false,
+            my_current_score: 100,
+            opponent_current_score: 50,
+          },
+          error: null,
+        })
+      },
+    }
+    const result = await syncCompetitionState(mockClient as never, COMP_ID)
+    expect(result).not.toBeNull()
+    expect(result?.competitionId).toBe(COMP_ID)
+    expect(result?.status).toBe("active")
+    expect(result?.myCurrentScore).toBe(100)
+  })
+
+  it("completed dalı (yalniz status doner) calisir", async () => {
+    const mockClient = {
+      rpc: () =>
+        Promise.resolve({
+          data: { status: "completed", scoreboard_available: true },
+          error: null,
+        }),
+    }
+    const result = await syncCompetitionState(mockClient as never, COMP_ID)
+    expect(result).not.toBeNull()
+    expect(result?.competitionId).toBe(COMP_ID)
+    expect(result?.status).toBe("completed")
+  })
+
+  it("null data null doner", async () => {
+    const mockClient = {
+      rpc: () => Promise.resolve({ data: null, error: null }),
+    }
+    const result = await syncCompetitionState(mockClient as never, COMP_ID)
+    expect(result).toBeNull()
+  })
+
+  it("gecersiz UUID CompetitionValidationError firlatir", async () => {
+    const mockClient = { rpc: () => Promise.resolve({ data: {}, error: null }) }
+    await expect(
+      syncCompetitionState(mockClient as never, "not-a-uuid")
+    ).rejects.toThrow(CompetitionValidationError)
   })
 })
 
@@ -529,5 +596,226 @@ describe("mapOwnCompetitionResult", () => {
 
     expect(result.questionResults[0].questionOrder).toBe(1)
     expect(result.questionResults[1].questionOrder).toBe(3)
+  })
+
+  it("081 sözleşmesi: ->>' ile string gelen sayısal alanlar sayıya cevrilir", () => {
+    // 081/099 jsonb_build_object + ->>' kombinasyonu question_order,
+    // points_awarded ve time_ms alanlarını JSON string olarak döndürür.
+    const result = mapOwnCompetitionResult({
+      competition_id: "11111111-1111-1111-1111-111111111111",
+      competition_code: "F5-STR",
+      competition_type: "one_vs_one",
+      grade_level: "12",
+      subject_id: "22222222-2222-2222-2222-222222222222",
+      question_count: "5",
+      result_type: "win_loss",
+      my_player_slot: "2",
+      my_total_points: "120",
+      my_correct_count: "2",
+      my_wrong_count: "1",
+      my_pass_count: "1",
+      my_timeout_count: "1",
+      my_finished_at: null,
+      question_results: [
+        {
+          question_order: "1",
+          difficulty: "easy",
+          points_awarded: "100",
+          time_ms: "5200",
+          answer_result: "correct",
+          submitted_answer: "B",
+        },
+        {
+          question_order: "2",
+          difficulty: "hard",
+          points_awarded: "20",
+          time_ms: "0",
+          answer_result: "wrong",
+          submitted_answer: "A",
+        },
+      ],
+      started_at: null,
+      completed_at: "2025-01-01T00:05:00Z",
+    } as Record<string, unknown>)
+
+    expect(result.gradeLevel).toBe(12)
+    expect(result.questionCount).toBe(5)
+    expect(result.myTotalPoints).toBe(120)
+    expect(result.questionResults[0].questionOrder).toBe(1)
+    expect(result.questionResults[0].pointsAwarded).toBe(100)
+    expect(result.questionResults[0].timeMs).toBe(5200)
+    expect(result.questionResults[1].pointsAwarded).toBe(20)
+  })
+
+  it("099: my_result allowlist disinda no_contest'e duser", () => {
+    const result = mapOwnCompetitionResult({
+      competition_id: "11111111-1111-1111-1111-111111111111",
+      competition_code: "F5-MR",
+      competition_type: "one_vs_one",
+      grade_level: 5,
+      subject_id: "22222222-2222-2222-2222-222222222222",
+      question_count: 5,
+      result_type: "win_loss",
+      my_result: "bilinmeyen_durum",
+    } as Record<string, unknown>)
+
+    expect(result.myResult).toBe("no_contest")
+  })
+
+  it("099: kendi answer_result/submitted_answer alanlari eslenir", () => {
+    const result = mapOwnCompetitionResult({
+      competition_id: "11111111-1111-1111-1111-111111111111",
+      competition_code: "F5-ANS",
+      competition_type: "one_vs_one",
+      grade_level: 5,
+      subject_id: "22222222-2222-2222-2222-222222222222",
+      question_count: 2,
+      result_type: "win_loss",
+      my_result: "loss",
+      question_results: [
+        {
+          question_order: 1,
+          difficulty: "easy",
+          points_awarded: 0,
+          time_ms: 1000,
+          answer_result: "wrong",
+          submitted_answer: "C",
+        },
+        {
+          question_order: 2,
+          difficulty: "easy",
+          points_awarded: 0,
+          time_ms: 0,
+          answer_result: "timeout",
+          submitted_answer: null,
+        },
+      ],
+    } as Record<string, unknown>)
+
+    expect(result.myResult).toBe("loss")
+    expect(result.questionResults[0].answerResult).toBe("wrong")
+    expect(result.questionResults[0].submittedAnswer).toBe("C")
+    expect(result.questionResults[1].answerResult).toBe("timeout")
+    expect(result.questionResults[1].submittedAnswer).toBeNull()
+  })
+
+  it("099: rakibin answer_result/submitted_answer degerleri DTO'da bulunmaz", () => {
+    const result = mapOwnCompetitionResult({
+      competition_id: "11111111-1111-1111-1111-111111111111",
+      competition_code: "F5-LEAK",
+      competition_type: "one_vs_one",
+      grade_level: 5,
+      subject_id: "22222222-2222-2222-2222-222222222222",
+      question_count: 1,
+      result_type: "win_loss",
+      my_result: "win",
+      question_results: [
+        {
+          question_order: 1,
+          difficulty: "easy",
+          points_awarded: "50",
+          time_ms: "3000",
+          answer_result: "correct",
+          submitted_answer: "B",
+        },
+      ],
+      // RPC tarafindan hic donmemesi gereken rakip cevap alanlari
+      opponent_submitted_answer: "A",
+      correct_answer: "D",
+    } as Record<string, unknown>)
+
+    const json = JSON.stringify(result)
+    expect(json).not.toContain("opponent_submitted_answer")
+    expect(json).not.toContain("correct_answer")
+    expect(json).not.toContain('"D"')
+  })
+})
+
+// ------------------------------------------------------------
+// 084: mapOwnMatchmakingStatus tests
+// ------------------------------------------------------------
+
+describe("mapOwnMatchmakingStatus", () => {
+  it("waiting durumu eslenir", () => {
+    const result = mapOwnMatchmakingStatus({ status: "waiting" })
+    expect(result.status).toBe("waiting")
+    expect(result.competitionId).toBeNull()
+    expect(result.competitionCode).toBeNull()
+  })
+
+  it("matched durumu yarisma bilgisiyle eslenir", () => {
+    const result = mapOwnMatchmakingStatus({
+      status: "matched",
+      competition_id: "33333333-3333-3333-3333-333333333333",
+      competition_code: "F5-MATCHED",
+    })
+    expect(result.status).toBe("matched")
+    expect(result.competitionId).toBe("33333333-3333-3333-3333-333333333333")
+    expect(result.competitionCode).toBe("F5-MATCHED")
+  })
+
+  it("not_queued durumu eslenir", () => {
+    const result = mapOwnMatchmakingStatus({
+      status: "not_queued",
+      competition_id: null,
+      competition_code: null,
+    })
+    expect(result.status).toBe("not_queued")
+    expect(result.competitionId).toBeNull()
+  })
+
+  it("bilinmeyen status not_queued'a duser (fail-closed)", () => {
+    const result = mapOwnMatchmakingStatus({ status: "weird" })
+    expect(result.status).toBe("not_queued")
+  })
+
+  it("null/bozuk response guvenli default'a duser", () => {
+    const result = mapOwnMatchmakingStatus(null)
+    expect(result.status).toBe("not_queued")
+    expect(result.competitionId).toBeNull()
+    expect(result.competitionCode).toBeNull()
+  })
+
+  it("rakip verisi DTO'da bulunmaz", () => {
+    const result = mapOwnMatchmakingStatus({
+      status: "matched",
+      competition_id: "33333333-3333-3333-3333-333333333333",
+      competition_code: "F5-M",
+      opponent_user_id: "SECRET_USER_ID",
+      opponent_nickname: "secret-nick",
+    } as Record<string, unknown>)
+
+    const json = JSON.stringify(result)
+    expect(json).not.toContain("SECRET_USER_ID")
+    expect(json).not.toContain("secret-nick")
+  })
+})
+
+describe("getOwnMatchmakingStatus", () => {
+  it("084 RPC'sini exact parametreyle cagirir, user_id gondermez", async () => {
+    const { getOwnMatchmakingStatus } = await import("./service")
+    const calls: { fn: string; args: unknown }[] = []
+    const mockClient = {
+      rpc: (fn: string, args?: unknown) => {
+        calls.push({ fn, args: args ?? null })
+        return Promise.resolve({ data: { status: "waiting" }, error: null })
+      },
+    }
+    const subjectId = "44444444-4444-4444-4444-444444444444"
+    await getOwnMatchmakingStatus(mockClient as never, subjectId)
+    expect(calls).toHaveLength(1)
+    expect(calls[0].fn).toBe("get_own_matchmaking_status")
+    expect(calls[0].args).toStrictEqual({ p_subject_id: subjectId })
+    const argStr = JSON.stringify(calls[0].args)
+    expect(argStr).not.toContain("user_id")
+  })
+
+  it("gecersiz subjectId CompetitionValidationError firlatir", async () => {
+    const { getOwnMatchmakingStatus, CompetitionValidationError } =
+      await import("./service")
+    const mockClient = { rpc: () => Promise.resolve({ data: null, error: null }) }
+    await expect(
+      getOwnMatchmakingStatus(mockClient as never, "not-a-uuid")
+    ).rejects.toBeInstanceOf(CompetitionValidationError)
   })
 })

@@ -19,6 +19,7 @@ import {
 import {
   CompetitionValidationError,
   getCurrentQuestion,
+  getOwnMatchmakingStatus,
   getOwnResult,
   joinMatchmakingQueue,
   leaveMatchmakingQueue,
@@ -31,6 +32,7 @@ import type {
   CompetitionQuestion,
   CompetitionSession,
   OwnCompetitionResult,
+  OwnMatchmakingStatus,
   QueueJoinResult,
   QueueLeaveResult,
 } from "@/lib/competition/types"
@@ -74,6 +76,32 @@ export async function leaveMatchmakingQueueAction(): Promise<
 
   try {
     const data = await leaveMatchmakingQueue(supabase)
+    return { ok: true, data }
+  } catch (error) {
+    if (error instanceof CompetitionValidationError) {
+      return { ok: false, message: error.message }
+    }
+    return { ok: false, message: mapCompetitionError(error) }
+  }
+}
+
+/**
+ * Kendi kuyruk durumunu sorgula (084).
+ * Rate-limit tuketmedigi icin beklerken polling bu aksiyonla yapilir;
+ * join tekrar tekrar cagrilmaz.
+ */
+export async function getOwnMatchmakingStatusAction(
+  subjectId: string
+): Promise<ActionResponse<OwnMatchmakingStatus>> {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, message: SESSION_EXPIRED_MESSAGE }
+
+  try {
+    const data = await getOwnMatchmakingStatus(supabase, subjectId)
     return { ok: true, data }
   } catch (error) {
     if (error instanceof CompetitionValidationError) {

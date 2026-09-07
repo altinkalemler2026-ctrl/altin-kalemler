@@ -21,7 +21,10 @@ import type {
   AnswerSubmitResult,
   CompetitionQuestion,
   CompetitionSession,
+  OwnCompetitionOutcome,
   OwnCompetitionResult,
+  OwnMatchmakingStatus,
+  OwnMatchmakingStatusValue,
   QueueJoinResult,
   QueueLeaveResult,
   QueueStatus,
@@ -225,31 +228,45 @@ function mapQuestionPayloadFromRaw(
       : null
   if (!question) return null
 
-  const qId = typeof question.id === "string" ? question.id : cpid
+  // submit_competition_answer FK olarak competition_questions.id
+  // bekler; payload kimliği BU değerdir. Soru bankası kimliği
+  // (question.id) gönderimde kullanılamaz.
 
   const options: CompetitionQuestion["options"] = {}
+  // RPC (023) soru satirini oldugu gibi dondurur: tabloda alanlar
+  // option_a..option_e'dir; _html varyantlari gelecekteki HTML destekli
+  // senaryolar icin tercih edilir.
   const optionFields = [
-    ["option_a_html", "A"],
-    ["option_b_html", "B"],
-    ["option_c_html", "C"],
-    ["option_d_html", "D"],
-    ["option_e_html", "E"],
+    ["option_a_html", "option_a", "A"],
+    ["option_b_html", "option_b", "B"],
+    ["option_c_html", "option_c", "C"],
+    ["option_d_html", "option_d", "D"],
+    ["option_e_html", "option_e", "E"],
   ] as const
-  for (const [field, letter] of optionFields) {
-    const val = question[field]
-    if (typeof val === "string" && val.length > 0) {
-      options[letter] = val
+  for (const [htmlField, textField, letter] of optionFields) {
+    const htmlVal = question[htmlField]
+    if (typeof htmlVal === "string" && htmlVal.length > 0) {
+      options[letter] = htmlVal
+      continue
+    }
+    const textVal = question[textField]
+    if (typeof textVal === "string" && textVal.length > 0) {
+      options[letter] = textVal
     }
   }
 
   return {
-    id: qId,
+    id: cpid,
     questionOrder:
       typeof raw.question_order === "number" ? raw.question_order : 0,
     sentAt: typeof raw.sent_at === "string" ? raw.sent_at : "",
     deadlineAt: typeof raw.deadline_at === "string" ? raw.deadline_at : "",
     stemHtml:
-      typeof question.stem_html === "string" ? question.stem_html : "",
+      typeof question.stem_html === "string" && question.stem_html.length > 0
+        ? question.stem_html
+        : typeof question.question_text === "string"
+          ? question.question_text
+          : "",
     options,
     difficulty:
       typeof question.difficulty === "string" ? question.difficulty : null,
@@ -375,6 +392,11 @@ export async function getCurrentQuestion(
 /**
  * Yarisma durumunu senkronize et (sync_competition_state).
  * Timeout ve soru ilerlemesini sunucu tarafinda tetikler.
+ *
+ * NOT: RPC (023) yanitinda competition_id alanı DONMEZ; mapper
+ * bu alani zorunlu tuttugu icin çağıranın bildiği p_competition_id
+ * ham yanıta enjekte edilir. Aynı şekilde completed dalı yalnızca
+ * status döner; mapper bu yanıtta da çalışabilir olmalıdır.
  */
 export async function syncCompetitionState(
   client: CompetitionClient,
@@ -385,7 +407,9 @@ export async function syncCompetitionState(
     p_competition_id: competitionId,
   })
   if (error) throw error
-  return mapSessionState(data)
+  if (typeof data !== "object" || data === null) return null
+  const raw = data as Record<string, unknown>
+  return mapSessionState({ ...raw, competition_id: competitionId })
 }
 
 /**
@@ -432,19 +456,111 @@ export async function setPlayerReady(
 }
 
 // ------------------------------------------------------------
-// 081: Own result — get_own_competition_result RPC
+// 084: Kuyruk durumu sorgusu (rate-limit tuketmez)
 // ------------------------------------------------------------
+
+const VALID_OWN_MATCHMAKING_STATUSES: readonly OwnMatchmakingStatusValue[] = [
+  "not_queued",
+  "waiting",
+  "matched",
+]
+
+/**
+ * get_own_matchmaking_status RPC cevabini guvenli DTO'ya cevirir.
+ * Bilinmeyen durum not_queued'a dusurulur (fail-closed).
+ */
+export function mapOwnMatchmakingStatus(raw: unknown): OwnMatchmakingStatus {
+  const record =
+    typeof raw === "object" && raw !== null
+      ? (raw as Record<string, unknown>)
+      : {}
+
+  const status =
+    typeof record.status === "string" &&
+    (VALID_OWN_MATCHMAKING_STATUSES as readonly string[]).includes(
+      record.status
+    )
+      ? (record.status as OwnMatchmakingStatusValue)
+      : "not_queued"
+
+  return {
+    status,
+    competitionId:
+      typeof record.competition_id === "string" && record.competition_id.length > 0
+        ? record.competition_id
+        : null,
+    competitionCode:
+      typeof record.competition_code === "string" &&
+      record.competition_code.length > 0
+        ? record.competition_code
+        : null,
+  }
+}
+
+/**
+ * Kullanicinin kendi kuyruk durumunu sorgular (084).
+ *
+ * - Rate limit TUKETMEZ; beklerken periyodik polling bu RPC ile yapilir.
+ * - Kimlik sunucu oturumundan gelir; user parametresi yoktur.
+ * - matched durumunda yalnizca kullanici katilimciysa yarisma bilgisi doner.
+ */
+export async function getOwnMatchmakingStatus(
+  client: CompetitionClient,
+  subjectId: string
+): Promise<OwnMatchmakingStatus> {
+  assertUuid(subjectId, "subjectId")
+  const { data, error } = await client.rpc("get_own_matchmaking_status", {
+    p_subject_id: subjectId,
+  })
+  if (error) throw error
+  return mapOwnMatchmakingStatus(data)
+}
+
+// ------------------------------------------------------------
+// 081 + 099: Own result — get_own_competition_result RPC
+// ------------------------------------------------------------
+
+const VALID_OWN_OUTCOMES: readonly OwnCompetitionOutcome[] = [
+  "win",
+  "loss",
+  "draw",
+  "forfeit_win",
+  "forfeit_loss",
+  "no_contest",
+]
+
+/**
+ * RPC'nin ->>' ile metin olarak dondurdugu sayısal alanları güvenle
+ * sayıya cevirir; 081/099 jsonb sözleşmesi string veya number
+ * verebilir. Geçersiz değerlerde fallback doner.
+ */
+function coerceNumber(value: unknown, fallback: number): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return fallback
+}
 
 /**
  * mapOwnCompetitionResult — get_own_competition_result RPC cevabini
  * OwnCompetitionResult DTO'ya cevirir. Rakip verisi zaten RPC tarafinda
- * filtrelenmistir; bu mapper yalnizca tip donusumu yapar.
+ * filtrelenmistir; bu mapper yalnizca tip donusumu yapar. 099 ile
+ * my_result + kendi answer_result/submitted_answer alanlari eklenir;
+ * winner_user_id/players bu mapper'dan ASLA gecmez.
  */
 export function mapOwnCompetitionResult(raw: unknown): OwnCompetitionResult {
   const record =
     typeof raw === "object" && raw !== null
       ? (raw as Record<string, unknown>)
       : {}
+
+  const myResult: OwnCompetitionOutcome =
+    typeof record.my_result === "string" &&
+    (VALID_OWN_OUTCOMES as readonly string[]).includes(record.my_result)
+      ? (record.my_result as OwnCompetitionOutcome)
+      : "no_contest"
 
   return {
     competitionId:
@@ -457,42 +573,32 @@ export function mapOwnCompetitionResult(raw: unknown): OwnCompetitionResult {
       typeof record.competition_type === "string"
         ? record.competition_type
         : "",
-    gradeLevel:
-      typeof record.grade_level === "number" ? record.grade_level : 0,
+    gradeLevel: coerceNumber(record.grade_level, 0),
     subjectId:
       typeof record.subject_id === "string" ? record.subject_id : "",
-    questionCount:
-      typeof record.question_count === "number" ? record.question_count : 0,
+    questionCount: coerceNumber(record.question_count, 0),
     resultType:
       typeof record.result_type === "string" ? record.result_type : "",
-    myPlayerSlot:
-      typeof record.my_player_slot === "number" ? record.my_player_slot : 0,
-    myTotalPoints:
-      typeof record.my_total_points === "number" ? record.my_total_points : 0,
-    myCorrectCount:
-      typeof record.my_correct_count === "number"
-        ? record.my_correct_count
-        : 0,
-    myWrongCount:
-      typeof record.my_wrong_count === "number" ? record.my_wrong_count : 0,
-    myPassCount:
-      typeof record.my_pass_count === "number" ? record.my_pass_count : 0,
-    myTimeoutCount:
-      typeof record.my_timeout_count === "number"
-        ? record.my_timeout_count
-        : 0,
+    myResult,
+    myPlayerSlot: coerceNumber(record.my_player_slot, 0),
+    myTotalPoints: coerceNumber(record.my_total_points, 0),
+    myCorrectCount: coerceNumber(record.my_correct_count, 0),
+    myWrongCount: coerceNumber(record.my_wrong_count, 0),
+    myPassCount: coerceNumber(record.my_pass_count, 0),
+    myTimeoutCount: coerceNumber(record.my_timeout_count, 0),
     myFinishedAt:
       typeof record.my_finished_at === "string" ? record.my_finished_at : null,
     questionResults: Array.isArray(record.question_results)
       ? (record.question_results as Array<Record<string, unknown>>)
           .map((q) => ({
-            questionOrder:
-              typeof q.question_order === "number" ? q.question_order : 0,
-            difficulty:
-              typeof q.difficulty === "string" ? q.difficulty : "",
-            pointsAwarded:
-              typeof q.points_awarded === "number" ? q.points_awarded : 0,
-            timeMs: typeof q.time_ms === "number" ? q.time_ms : 0,
+            questionOrder: coerceNumber(q.question_order, 0),
+            difficulty: typeof q.difficulty === "string" ? q.difficulty : "",
+            pointsAwarded: coerceNumber(q.points_awarded, 0),
+            timeMs: coerceNumber(q.time_ms, 0),
+            answerResult:
+              typeof q.answer_result === "string" ? q.answer_result : "timeout",
+            submittedAnswer:
+              typeof q.submitted_answer === "string" ? q.submitted_answer : null,
           }))
           .sort((a, b) => a.questionOrder - b.questionOrder)
       : [],
