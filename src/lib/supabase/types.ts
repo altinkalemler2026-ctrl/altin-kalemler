@@ -3234,6 +3234,33 @@ export type Database = {
           },
         ]
       }
+      badge_definitions: {
+        Row: {
+          badge_code: string
+          created_at: string
+          description: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          badge_code: string
+          created_at?: string
+          description?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          badge_code?: string
+          created_at?: string
+          description?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       characters: {
         Row: {
           character_code: string
@@ -8712,6 +8739,35 @@ export type Database = {
           },
         ]
       }
+      student_badges: {
+        Row: {
+          badge_code: string
+          granted_at: string
+          source_ref: Json
+          user_id: string
+        }
+        Insert: {
+          badge_code: string
+          granted_at?: string
+          source_ref?: Json
+          user_id: string
+        }
+        Update: {
+          badge_code?: string
+          granted_at?: string
+          source_ref?: Json
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_badges_badge_code_fkey"
+            columns: ["badge_code"]
+            isOneToOne: false
+            referencedRelation: "badge_definitions"
+            referencedColumns: ["badge_code"]
+          },
+        ]
+      }
       student_characters: {
         Row: {
           character_id: string
@@ -8781,6 +8837,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      student_daily_activity: {
+        Row: {
+          activity_day: string
+          created_at: string
+          first_event_at: string
+          user_id: string
+        }
+        Insert: {
+          activity_day: string
+          created_at?: string
+          first_event_at?: string
+          user_id: string
+        }
+        Update: {
+          activity_day?: string
+          created_at?: string
+          first_event_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      student_daily_question_counters: {
+        Row: {
+          questions_used: number
+          quota_day: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          questions_used?: number
+          quota_day: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          questions_used?: number
+          quota_day?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       student_dimension_metrics: {
         Row: {
@@ -9253,6 +9351,30 @@ export type Database = {
           },
         ]
       }
+      student_streaks: {
+        Row: {
+          current_streak: number
+          last_activity_day: string | null
+          longest_streak: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          current_streak?: number
+          last_activity_day?: string | null
+          longest_streak?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          current_streak?: number
+          last_activity_day?: string | null
+          longest_streak?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       student_training_levels: {
         Row: {
           attempt_count: number
@@ -9463,6 +9585,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      student_xp_ledger: {
+        Row: {
+          created_at: string
+          id: number
+          metadata: Json
+          source_id: string
+          source_type: string
+          user_id: string
+          xp_amount: number
+        }
+        Insert: {
+          created_at?: string
+          id?: never
+          metadata?: Json
+          source_id: string
+          source_type: string
+          user_id: string
+          xp_amount: number
+        }
+        Update: {
+          created_at?: string
+          id?: never
+          metadata?: Json
+          source_id?: string
+          source_type?: string
+          user_id?: string
+          xp_amount?: number
+        }
+        Relationships: []
+      }
+      student_xp_totals: {
+        Row: {
+          total_xp: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          total_xp?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          total_xp?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       subjects: {
         Row: {
@@ -11012,6 +11182,39 @@ export type Database = {
         }
         Returns: string
       }
+      _faz9_consume_daily_quota: {
+        Args: { p_count: number; p_day: string; p_user: string }
+        Returns: undefined
+      }
+      _faz9_evaluate_badges: { Args: { p_user: string }; Returns: undefined }
+      _faz9_grant_competition_xp: {
+        Args: {
+          p_amount: number
+          p_competition_id: string
+          p_event_time: string
+          p_result_type: string
+          p_user: string
+        }
+        Returns: undefined
+      }
+      _faz9_grant_training_xp: {
+        Args: {
+          p_attempt_id: string
+          p_difficulty: string
+          p_event_time: string
+          p_user: string
+        }
+        Returns: undefined
+      }
+      _faz9_local_day: { Args: { p_event_time?: string }; Returns: string }
+      _faz9_lock_daily_counter: {
+        Args: { p_day: string; p_user: string }
+        Returns: number
+      }
+      _faz9_record_daily_activity: {
+        Args: { p_event_time: string; p_user: string }
+        Returns: undefined
+      }
       academic_calendar_delete_week: {
         Args: { p_week: number; p_year: string }
         Returns: undefined
@@ -11177,6 +11380,11 @@ export type Database = {
         }
         Returns: Json
       }
+      faz9_level_from_total_xp: {
+        Args: { p_total_xp: number }
+        Returns: number
+      }
+      faz9_required_total_xp: { Args: { p_level: number }; Returns: number }
       finalize_competition_if_ready: {
         Args: { p_competition_id: string }
         Returns: undefined
