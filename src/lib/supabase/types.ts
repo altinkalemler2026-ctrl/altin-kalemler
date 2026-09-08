@@ -11253,6 +11253,7 @@ export type Database = {
         Args: { p_competition_id: string }
         Returns: Json
       }
+      get_own_gamification_profile: { Args: never; Returns: Json }
       get_own_matchmaking_status: {
         Args: { p_subject_id: string }
         Returns: Json

@@ -8,7 +8,10 @@ import {
   fetchStudentDimensionSummary,
 } from "@/lib/analytics/service"
 import StudentAnalytics from "@/components/student/StudentAnalytics"
+import StudentGamification from "@/components/student/StudentGamification"
 import StudentHome from "@/components/student/StudentHome"
+import { fetchGamificationProfile } from "@/lib/gamification/service"
+import type { GamificationProfile } from "@/lib/gamification/types"
 
 /** Trend isteği başarısızsa boş listeyle düşer; hatayı yutar. */
 async function safeTrend(
@@ -74,6 +77,15 @@ export default async function DashboardPage() {
   const trend7 = await safeTrend(supabase, 7)
   const trend30 = await safeTrend(supabase, 30)
 
+  // Faz 9: oyunlaştırma profili (yalnız gerçek değerler). Yüklenemezse
+  // kart gösterilmez; sahte değer üretilmez.
+  let gamification: GamificationProfile | null = null
+  try {
+    gamification = await fetchGamificationProfile(supabase)
+  } catch {
+    gamification = null
+  }
+
   return (
     <main className="mx-auto w-full max-w-5xl p-6">
       <StudentHome
@@ -85,6 +97,8 @@ export default async function DashboardPage() {
         referenceNow={analyticsReferenceNow()}
         analyticsError={analyticsError}
       />
+
+      {gamification && <StudentGamification profile={gamification} />}
 
       <StudentAnalytics
         priorities={priorities}

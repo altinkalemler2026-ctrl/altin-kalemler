@@ -6,6 +6,10 @@ import { submitTrainingAttemptAction } from "@/app/(student)/training/actions"
 import { createClient } from "@/lib/supabase/server"
 import { mapTrainingError } from "@/lib/training/errors"
 import {
+  DAILY_QUOTA_FULL_MESSAGE,
+  DAILY_QUOTA_FULL_REASON,
+} from "@/lib/gamification/service"
+import {
   fetchOutcomeReviewPlan,
   startTargetedReview,
 } from "@/lib/review/service"
@@ -146,6 +150,15 @@ export default async function ReviewSubjectPage({
       <ErrorCard
         title="Kazanım bu dönemde çalışılamaz"
         message="Seçili kazanım bu dönemin kapsamında bulunmuyor."
+      />
+    )
+  }
+
+  if (selection.reason === DAILY_QUOTA_FULL_REASON) {
+    return (
+      <StatusCard
+        title="Bugünlük çalışma hakkın doldu"
+        message={DAILY_QUOTA_FULL_MESSAGE}
       />
     )
   }

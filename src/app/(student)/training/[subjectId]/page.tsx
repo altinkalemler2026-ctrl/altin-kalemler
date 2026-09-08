@@ -6,6 +6,10 @@ import { submitTrainingAttemptAction } from "@/app/(student)/training/actions"
 import { createClient } from "@/lib/supabase/server"
 import { mapTrainingError } from "@/lib/training/errors"
 import {
+  DAILY_QUOTA_FULL_MESSAGE,
+  DAILY_QUOTA_FULL_REASON,
+} from "@/lib/gamification/service"
+import {
   listTrainingOutcomes,
   listTrainingTopics,
   selectTrainingQuestions,
@@ -108,6 +112,27 @@ export default async function TrainingSubjectPage({
 
   if (questions.length === 0 && selectionReason === "gecersiz_kapsam") {
     return <ErrorCard message="Seçili konu/kazanım bu dönemde çalışılamaz." />
+  }
+
+  if (questions.length === 0 && selectionReason === DAILY_QUOTA_FULL_REASON) {
+    return (
+      <main className="mx-auto w-full max-w-2xl flex-1 p-6">
+        <div
+          role="status"
+          aria-live="polite"
+          className="rounded-2xl border border-teal-700 bg-teal-50 p-5 text-teal-900"
+        >
+          <p className="font-semibold">Bugünlük çalışma hakkın doldu</p>
+          <p className="mt-1 text-sm">{DAILY_QUOTA_FULL_MESSAGE}</p>
+          <Link
+            href="/dashboard"
+            className="mt-3 inline-flex min-h-11 items-center font-semibold text-teal-900 underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+          >
+            Ana sayfaya dön
+          </Link>
+        </div>
+      </main>
+    )
   }
 
   return (

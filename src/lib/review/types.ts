@@ -72,14 +72,18 @@ export const TARGETED_REVIEW_SESSION_KIND = "targeted_review"
  *    (fail-closed; kapsam dışı veri sızmaz).
  *  - tekrar_gerekmiyor: hata havuzu boş (pozitif kapanış; açıklayıcı
  *    durum).
+ *  - gunluk_kota_doldu: günlük 500 soru hakkı tüklendi (Faz 9;
+ *    soru teslim edilmez).
  */
 export type TargetedReviewReason =
   | "gecersiz_kapsam"
   | "tekrar_gerekmiyor"
+  | "gunluk_kota_doldu"
 
 export const TARGETED_REVIEW_REASONS: readonly TargetedReviewReason[] = [
   "gecersiz_kapsam",
   "tekrar_gerekmiyor",
+  "gunluk_kota_doldu",
 ]
 
 export function isTargetedReviewReason(
