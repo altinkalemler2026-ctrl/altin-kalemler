@@ -11,6 +11,20 @@
 --   104 baglanti: ingest_student_attempt XP/seri/rozet, select
 --   RPC'lerinde gunluk kota, _faz5_apply_competition_points
 --   yarisma XP/aktivite.
+--   105 result guard: cancelled/disputed yarismalar aktivite/
+--   streak/yarisma rozeti uretmez (Faz 9b).
+--
+-- Test haritasi:
+--   T-01..T-03  seviye formulu ve esikler
+--   T-10..T-19  training XP + append-only + ogrenci yazim engelleri
+--   T-30..T-39  gunluk kota (Europe/Istanbul, atomik, kota-doldu)
+--   T-40..T-44  seri motoru (idempotency, gecikmis olay, longest)
+--   T-50..T-55  yarisma XP + rating ayrikligi + gunluk etkinlik
+--   T-60..T-67  rozetler (idempotent grant, katalog, RLS)
+--   T-70..T-74  profil RPC (otoriter toplam, ayri DTO alanlari)
+--   T-75..T-79  Faz 9b: result guard, duplicate attempt XP,
+--               streak_7, paralel kota (dblink), rewards.manage
+--               idempotency
 --
 -- ON KOSULLAR (disposable stack, LOCAL ONLY):
 --   - Migration'lar 101/102 dahil uygulanmis + 103/104 uygulanmis.
@@ -104,20 +118,29 @@ insert into auth.users (id, email) values
   ('9f900000-0000-0000-0000-000000000001', 'qa9-a@test.local'),
   ('9f900000-0000-0000-0000-000000000002', 'qa9-b@test.local'),
   ('9f900000-0000-0000-0000-000000000003', 'qa9-w@test.local'),
-  ('9f900000-0000-0000-0000-000000000004', 'qa9-q@test.local');
+  ('9f900000-0000-0000-0000-000000000004', 'qa9-q@test.local'),
+  ('9f900000-0000-0000-0000-000000000005', 'qa9-u@test.local'),
+  ('9f900000-0000-0000-0000-000000000006', 'qa9-v@test.local'),
+  ('9f900000-0000-0000-0000-000000000007', 'qa9-s@test.local');
 
 insert into public.student_profiles (id, grade_level, nickname) values
   ('9f900000-0000-0000-0000-000000000001', 12, 'QA9-NICK-A'),
   ('9f900000-0000-0000-0000-000000000002', 12, 'QA9-NICK-B'),
   ('9f900000-0000-0000-0000-000000000003', 12, 'QA9-NICK-W'),
-  ('9f900000-0000-0000-0000-000000000004', 12, 'QA9-NICK-Q');
+  ('9f900000-0000-0000-0000-000000000004', 12, 'QA9-NICK-Q'),
+  ('9f900000-0000-0000-0000-000000000005', 12, 'QA9-NICK-U'),
+  ('9f900000-0000-0000-0000-000000000006', 12, 'QA9-NICK-V'),
+  ('9f900000-0000-0000-0000-000000000007', 12, 'QA9-NICK-S');
 
 insert into public.student_public_profiles
   (user_id, nickname, grade_level, avatar_key, is_visible) values
   ('9f900000-0000-0000-0000-000000000001', 'QA9-NICK-A', 12, 'avatar_qa9_a', true),
   ('9f900000-0000-0000-0000-000000000002', 'QA9-NICK-B', 12, 'avatar_qa9_b', true),
   ('9f900000-0000-0000-0000-000000000003', 'QA9-NICK-W', 12, 'avatar_qa9_w', true),
-  ('9f900000-0000-0000-0000-000000000004', 'QA9-NICK-Q', 12, 'avatar_qa9_q', true);
+  ('9f900000-0000-0000-0000-000000000004', 'QA9-NICK-Q', 12, 'avatar_qa9_q', true),
+  ('9f900000-0000-0000-0000-000000000005', 'QA9-NICK-U', 12, 'avatar_qa9_u', true),
+  ('9f900000-0000-0000-0000-000000000006', 'QA9-NICK-V', 12, 'avatar_qa9_v', true),
+  ('9f900000-0000-0000-0000-000000000007', 'QA9-NICK-S', 12, 'avatar_qa9_s', true);
 
 insert into public.subjects (id, name, slug, sort_order, is_active)
 values ('9f905000-0000-0000-0000-000000000001', 'QA9 Matematik',
@@ -970,6 +993,419 @@ begin
   perform set_config('request.jwt.claims', '', true);
   perform set_config('request.jwt.claim.sub', '', true);
   perform set_config('request.jwt.claim.role', '', true);
+end;
+$blk$;
+
+
+-- ============================================================
+-- BOLUM H: FAZ 9B DAVRANISSEL TESTLER (T-75..T-79)
+-- ============================================================
+
+-- ------------------------------------------------------------
+-- T-75: cancelled/disputed yarismalar XP, gunluk etkinlik,
+-- current/longest streak, first_competition ve wins_10
+-- rozetlerini DEGISTIRMEZ (105 guard).
+-- ------------------------------------------------------------
+do $blk$
+declare
+  v_u uuid := '9f900000-0000-0000-0000-000000000005';
+  v_v uuid := '9f900000-0000-0000-0000-000000000006';
+  v_cnt integer;
+  v_act integer;
+  v_stk integer;
+begin
+  insert into public.competitions
+    (id, competition_code, competition_type, grade_level,
+     scoring_rule_set_id, status, question_count,
+     server_completed_at, completed_at)
+  values
+    ('9f920000-0000-0000-0000-000000000004', 'QA9-C4-CANCEL', 'one_vs_one', 12,
+     '9f917000-0000-0000-0000-000000000001', 'completed', 5, now(), now()),
+    ('9f920000-0000-0000-0000-000000000005', 'QA9-C5-DISPUTED', 'one_vs_one', 12,
+     '9f917000-0000-0000-0000-000000000001', 'completed', 5, now(), now());
+
+  insert into public.competition_players
+    (competition_id, user_id, player_slot, status) values
+    ('9f920000-0000-0000-0000-000000000004', v_u, 1, 'active'),
+    ('9f920000-0000-0000-0000-000000000004', v_v, 2, 'active'),
+    ('9f920000-0000-0000-0000-000000000005', v_u, 1, 'active'),
+    ('9f920000-0000-0000-0000-000000000005', v_v, 2, 'active');
+
+  insert into public.competition_results
+    (competition_id, winner_user_id, result_type) values
+    ('9f920000-0000-0000-0000-000000000004', null, 'cancelled'),
+    ('9f920000-0000-0000-0000-000000000005', null, 'disputed');
+
+  -- BASLANGIC: temiz durum.
+  select count(*) into v_act
+    from public.student_daily_activity
+   where user_id in (v_u, v_v);
+  select count(*) into v_stk
+    from public.student_streaks
+   where user_id in (v_u, v_v);
+  perform public._qa9_true('T-75a',
+    'T-75 baslangic: U/V icin aktivite ve seri YOK',
+    v_act = 0 and v_stk = 0,
+    'aktivite=' || v_act || ' seri=' || v_stk);
+
+  perform public._faz5_apply_competition_points(
+    '9f920000-0000-0000-0000-000000000004');
+  perform public._faz5_apply_competition_points(
+    '9f920000-0000-0000-0000-000000000005');
+
+  -- XP: cancelled/disputed 0 (ledger kaydi yok).
+  select count(*) into v_cnt
+    from public.student_xp_ledger
+   where source_id in ('9f920000-0000-0000-0000-000000000004',
+                       '9f920000-0000-0000-0000-000000000005');
+  perform public._qa9_true('T-75b',
+    'T-75: cancelled/disputed 0 XP (ledger kaydi uretmez)',
+    v_cnt = 0, 'ledger=' || v_cnt);
+
+  -- Gunluk etkinlik + seri URETMEZ.
+  select count(*) into v_act
+    from public.student_daily_activity
+   where user_id in (v_u, v_v);
+  select count(*) into v_stk
+    from public.student_streaks
+   where user_id in (v_u, v_v);
+  perform public._qa9_true('T-75c',
+    'T-75: cancelled/disputed gunluk etkinlik ve streak URETMEZ',
+    v_act = 0 and v_stk = 0,
+    'aktivite=' || v_act || ' seri=' || v_stk);
+
+  -- Rozetler: evaluate acikca cagrilsa bile yarisma rozetleri
+  -- ve aktivite-bazli first_step VERILMEZ.
+  perform public._faz9_evaluate_badges(v_u);
+  perform public._faz9_evaluate_badges(v_v);
+  select count(*) into v_cnt
+    from public.student_badges
+   where user_id in (v_u, v_v)
+     and badge_code in ('first_competition', 'wins_10',
+                        'first_step', 'streak_3');
+  perform public._qa9_true('T-75e',
+    'T-75: cancelled/disputed yarisma rozetlerini URETMEZ',
+    v_cnt = 0, 'rozet=' || v_cnt);
+
+  -- Duplicate apply (idempotency): hala sifir.
+  perform public._faz5_apply_competition_points(
+    '9f920000-0000-0000-0000-000000000004');
+  perform public._faz5_apply_competition_points(
+    '9f920000-0000-0000-0000-000000000005');
+  select count(*) into v_act
+    from public.student_daily_activity
+   where user_id in (v_u, v_v);
+  select count(*) into v_stk
+    from public.student_streaks
+   where user_id in (v_u, v_v);
+  perform public._qa9_true('T-75f',
+    'T-75: duplicate apply sonrasi hala aktivite/seri/rozet YOK',
+    v_act = 0 and v_stk = 0,
+    'aktivite=' || v_act || ' seri=' || v_stk);
+end;
+$blk$;
+
+-- ------------------------------------------------------------
+-- T-76: ayni antrenman attempt/cevap isleminin tekrari (ayni
+-- client_key) yalniz BIR ledger kaydi ve TEK XP artisi uretir.
+-- ------------------------------------------------------------
+do $blk$
+declare
+  v_key uuid := '9f990000-0000-0000-0000-000000000011';
+  v_res jsonb;
+  v_total integer;
+  v_total2 integer;
+  v_rows integer;
+begin
+  insert into public.student_question_exposures
+    (user_id, question_id, attempt_context)
+  values ('9f900000-0000-0000-0000-000000000001',
+          '9f910000-0000-0000-0000-000000000001', 'training');
+
+  perform set_config('request.jwt.claims',
+    '{"sub":"9f900000-0000-0000-0000-000000000001","role":"authenticated"}', true);
+  perform set_config('request.jwt.claim.sub',
+    '9f900000-0000-0000-0000-000000000001', true);
+  perform set_config('request.jwt.claim.role', 'authenticated', true);
+
+  select total_xp into v_total
+    from public.student_xp_totals
+   where user_id = '9f900000-0000-0000-0000-000000000001';
+
+  v_res := public.submit_training_attempt(
+    '9f910000-0000-0000-0000-000000000001', 'a', null, 5000, v_key);
+
+  perform public._qa9_true('T-76a',
+    'T-76: ilk submit correct + duplicate=false',
+    v_res ->> 'result' = 'correct'
+      and (v_res ->> 'duplicate')::boolean is false,
+    'res=' || coalesce(v_res ->> 'result', '?') ||
+    ' dup=' || coalesce(v_res ->> 'duplicate', '?'));
+
+  select count(*) into v_rows
+    from public.student_xp_ledger l
+    join public.student_question_attempts a on a.id = l.source_id
+   where l.source_type = 'training_attempt'
+     and l.user_id = '9f900000-0000-0000-0000-000000000001'
+     and a.user_id = '9f900000-0000-0000-0000-000000000001'
+     and a.metadata ->> 'client_key' = v_key::text;
+  perform public._qa9_true('T-76b',
+    'T-76: ayni islem icin ledger tam 1 kayit',
+    v_rows = 1, 'ledger=' || v_rows);
+
+  select total_xp into v_total2
+    from public.student_xp_totals
+   where user_id = '9f900000-0000-0000-0000-000000000001';
+  perform public._qa9_true('T-76c',
+    'T-76: ilk submit toplam XP''ye +2 ekledi (kolay)',
+    v_total2 = v_total + 2,
+    'once=' || v_total || ' sonra=' || v_total2);
+
+  -- Ayni client_key ile tekrar: duplicate, ek XP YOK.
+  v_res := public.submit_training_attempt(
+    '9f910000-0000-0000-0000-000000000001', 'a', null, 5000, v_key);
+
+  perform public._qa9_true('T-76d',
+    'T-76: tekrar submit duplicate=true',
+    (v_res ->> 'duplicate')::boolean is true,
+    'dup=' || coalesce(v_res ->> 'duplicate', '?'));
+
+  select count(*) into v_rows
+    from public.student_xp_ledger l
+    join public.student_question_attempts a on a.id = l.source_id
+   where l.source_type = 'training_attempt'
+     and l.user_id = '9f900000-0000-0000-0000-000000000001'
+     and a.user_id = '9f900000-0000-0000-0000-000000000001'
+     and a.metadata ->> 'client_key' = v_key::text;
+  select total_xp into v_total
+    from public.student_xp_totals
+   where user_id = '9f900000-0000-0000-0000-000000000001';
+  perform public._qa9_true('T-76e',
+    'T-76: tekrar submit ikinci XP URETMEZ (1 ledger, ayni toplam)',
+    v_rows = 1 and v_total = v_total2,
+    'ledger=' || v_rows || ' total=' || v_total);
+
+  perform set_config('request.jwt.claims', '', true);
+  perform set_config('request.jwt.claim.sub', '', true);
+  perform set_config('request.jwt.claim.role', '', true);
+end;
+$blk$;
+
+-- ------------------------------------------------------------
+-- T-77: 7 ardisik Europe/Istanbul gunu streak_7 rozetini TAM
+-- BIR kez verir; ayni gun/tekrar cagri ikinci grant uretmez.
+-- ------------------------------------------------------------
+do $blk$
+declare
+  v_u   uuid := '9f900000-0000-0000-0000-000000000007';
+  v_now timestamptz := now();
+  v_cnt integer;
+  v_cur integer;
+begin
+  perform public._faz9_record_daily_activity(v_u, v_now - interval '6 day');
+  perform public._faz9_record_daily_activity(v_u, v_now - interval '5 day');
+  perform public._faz9_record_daily_activity(v_u, v_now - interval '4 day');
+  perform public._faz9_record_daily_activity(v_u, v_now - interval '3 day');
+  perform public._faz9_record_daily_activity(v_u, v_now - interval '2 day');
+  perform public._faz9_record_daily_activity(v_u, v_now - interval '1 day');
+  perform public._faz9_record_daily_activity(v_u, v_now);
+
+  select current_streak into v_cur
+    from public.student_streaks where user_id = v_u;
+  perform public._qa9_true('T-77a',
+    'T-77: 7 ardisik gun → current=7',
+    v_cur = 7, 'cur=' || v_cur);
+
+  perform public._faz9_evaluate_badges(v_u);
+  select count(*) into v_cnt
+    from public.student_badges
+   where user_id = v_u and badge_code = 'streak_7';
+  perform public._qa9_true('T-77b',
+    'T-77: streak_7 TAM 1 kez verildi',
+    v_cnt = 1, 'rozet=' || v_cnt);
+
+  -- Ayni gun ek etkinlik + tekrar degerlendirme: ikinci grant YOK.
+  perform public._faz9_record_daily_activity(v_u, v_now + interval '2 hour');
+  perform public._faz9_evaluate_badges(v_u);
+  perform public._faz9_evaluate_badges(v_u);
+  select count(*) into v_cnt
+    from public.student_badges
+   where user_id = v_u and badge_code = 'streak_7';
+  perform public._qa9_true('T-77c',
+    'T-77: ayni gun/tekrar cagri ikinci streak_7 URETMEZ',
+    v_cnt = 1, 'rozet=' || v_cnt);
+end;
+$blk$;
+
+-- ------------------------------------------------------------
+-- T-78: 499 dolu sayacta PARALEL iki tuketim oturumu: en fazla
+-- biri tuketir; final sayaç TAM 500; 501 imkansiz; ikinci
+-- tuketici kontrollu kota hatasi alir.
+--
+-- Yontem: dblink ile ikinci GERCEK baglanti (paralel islem)
+-- acilir; oturum-1 satiri FOR UPDATE ile kilitler, oturum-2
+-- lock_timeout icinde ilerleyemez (55P03). Oturum-1 tuketip
+-- commit eder; committed final = 500 dogrulanir.
+-- ------------------------------------------------------------
+do $blk$
+declare
+  v_r     uuid := '9f900000-0000-0000-0000-000000000008';
+  v_day   date := public._faz9_local_day(now());
+  v_used  integer;
+  v_rem   integer;
+begin
+  create extension if not exists dblink;
+  perform dblink_connect('qa78',
+    'host=/var/run/postgresql port=5432 dbname=postgres user=supabase_admin');
+
+  -- R kullanici + 499 dolu sayaç (COMMITTED; paralel oturumun
+  -- gorunur olması icin).
+  perform dblink_exec('qa78', 'begin');
+  perform dblink_exec('qa78', format(
+    'insert into auth.users (id, email) values (%L, %L) on conflict (id) do nothing',
+    v_r, 'qa9-r78@test.local'));
+  perform dblink_exec('qa78', format(
+    'insert into public.student_daily_question_counters (user_id, quota_day, questions_used) values (%L, %L, 499) on conflict do nothing',
+    v_r, v_day));
+  perform dblink_exec('qa78', 'commit');
+
+  -- Oturum-1: satiri kilitler ve TUTAR (islem acik).
+  perform dblink_exec('qa78', 'begin');
+  perform * from dblink('qa78', format(
+    'select public._faz9_lock_daily_counter(%L::uuid, %L::date)',
+    v_r, v_day)) as t(remaining int);
+
+  -- Oturum-2 (ana): kilitli satirda 1.5 sn icinde ilerleyemez.
+  set local lock_timeout = '1500ms';
+  perform public._qa9_expect('T-78a',
+    'T-78: kilitli sayacta paralel tuketici BEKLEMEK ZORUNDA (55P03)',
+    '55P03',
+    format($f$
+      select public._faz9_lock_daily_counter('%s'::uuid, '%s'::date)
+    $f$, v_r, v_day));
+
+  -- Oturum-1: kalan 1 hakki tuketir (499 → 500) ve commit eder.
+  perform * from dblink('qa78', format(
+    'select public._faz9_consume_daily_quota(%L::uuid, %L::date, 1)::text',
+    v_r, v_day)) as t(x text);
+  perform dblink_exec('qa78', 'commit');
+
+  -- Final sayaç TAM 500 (committed; ana oturumda lokal yazim yok
+  -- — T-78a subtransaction rollback edildi).
+  select questions_used into v_used
+    from public.student_daily_question_counters
+   where user_id = v_r and quota_day = v_day;
+  perform public._qa9_true('T-78b',
+    'T-78: paralel yarista final sayaç TAM 500, 501 DEGIL',
+    v_used = 500, 'used=' || coalesce(v_used::text, 'yok'));
+
+  -- 501 imkansiz: kontrollu P0001 (dolu sayacta 1 hak da reddedilir).
+  perform public._qa9_expect('T-78c',
+    'T-78: 500 dolu sayacta ek tuketim kontrollu P0001 ile reddedilir',
+    'P0001',
+    format($f$
+      select * from dblink('qa78',
+        'select public._faz9_consume_daily_quota(''%s''::uuid, ''%s''::date, 1)::text'
+      ) as t(x text)
+    $f$, v_r, v_day));
+
+  -- Ikinci tuketici kalan 0 gorur → select kontrollu
+  -- gunluk_kota_doldu yoluna girer (istisna degil).
+  select t.remaining into v_rem
+    from dblink('qa78', format(
+      'select public._faz9_lock_daily_counter(%L::uuid, %L::date) as remaining',
+      v_r, v_day)) as t(remaining int);
+  perform public._qa9_true('T-78d',
+    'T-78: ikinci tuketici kalan 0 gorur (kontrollu kota-doldu yolu)',
+    v_rem = 0, 'kalan=' || coalesce(v_rem::text, 'yok'));
+
+  -- Temizlik (committed): bu testin kendi kaynaklari.
+  perform dblink_exec('qa78', 'begin');
+  perform dblink_exec('qa78', format(
+    'delete from public.student_daily_question_counters where user_id = %L', v_r));
+  perform dblink_exec('qa78', format(
+    'delete from auth.users where id = %L', v_r));
+  perform dblink_exec('qa78', 'commit');
+  perform dblink_disconnect('qa78');
+end;
+$blk$;
+
+-- ------------------------------------------------------------
+-- T-79: rewards.manage katalog/izin yolu tekrar calistirilinca
+-- DUPLICATE kayit veya yetki genislemesi URETMEZ (migration
+-- dosyasi koyu calistirilmaz; ayni idempotent ifadeler test edilir).
+-- ------------------------------------------------------------
+do $blk$
+declare
+  v_perm_cnt  integer;
+  v_link_cnt  integer;
+  v_other_cnt integer;
+begin
+  -- Migration 103'teki birebir idempotent ifadeler (1. tekrar).
+  insert into public.admin_permissions
+    (permission_code, name, description)
+  values ('rewards.manage',
+          'Ödülleri Yönet',
+          'Rozet kataloğunu yönetebilir.')
+  on conflict (permission_code) do update
+    set name = excluded.name,
+        description = excluded.description;
+
+  insert into public.admin_role_permissions
+    (role_id, permission_id)
+  select ar.id, ap.id
+    from public.admin_roles ar
+   cross join public.admin_permissions ap
+   where ar.role_code = 'super_admin'
+     and ap.permission_code = 'rewards.manage'
+  on conflict do nothing;
+
+  -- 2. tekrar (aynı ifadeler).
+  insert into public.admin_permissions
+    (permission_code, name, description)
+  values ('rewards.manage',
+          'Ödülleri Yönet',
+          'Rozet kataloğunu yönetebilir.')
+  on conflict (permission_code) do update
+    set name = excluded.name,
+        description = excluded.description;
+
+  insert into public.admin_role_permissions
+    (role_id, permission_id)
+  select ar.id, ap.id
+    from public.admin_roles ar
+   cross join public.admin_permissions ap
+   where ar.role_code = 'super_admin'
+     and ap.permission_code = 'rewards.manage'
+  on conflict do nothing;
+
+  select count(*) into v_perm_cnt
+    from public.admin_permissions
+   where permission_code = 'rewards.manage';
+  perform public._qa9_true('T-79a',
+    'T-79: tekrar uygulama DUPLICATE izin kaydi uretmez (tam 1)',
+    v_perm_cnt = 1, 'izin=' || v_perm_cnt);
+
+  select count(*) into v_link_cnt
+    from public.admin_role_permissions rp
+    join public.admin_roles ar on ar.id = rp.role_id
+    join public.admin_permissions ap on ap.id = rp.permission_id
+   where ar.role_code = 'super_admin'
+     and ap.permission_code = 'rewards.manage';
+  perform public._qa9_true('T-79b',
+    'T-79: tekrar uygulama DUPLICATE super_admin baglantisi uretmez (tam 1)',
+    v_link_cnt = 1, 'baglanti=' || v_link_cnt);
+
+  -- Yetki genislemesi YOK: baska hicbir role baglanmamis.
+  select count(*) into v_other_cnt
+    from public.admin_role_permissions rp
+    join public.admin_roles ar on ar.id = rp.role_id
+    join public.admin_permissions ap on ap.id = rp.permission_id
+   where ap.permission_code = 'rewards.manage'
+     and ar.role_code <> 'super_admin';
+  perform public._qa9_true('T-79c',
+    'T-79: rewards.manage baska role SIÇMAZ (yetki genislemesi 0)',
+    v_other_cnt = 0, 'diger=' || v_other_cnt);
 end;
 $blk$;
 
