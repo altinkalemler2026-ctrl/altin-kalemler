@@ -249,6 +249,7 @@ jobs:
           run_suite scoring094 scripts/qa_scoring_v1_094_local.sql parsed
           run_suite boundary095 scripts/qa_data_boundary_095_local.sql parsed
           run_suite faz6 scripts/qa_faz6_targeted_review_local.sql parsed
+          run_suite faz10 scripts/qa_faz10_avatar_rpc_local.sql parsed
 
       # ----------------------------------------------------------
       # Faz 2 paralel sayaç probe'u: iki AYRI docker exec sureci ile

@@ -82,7 +82,7 @@ export default function StudentNav({
         aria-label="Öğrenci menüsü"
         className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] sm:hidden"
       >
-        <div className="flex items-stretch justify-around px-1 py-1">
+        <div className="flex items-stretch justify-around px-0.5 py-1">
           {NAV_ITEMS.map((item) => {
             const active = isActive(pathname, item.href)
 
@@ -91,17 +91,17 @@ export default function StudentNav({
                 key={item.href}
                 href={item.href}
                 aria-current={active ? "page" : undefined}
-                className={`flex flex-1 flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-[11px] font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 ${
+                className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg px-0.5 py-1 text-[10px] font-medium leading-3 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 ${
                   active ? "text-navy-800" : "text-ink-muted"
                 }`}
               >
                 <span
                   aria-hidden="true"
-                  className={`h-1.5 w-6 rounded-full ${
+                  className={`h-1 w-5 rounded-full ${
                     active ? "bg-navy-800" : "bg-transparent"
                   }`}
                 />
-                {item.label}
+                <span className="min-h-8 flex items-center">{item.label}</span>
               </Link>
             )
           })}

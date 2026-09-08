@@ -1,3 +1,5 @@
+import Link from "next/link"
+
 import type { GamificationProfile } from "@/lib/gamification/types"
 
 /**
@@ -5,6 +7,10 @@ import type { GamificationProfile } from "@/lib/gamification/types"
  * Yalnız gerçek sunucu değerleri gösterilir; XP, seviye, seri, rozet
  * ve günlük kota ayrı alanlardır. Yarışma puanı, lig rating'i ve
  * yıldız bu kartta GÖSTERİLMEZ (ayrı değerler ayrı yerlerde).
+ *
+ * Faz 10: günlük kota kartında kullanılan soru sayısı ayrıca
+ * gösterilir; kartın sonuna Profil ve Lig ekranlarına anlaşılır
+ * bağlantılar eklenir.
  */
 export default function StudentGamification({
   profile,
@@ -65,6 +71,9 @@ export default function StudentGamification({
             <span className="ml-2 text-sm text-gray-600">
               / {dailyQuota.limit} soru kaldı
             </span>
+            <p className="mt-1 text-sm text-gray-600">
+              Bugün {dailyQuota.questionsUsed} soru çözdün.
+            </p>
           </dd>
         </div>
 
@@ -91,6 +100,21 @@ export default function StudentGamification({
           </dd>
         </div>
       </dl>
+
+      <div className="mt-5 flex flex-wrap gap-3">
+        <Link
+          href="/profile"
+          className="inline-flex min-h-11 items-center rounded-xl border border-gray-200 px-4 text-sm font-semibold text-gray-900 transition hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+        >
+          Profilim
+        </Link>
+        <Link
+          href="/league"
+          className="inline-flex min-h-11 items-center rounded-xl border border-gray-200 px-4 text-sm font-semibold text-gray-900 transition hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+        >
+          Ligim
+        </Link>
+      </div>
     </section>
   )
 }

@@ -12,6 +12,7 @@ import StudentGamification from "@/components/student/StudentGamification"
 import StudentHome from "@/components/student/StudentHome"
 import { fetchGamificationProfile } from "@/lib/gamification/service"
 import type { GamificationProfile } from "@/lib/gamification/types"
+import { fetchOwnProfileSummary } from "@/lib/profile/service"
 
 /** Trend isteği başarısızsa boş listeyle düşer; hatayı yutar. */
 async function safeTrend(
@@ -86,6 +87,15 @@ export default async function DashboardPage() {
     gamification = null
   }
 
+  // Faz 10: seçili karakter adı (avatar); yüklenemezse kart boş kalır.
+  let avatarName: string | null = null
+  try {
+    const summary = await fetchOwnProfileSummary(supabase, user.id)
+    avatarName = summary.avatar?.name ?? null
+  } catch {
+    avatarName = null
+  }
+
   return (
     <main className="mx-auto w-full max-w-5xl p-6">
       <StudentHome
@@ -96,6 +106,7 @@ export default async function DashboardPage() {
         outcomeRows={outcomeRows}
         referenceNow={analyticsReferenceNow()}
         analyticsError={analyticsError}
+        avatarName={avatarName}
       />
 
       {gamification && <StudentGamification profile={gamification} />}

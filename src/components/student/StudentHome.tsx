@@ -137,6 +137,8 @@ export interface StudentHomeProps {
   outcomeRows: DimensionSummaryRow[]
   referenceNow: number
   analyticsError: string | null
+  /** Faz 10: seçili karakterin adı; yoksa hiçbir şey gösterilmez. */
+  avatarName?: string | null
 }
 
 export default function StudentHome({
@@ -147,6 +149,7 @@ export default function StudentHome({
   outcomeRows,
   referenceNow,
   analyticsError,
+  avatarName = null,
 }: StudentHomeProps) {
   const dailyGoal = computeDailyGoal(trend7, referenceNow)
   const outcomeProgress = computeOutcomeProgress(outcomeRows)
@@ -161,12 +164,24 @@ export default function StudentHome({
       <Card padding="lg">
         <p className="text-sm font-medium text-ink-muted">Altın Kalemler</p>
 
-        <p className="mt-2 text-3xl font-bold text-ink">
+        <p className="mt-2 break-words text-3xl font-bold text-ink">
           Hoş geldin, {nickname}
         </p>
 
-        <div className="mt-3">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <Badge variant="navy">{gradeLevel}. Sınıf</Badge>
+
+          {avatarName && (
+            <span
+              aria-hidden="true"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-navy-100 text-sm font-bold text-navy-900"
+            >
+              {avatarName.slice(0, 1).toLocaleUpperCase("tr-TR")}
+            </span>
+          )}
+          {avatarName && (
+            <span className="sr-only">Karakterin: {avatarName}</span>
+          )}
         </div>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2">

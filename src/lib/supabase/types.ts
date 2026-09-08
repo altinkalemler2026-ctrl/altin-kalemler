@@ -11718,6 +11718,7 @@ export type Database = {
         }
         Returns: string
       }
+      select_own_avatar: { Args: { p_character_code: string }; Returns: Json }
       select_targeted_review_questions: {
         Args: { p_limit?: number; p_outcome_id: string; p_subject_id: string }
         Returns: Json
