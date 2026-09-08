@@ -104,6 +104,19 @@ begin
 end;
 $qa$;
 
+-- Yeni CLI "no-auto-expose" bootstrap'inda yardimci tablo/fonksiyonlara
+-- dogustan grant verilmedigi icin (faz8/faz10 deseniyle ayni)
+-- calistirilabilirlik grant'leri. Test beklentileri degismez.
+grant select, insert, update, delete
+  on public._qa_faz9_results
+  to anon, authenticated, service_role;
+grant execute
+  on function public._qa9_expect(text, text, text, text)
+  to anon, authenticated, service_role;
+grant execute
+  on function public._qa9_true(text, text, boolean, text)
+  to anon, authenticated, service_role;
+
 
 -- ============================================================
 -- FIXTURE'LAR (deterministik sahte veriler)
@@ -570,8 +583,17 @@ $blk$;
 
 do $blk$
 declare
+  -- Zaman-deterministik sabitleme: olaylar YEREL GUN ORTASINA (12:00)
+  -- cemlenir. now()'un 22:00-24:00 bandindaki degerleri, '-1 gun +2
+  -- saat' ofsetini gun sinirini asacak sekilde kaydirir ve ayni-gun
+  -- ikinci etkinlik testi (T-41) kosma saatine bagli hale gelirdi.
+  -- 12:00 cemlemesi butun ofset gunleri ayni yerel gunde tutar;
+  -- test beklentileri degismez.
   v_u   uuid := '9f900000-0000-0000-0000-000000000002';
-  v_now timestamptz := now();
+  v_now timestamptz := (
+    (date_trunc('day', now() at time zone 'Europe/Istanbul') + interval '12 hours')
+    at time zone 'Europe/Istanbul'
+  );
   v_cur integer; v_long integer; v_last date;
 begin
   -- Gun -1: ilk etkinlik.

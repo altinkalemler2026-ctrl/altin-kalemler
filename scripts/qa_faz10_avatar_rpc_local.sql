@@ -240,12 +240,21 @@ begin
     'select public.select_own_avatar(null)');
 
   -- V-08: avatar secimi XP/rating/yildiz/grade DEGISTIRMEZ.
+  -- Deger okumasi postgres baglaminda yapilir: cuzdanda authenticated'a
+  -- dogrudan SELECT bilincli bir uygulama yolu DEGILDIR (okuma sunucu
+  -- RPC'leri ile); yeni CLI bootstrap'inda bu grant tanimli degildir.
+  -- Test beklentisi degismez.
+  execute 'reset role';
   select s.grade_level, w.stars, m.current_points
     into v_grade, v_stars, v_points
     from public.student_profiles s
     join public.student_wallets w on w.user_id = s.id
     join public.student_league_memberships m on m.user_id = s.id and m.is_current
    where s.id = '97000000-0000-0000-0000-0000000000a1';
+
+  execute 'set local role authenticated';
+  perform set_config('request.jwt.claims',
+    '{"sub":"97000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
 
   perform public.select_own_avatar('qa10-ch1');
 

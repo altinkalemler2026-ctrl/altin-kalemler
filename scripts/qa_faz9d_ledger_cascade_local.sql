@@ -91,6 +91,19 @@ begin
 end;
 $qa$;
 
+-- Yeni CLI "no-auto-expose" bootstrap'inda yardimci tablo/fonksiyonlara
+-- dogustan grant verilmedigi icin (faz8/faz10 deseniyle ayni)
+-- calistirilabilirlik grant'leri. Test beklentileri degismez.
+grant select, insert, update, delete
+  on public._qa_faz9d_results
+  to anon, authenticated, service_role;
+grant execute
+  on function public._qa9d_expect(text, text, text, text)
+  to anon, authenticated, service_role;
+grant execute
+  on function public._qa9d_true(text, text, boolean, text)
+  to anon, authenticated, service_role;
+
 
 -- ============================================================
 -- FIXTURE (deterministik sahte veriler)

@@ -168,6 +168,78 @@ jobs:
           SQL
 
       # ----------------------------------------------------------
+      # Faz 10B guvenlik invarianti: public tablo ayricaliklari.
+      # Gelecekte su durumlardan biri geri donerse CI kirilir:
+      #   - authenticated/anon herhangi bir public tabloda TRUNCATE,
+      #     REFERENCES veya TRIGGER ayrica sahibi
+      #   - gelecekte olusturulan tablo default privilege yoluyla bu
+      #     ayricaliklari yeniden aliyor (davranissal probe)
+      #   - RPC-only uc lig tablosunda dogrudan SELECT yeniden aciliyor
+      # ----------------------------------------------------------
+
+      - name: Public privilege security invariant (Faz 10B)
+        run: |
+          set -euo pipefail
+          docker exec -i "$CONTAINER" psql -U postgres -d postgres \
+            -v ON_ERROR_STOP=1 -At \
+            <<'SQL'
+          do $$
+          declare
+            v_dangerous int;
+            v_league_open int;
+            v_future_bad int;
+          begin
+            select count(*) into v_dangerous
+              from pg_class c
+              join pg_namespace n on n.oid = c.relnamespace
+             where n.nspname = 'public'
+               and c.relkind in ('r','p')
+               and (
+                     has_table_privilege('authenticated', c.oid, 'TRUNCATE')
+                  or has_table_privilege('anon', c.oid, 'TRUNCATE')
+                  or has_table_privilege('authenticated', c.oid, 'REFERENCES')
+                  or has_table_privilege('anon', c.oid, 'REFERENCES')
+                  or has_table_privilege('authenticated', c.oid, 'TRIGGER')
+                  or has_table_privilege('anon', c.oid, 'TRIGGER')
+                   );
+            if v_dangerous > 0 then
+              raise exception 'SECURITY_INVARIANT_FAIL: % public tabloda authenticated/anon TRUNCATE/REFERENCES/TRIGGER ayricaligi var', v_dangerous;
+            end if;
+
+            select count(*) into v_league_open
+              from (values
+                ('public.leaderboard_entries'::regclass),
+                ('public.student_league_memberships'::regclass),
+                ('public.student_league_history'::regclass)
+              ) as t(oid)
+             where has_table_privilege('authenticated', t.oid, 'SELECT')
+                or has_table_privilege('anon', t.oid, 'SELECT');
+            if v_league_open > 0 then
+              raise exception 'SECURITY_INVARIANT_FAIL: RPC-only lig tablosunda dogrudan SELECT acik (%)', v_league_open;
+            end if;
+
+            create table public._ci_priv_probe (id int);
+            select count(*) into v_future_bad
+              from pg_class c
+             where c.oid = 'public._ci_priv_probe'::regclass
+               and (
+                     has_table_privilege('authenticated', c.oid, 'TRUNCATE')
+                  or has_table_privilege('anon', c.oid, 'TRUNCATE')
+                  or has_table_privilege('authenticated', c.oid, 'REFERENCES')
+                  or has_table_privilege('anon', c.oid, 'REFERENCES')
+                  or has_table_privilege('authenticated', c.oid, 'TRIGGER')
+                  or has_table_privilege('anon', c.oid, 'TRIGGER')
+                   );
+            drop table public._ci_priv_probe;
+            if v_future_bad > 0 then
+              raise exception 'SECURITY_INVARIANT_FAIL: yeni tablo default privilege yoluyla tehlikeli ayricalik aldi (%)', v_future_bad;
+            end if;
+
+            raise notice 'SECURITY_INVARIANT_OK';
+          end $$;
+          SQL
+
+      # ----------------------------------------------------------
       # Tip drift guard: committed src/lib/supabase/types.ts dosyasi
       # migration zinciriyle birebir uyumlu mu? Uretilen tipler farkli
       # cikarsa CI kirmizi yanar (tipler unutulmus/guncellenmemis).
@@ -250,6 +322,7 @@ jobs:
           run_suite boundary095 scripts/qa_data_boundary_095_local.sql parsed
           run_suite faz6 scripts/qa_faz6_targeted_review_local.sql parsed
           run_suite faz10 scripts/qa_faz10_avatar_rpc_local.sql parsed
+          run_suite faz10b scripts/qa_faz10b_public_privilege_hardening_local.sql parsed
 
       # ----------------------------------------------------------
       # Faz 2 paralel sayaç probe'u: iki AYRI docker exec sureci ile
