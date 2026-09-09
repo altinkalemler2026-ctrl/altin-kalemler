@@ -367,15 +367,17 @@ end;
 $blk$;
 
 -- ============ OZET ============
+-- CI uyumlu ozet: son satir "toplam|gecen|kalan" (kalan=0).
+-- Detay satirlari once basilir; ayristirici son satiri okur.
 reset role;
-
-select 'TOPLAM=' || count(*)
-       || '|' || 'GECEN=' || count(*) filter (where result = 'PASS')
-       || '|' || 'KALAN=' || count(*) filter (where result = 'FAIL')
-  from public._qa_d107_results;
 
 select label || '|PASS|' || title from public._qa_d107_results where result = 'PASS';
 select label || '|FAIL|' || coalesce(detail, title) from public._qa_d107_results where result = 'FAIL';
+
+select count(*)
+       || '|' || count(*) filter (where result = 'PASS')
+       || '|' || count(*) filter (where result = 'FAIL')
+  from public._qa_d107_results;
 
 drop function public._qa_d107_expect(text,text,text,text);
 drop function public._qa_d107_true(text,text,boolean,text);
