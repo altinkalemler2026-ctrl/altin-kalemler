@@ -797,6 +797,8 @@ END;
 $blk$;
 
 -- ============ OZET ============
+-- CI uyumlu ozet: son satir "toplam|gecen|kalan" (kalan=0).
+-- Detay satirlari once basilir; ayristirici son satiri okur.
 reset role;
 
 select 'PASS=' || count(*) filter (where result = 'PASS')
@@ -804,14 +806,14 @@ select 'PASS=' || count(*) filter (where result = 'PASS')
        || '|SKIP=' || count(*) filter (where result = 'SKIP')
   from public._qa10b_results;
 
-select 'TOPLAM=' || count(*)
-       || '|' || 'GECEN=' || count(*) filter (where result = 'PASS')
-       || '|' || 'KALAN=' || count(*) filter (where result = 'FAIL')
-  from public._qa10b_results;
-
 select label || '|PASS|' || title from public._qa10b_results where result = 'PASS';
 select label || '|FAIL|' || coalesce(detail, title) from public._qa10b_results where result = 'FAIL';
 select label || '|SKIP|' || coalesce(detail, title) from public._qa10b_results where result = 'SKIP';
+
+select count(*)
+       || '|' || count(*) filter (where result = 'PASS')
+       || '|' || count(*) filter (where result = 'FAIL')
+  from public._qa10b_results;
 
 drop function public._qa10b_expect(text,text,text,text);
 drop function public._qa10b_true(text,text,boolean,text);
