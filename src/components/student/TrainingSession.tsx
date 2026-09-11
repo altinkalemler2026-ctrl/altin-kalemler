@@ -19,7 +19,9 @@ import Link from "next/link"
 import MathText from "@/components/student/MathText"
 import {
   CHOICE_LETTERS,
+  isChoiceLetter,
   type AttemptAction,
+  type AttemptFeedback,
   type ChoiceLetter,
   type SubmitResult,
   type TrainingQuestion,
@@ -28,6 +30,14 @@ import {
 export type SubmitActionResponse =
   | { ok: true; data: SubmitResult }
   | { ok: false; message: string }
+
+export type FeedbackActionResponse =
+  | { ok: true; data: AttemptFeedback }
+  | { ok: false; message: string }
+
+export type FeedbackActionFn = (
+  questionId: string
+) => Promise<FeedbackActionResponse>
 
 export type SubmitActionFn = (input: {
   questionId: string
@@ -41,6 +51,8 @@ interface TrainingSessionProps {
   subjectName: string
   questions: TrainingQuestion[]
   submitAction: SubmitActionFn
+  /** Faz 11: cevap KABUL edildikten sonra onaylı çözüm geri bildirimi. */
+  feedbackAction: FeedbackActionFn
   backHref?: string
 }
 
@@ -132,10 +144,20 @@ interface RecordedOutcome {
   duplicate: boolean
 }
 
+/** Faz 11: kabul edilmiş cevap sonrası görünür geri bildirim durumu. */
+interface AnswerFeedback {
+  questionId: string
+  result: SubmitResult["result"]
+  duplicate: boolean
+  correctAnswer: string | null
+  solutionText: string | null
+}
+
 export default function TrainingSession({
   subjectName,
   questions,
   submitAction,
+  feedbackAction,
   backHref = "/training",
 }: TrainingSessionProps) {
   const [index, setIndex] = useState(0)
@@ -145,14 +167,26 @@ export default function TrainingSession({
   const [feedback, setFeedback] = useState<string | null>(null)
   const [duplicateNotice, setDuplicateNotice] = useState<string | null>(null)
   const [outcomes, setOutcomes] = useState<RecordedOutcome[]>([])
+  /** Faz 11: yalnız sunucu cevabı kabul ettikten sonra doldurulur. */
+  const [answerFeedback, setAnswerFeedback] = useState<AnswerFeedback | null>(
+    null
+  )
 
   /** Soru başına bir kez üretilen idempotency anahtarları. */
   const clientKeysRef = useRef(new Map<string, string>())
   const startedAtRef = useRef(0)
   const submittingRef = useRef(false)
+  /** Faz 11: süre dolduğunda cevabı zaten kabul edilmiş soruyu yeniden gönderme. */
+  const answeredQuestionRef = useRef<string | null>(null)
 
   const question = questions[index]
   const finished = !question
+  const panel: AnswerFeedback | null =
+    answerFeedback !== null && question !== undefined &&
+    answerFeedback.questionId === question.id
+      ? answerFeedback
+      : null
+  const showFeedbackPanel = panel !== null
 
   const ensureClientKey = useCallback((questionId: string): string => {
     const existing = clientKeysRef.current.get(questionId)
@@ -166,12 +200,14 @@ export default function TrainingSession({
     setSelected(null)
     setError(null)
     setDuplicateNotice(null)
+    setAnswerFeedback(null)
     setIndex((current) => current + 1)
   }, [])
 
   const sendAnswer = useCallback(
     async (payload: { choice?: ChoiceLetter; action?: AttemptAction }) => {
       if (!question || submittingRef.current) return
+      if (answeredQuestionRef.current === question.id) return
       submittingRef.current = true
       setSubmitting(true)
       setError(null)
@@ -206,9 +242,32 @@ export default function TrainingSession({
         setFeedback(
           `${RESULT_LABELS[outcome.result] ?? outcome.result}${
             outcome.duplicate ? " (kayıtlıydı)" : ""
-          } — sonraki soruya geçiliyor.`
+          }`
         )
-        advance()
+
+        // Faz 11: sunucu cevabı KABUL ettikten sonra onaylı geri
+        // bildirim istenir. Açıklama yoksa uydurma üretilmez.
+        answeredQuestionRef.current = question.id
+        try {
+          const fb = await feedbackAction(question.id)
+          setAnswerFeedback({
+            questionId: question.id,
+            result: outcome.result,
+            duplicate: outcome.duplicate,
+            correctAnswer:
+              fb.ok && fb.data.found ? fb.data.correctAnswer : null,
+            solutionText:
+              fb.ok && fb.data.found ? fb.data.solutionText : null,
+          })
+        } catch {
+          setAnswerFeedback({
+            questionId: question.id,
+            result: outcome.result,
+            duplicate: outcome.duplicate,
+            correctAnswer: null,
+            solutionText: null,
+          })
+        }
       } catch {
         // ActionResponse sözleşmesi dışı throw / transport hatası:
         // güvenli Türkçe mesaj; client_key haritada korunduğu için
@@ -221,7 +280,7 @@ export default function TrainingSession({
         setSubmitting(false)
       }
     },
-    [advance, ensureClientKey, question, submitAction]
+    [ensureClientKey, feedbackAction, question, submitAction]
   )
 
   const submitRef = useRef(sendAnswer)
@@ -308,7 +367,7 @@ export default function TrainingSession({
     )
   }
 
-  const canAnswer = selected !== null && !submitting
+  const canAnswer = selected !== null && !submitting && !showFeedbackPanel
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 p-4 sm:p-6">
@@ -328,18 +387,20 @@ export default function TrainingSession({
           <p className="text-sm font-medium text-gray-500">
             {subjectName} · Soru {index + 1}/{questions.length}
           </p>
-          <SessionTimer
-            key={question.id}
-            totalSeconds={questionTimeSeconds(question)}
-            onExpire={() => void submitRef.current({ action: "timeout" })}
-          />
+          {!showFeedbackPanel && question && (
+            <SessionTimer
+              key={question.id}
+              totalSeconds={questionTimeSeconds(question)}
+              onExpire={() => void submitRef.current({ action: "timeout" })}
+            />
+          )}
         </header>
 
         <h1 className="mt-4 text-lg font-semibold leading-relaxed text-gray-900">
           <MathText text={question?.questionText ?? "Soru metni bulunamadı."} />
         </h1>
 
-        <fieldset className="mt-5" disabled={submitting}>
+        <fieldset className="mt-5" disabled={submitting || showFeedbackPanel}>
           <legend className="sr-only">Cevap seçenekleri</legend>
 
           <div
@@ -363,7 +424,7 @@ export default function TrainingSession({
                     value={letter}
                     checked={selected === letter}
                     onChange={() => setSelected(letter)}
-                    disabled={submitting}
+                    disabled={submitting || showFeedbackPanel}
                     className="sr-only"
                   />
                   <span
@@ -379,40 +440,96 @@ export default function TrainingSession({
           </div>
         </fieldset>
 
-        {duplicateNotice && (
-          <p className="mt-3 rounded-xl bg-blue-50 px-4 py-2 text-sm text-blue-700">
-            {duplicateNotice}
-          </p>
+        {panel && (
+          <section
+            aria-label="Cevap geri bildirimi"
+            className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4"
+          >
+            <p
+              role="status"
+              aria-live="polite"
+              className="text-base font-semibold text-gray-900"
+            >
+              {RESULT_LABELS[panel.result] ?? panel.result}
+              {panel.duplicate ? " (kayıtlıydı)" : ""}
+            </p>
+
+            {panel.correctAnswer &&
+              isChoiceLetter(panel.correctAnswer) &&
+              question?.options[panel.correctAnswer] && (
+              <p className="mt-2 text-sm text-gray-700">
+                Doğru cevap:{" "}
+                <span className="font-semibold">{panel.correctAnswer}</span>
+                ){" "}
+                <MathText
+                  text={question.options[panel.correctAnswer] ?? ""}
+                />
+              </p>
+            )}
+
+            <div className="mt-3 text-sm text-gray-700">
+              {panel.solutionText ? (
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Çözüm açıklaması
+                  </h3>
+                  <MathText text={panel.solutionText} />
+                </div>
+              ) : (
+                <p className="italic text-gray-600">
+                  Çözüm açıklaması hazırlanıyor.
+                </p>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={advance}
+              className="mt-4 min-h-11 w-full rounded-xl bg-gray-900 px-6 py-3 font-semibold text-white transition hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 sm:w-auto"
+            >
+              {index + 1 < questions.length ? "Sonraki Soru" : "Oturumu Bitir"}
+            </button>
+          </section>
         )}
 
-        <div className="mt-6 grid gap-2 sm:grid-cols-3">
-          <button
-            type="button"
-            onClick={() => {
-              if (selected) void sendAnswer({ choice: selected })
-            }}
-            disabled={!canAnswer}
-            className="min-h-11 rounded-xl bg-gray-900 px-6 py-3 font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900"
-          >
-            {submitting ? "Gönderiliyor..." : "Cevapla"}
-          </button>
-          <button
-            type="button"
-            onClick={() => void sendAnswer({ action: "blank" })}
-            disabled={submitting}
-            className="min-h-11 rounded-xl border border-gray-300 px-6 py-3 font-semibold text-gray-900 transition hover:border-gray-500 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900"
-          >
-            Boş Bırak
-          </button>
-          <button
-            type="button"
-            onClick={() => void sendAnswer({ action: "pass" })}
-            disabled={submitting}
-            className="min-h-11 rounded-xl border border-gray-300 px-6 py-3 font-semibold text-gray-900 transition hover:border-gray-500 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900"
-          >
-            Pas Geç
-          </button>
-        </div>
+        {!showFeedbackPanel && (
+          <>
+            {duplicateNotice && (
+              <p className="mt-3 rounded-xl bg-blue-50 px-4 py-2 text-sm text-blue-700">
+                {duplicateNotice}
+              </p>
+            )}
+
+            <div className="mt-6 grid gap-2 sm:grid-cols-3">
+              <button
+                type="button"
+                onClick={() => {
+                  if (selected) void sendAnswer({ choice: selected })
+                }}
+                disabled={!canAnswer}
+                className="min-h-11 rounded-xl bg-gray-900 px-6 py-3 font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900"
+              >
+                {submitting ? "Gönderiliyor..." : "Cevapla"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void sendAnswer({ action: "blank" })}
+                disabled={submitting}
+                className="min-h-11 rounded-xl border border-gray-300 px-6 py-3 font-semibold text-gray-900 transition hover:border-gray-500 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900"
+              >
+                Boş Bırak
+              </button>
+              <button
+                type="button"
+                onClick={() => void sendAnswer({ action: "pass" })}
+                disabled={submitting}
+                className="min-h-11 rounded-xl border border-gray-300 px-6 py-3 font-semibold text-gray-900 transition hover:border-gray-500 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900"
+              >
+                Pas Geç
+              </button>
+            </div>
+          </>
+        )}
       </section>
     </main>
   )

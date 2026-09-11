@@ -2,7 +2,10 @@ import Link from "next/link"
 
 import TrainingFilters from "@/components/student/TrainingFilters"
 import TrainingSession from "@/components/student/TrainingSession"
-import { submitTrainingAttemptAction } from "@/app/(student)/training/actions"
+import {
+  fetchAttemptFeedbackAction,
+  submitTrainingAttemptAction,
+} from "@/app/(student)/training/actions"
 import { createClient } from "@/lib/supabase/server"
 import { mapTrainingError } from "@/lib/training/errors"
 import {
@@ -153,6 +156,7 @@ export default async function TrainingSubjectPage({
         subjectName={subject?.name ?? "Seçili ders"}
         questions={questions}
         submitAction={submitTrainingAttemptAction}
+        feedbackAction={fetchAttemptFeedbackAction}
       />
     </div>
   )

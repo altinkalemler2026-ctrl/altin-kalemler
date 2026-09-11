@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest"
 import {
   clampQuestionLimit,
   clampTimeMs,
+  fetchAttemptFeedback,
   listTrainingOutcomes,
   listTrainingTopics,
+  mapAttemptFeedback,
   mapQuestionPayload,
   mapSubmitResult,
   mapWeeklyUsage,
@@ -423,5 +425,121 @@ describe("listTrainingTopics / listTrainingOutcomes", () => {
     await expect(
       listTrainingTopics(client, "430903f3-527e-4e12-b7e8-ac0afdb784aa")
     ).rejects.toThrow(/akademik donem bulunamadi/i)
+  })
+})
+
+describe("mapAttemptFeedback — Faz 11 allowlist", () => {
+  it("found=false herhangi bir cevap/anahtar alanı üretmez", () => {
+    const mapped = mapAttemptFeedback({ found: false }) as unknown as Record<
+      string,
+      unknown
+    >
+
+    expect(mapped.found).toBe(false)
+    expect(mapped.correctAnswer).toBeNull()
+    expect(mapped.solutionText).toBeNull()
+    expect(Object.keys(mapped).sort()).toEqual(
+      ["correctAnswer", "found", "solutionText"].sort()
+    )
+  })
+
+  it("onaylı cevap + açıklamayı güvenli DTO'ya taşır", () => {
+    const mapped = mapAttemptFeedback({
+      found: true,
+      correct_answer: "B",
+      solution_text: "Ankara başkenttir.",
+    })
+
+    expect(mapped).toEqual({
+      found: true,
+      correctAnswer: "B",
+      solutionText: "Ankara başkenttir.",
+    })
+  })
+
+  it("geçersiz correct_answer değerini null'a düşürür (fail-safe)", () => {
+    const mapped = mapAttemptFeedback({
+      found: true,
+      correct_answer: "X",
+      solution_text: null,
+    })
+
+    expect(mapped.correctAnswer).toBeNull()
+    expect(mapped.found).toBe(true)
+  })
+
+  it("bilinmeyen/ham alanları sessizce düşürür", () => {
+    const mapped = mapAttemptFeedback({
+      found: true,
+      correct_answer: "A",
+      solution_text: "Çözüm.",
+      question_id: "33333333-3333-3333-3333-000000000001",
+      user_id: "99999999-8888-4000-8000-000000000901",
+      internal_note: SECRET_SENTINEL,
+      raw_error: "duplicate key value violates unique constraint",
+    }) as unknown as Record<string, unknown>
+
+    expect(JSON.stringify(mapped)).not.toContain(SECRET_SENTINEL)
+    expect(JSON.stringify(mapped)).not.toContain("user_id")
+    expect(JSON.stringify(mapped)).not.toContain("raw_error")
+    expect(Object.keys(mapped).sort()).toEqual(
+      ["correctAnswer", "found", "solutionText"].sort()
+    )
+  })
+
+  it("bozuk/eksik girdide found=false'a düşer", () => {
+    expect(mapAttemptFeedback(null)).toEqual({
+      found: false,
+      correctAnswer: null,
+      solutionText: null,
+    })
+    expect(mapAttemptFeedback("bozuk")).toEqual({
+      found: false,
+      correctAnswer: null,
+      solutionText: null,
+    })
+  })
+})
+
+describe("fetchAttemptFeedback — Faz 11", () => {
+  function createFeedbackClient(payload: {
+    data?: unknown
+    error?: { message: string } | null
+  }) {
+    return {
+      rpc: async () => payload,
+    } as unknown as TrainingClient
+  }
+
+  it("geçerli UUID ile RPC cevabını allowlist DTO'ya çevirir", async () => {
+    const client = createFeedbackClient({
+      data: { found: true, correct_answer: "C", solution_text: "Cozum." },
+    })
+
+    const result = await fetchAttemptFeedback(
+      client,
+      "33333333-3333-3333-3333-000000000001"
+    )
+    expect(result.found).toBe(true)
+    expect(result.correctAnswer).toBe("C")
+    expect(result.solutionText).toBe("Cozum.")
+  })
+
+  it("geçersiz question_id'de TrainingValidationError fırlatır (RPC çağrılmaz)", async () => {
+    const client = createFeedbackClient({ data: null })
+
+    await expect(
+      fetchAttemptFeedback(client, "not-a-uuid")
+    ).rejects.toThrow(TrainingValidationError)
+  })
+
+  it("RPC hatasını fırlatır (fail-closed)", async () => {
+    const client = createFeedbackClient({
+      error: { message: "Kimlik dogrulamasi gerekli." },
+    })
+
+    await expect(
+      fetchAttemptFeedback(client, "33333333-3333-3333-3333-000000000001")
+    ).rejects.toThrow(/Kimlik dogrulamasi/i)
   })
 })

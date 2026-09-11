@@ -22,6 +22,7 @@ import type { Database } from "@/lib/supabase/types"
 import {
   isAttemptAction,
   isChoiceLetter,
+  type AttemptFeedback,
   type QuestionSelection,
   type SubmitAnswerInput,
   type SubmitOutcome,
@@ -191,6 +192,58 @@ export function mapSubmitResult(raw: unknown): SubmitResult {
     result,
     duplicate: record.duplicate === true,
   }
+}
+
+/**
+ * Faz 11: get_attempt_feedback (109) cevabının sıkı allowlist
+ * eşleyicisi. Yalnızca found/correct_answer/solution_text taşınır;
+ * bilinmeyen her anahtar (PII, UUID, dahili alan) sessizce düşer.
+ * found=false ise correctAnswer/solutionText hiç üretilmez.
+ */
+export function mapAttemptFeedback(raw: unknown): AttemptFeedback {
+  const record =
+    typeof raw === "object" && raw !== null
+      ? (raw as Record<string, unknown>)
+      : {}
+
+  if (record.found !== true) {
+    return { found: false, correctAnswer: null, solutionText: null }
+  }
+
+  const correctAnswer =
+    typeof record.correct_answer === "string" &&
+    isChoiceLetter(record.correct_answer)
+      ? record.correct_answer
+      : null
+
+  const solutionText =
+    typeof record.solution_text === "string" && record.solution_text.length > 0
+      ? record.solution_text
+      : null
+
+  return { found: true, correctAnswer, solutionText }
+}
+
+/**
+ * Cevap sonrası onaylı geri bildirim (get_attempt_feedback, 109).
+ *
+ * - user_id ALMAZ; kimlik RPC'de auth.uid()'den gelir.
+ * - RPC cevap öncesinde {found:false} döner; doğru cevap/açıklama
+ *   istemciye sızmaz (DB tarafı fail-closed kapılar).
+ */
+export async function fetchAttemptFeedback(
+  client: TrainingClient,
+  questionId: string
+): Promise<AttemptFeedback> {
+  assertUuid(questionId, "questionId")
+
+  const { data, error } = await client.rpc(
+    "get_attempt_feedback",
+    { p_question_id: questionId } as unknown as Database["public"]["Functions"]["get_attempt_feedback"]["Args"]
+  )
+  if (error) throw error
+
+  return mapAttemptFeedback(data)
 }
 
 // ------------------------------------------------------------

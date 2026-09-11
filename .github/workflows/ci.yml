@@ -323,6 +323,7 @@ jobs:
           run_suite faz6 scripts/qa_faz6_targeted_review_local.sql parsed
           run_suite faz10 scripts/qa_faz10_avatar_rpc_local.sql parsed
           run_suite faz10b scripts/qa_faz10b_public_privilege_hardening_local.sql parsed
+          run_suite faz11 scripts/qa_faz11_progress_feedback_local.sql parsed
 
       # ----------------------------------------------------------
       # Faz 2 paralel sayaç probe'u: iki AYRI docker exec sureci ile

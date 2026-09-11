@@ -1,7 +1,7 @@
 /**
  * StudentNav testleri (Client Component).
  *
- * - Altı baglantiyi icerir: Ana Sayfa, Antrenman, Tekrar, Yarisma, Lig, Profil
+ * - Baglantilari icerir: Ana Sayfa, Antrenman, Ilerleme, Tekrar, Yarisma, Lig, Profil
  * - Aktif route aria-current="page" ile vurgulanir
  * - Takma ad gorunur
  * - Logout formu logout action cagirir
@@ -24,13 +24,14 @@ beforeEach(() => {
 })
 
 describe("StudentNav", () => {
-  it("bes ozetme baglantisini icerir", () => {
+  it("ogrenci baglantilari icerir (Faz 11: Ilerleme dahil)", () => {
     usePathnameMock.mockReturnValue("/dashboard")
     render(<StudentNav nickname="altinkalem" logout={vi.fn()} />)
 
     for (const label of [
       "Ana Sayfa",
       "Antrenman",
+      "İlerleme",
       "Tekrar",
       "Yarışma",
       "Lig",
@@ -38,6 +39,12 @@ describe("StudentNav", () => {
     ]) {
       expect(screen.getAllByRole("link", { name: label }).length).toBeGreaterThan(0)
     }
+
+    // Ilerleme rotasi /ilerleme'ye gider.
+    const progressLinks = screen
+      .getAllByRole("link", { name: "İlerleme" })
+      .map((link) => link.getAttribute("href"))
+    expect(progressLinks).toContain("/ilerleme")
   })
 
   it("aktif route aria-current ile isaretlenir", () => {

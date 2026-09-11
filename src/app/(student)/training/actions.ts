@@ -12,11 +12,13 @@ import { createClient } from "@/lib/supabase/server"
 import { mapTrainingError, SESSION_EXPIRED_MESSAGE } from "@/lib/training/errors"
 import {
   DEFAULT_QUESTION_LIMIT,
+  fetchAttemptFeedback,
   selectTrainingQuestions,
   submitTrainingAttempt,
   TrainingValidationError,
 } from "@/lib/training/service"
 import type {
+  AttemptFeedback,
   QuestionSelection,
   SubmitAnswerInput,
   SubmitResult,
@@ -40,6 +42,31 @@ export async function submitTrainingAttemptAction(
 
   try {
     const data = await submitTrainingAttempt(supabase, input)
+    return { ok: true, data }
+  } catch (error) {
+    if (error instanceof TrainingValidationError) {
+      return { ok: false, message: error.message }
+    }
+    return { ok: false, message: mapTrainingError(error) }
+  }
+}
+
+/**
+ * Faz 11: cevap sonrası onaylı geri bildirim (yalnız sunucu cevabı
+ * kabul ettikten sonra çağrılır; kimlik sunucudan, veri RPC'den).
+ */
+export async function fetchAttemptFeedbackAction(
+  questionId: string
+): Promise<ActionResponse<AttemptFeedback>> {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, message: SESSION_EXPIRED_MESSAGE }
+
+  try {
+    const data = await fetchAttemptFeedback(supabase, questionId)
     return { ok: true, data }
   } catch (error) {
     if (error instanceof TrainingValidationError) {

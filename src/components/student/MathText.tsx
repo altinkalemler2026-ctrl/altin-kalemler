@@ -9,12 +9,19 @@
  *  - Üs:     "2^10" -> üst simge + aria "2 üzeri 10"
  *  - Sembol: "*" çarpı görünümü (aria "çarpı"); "÷" olduğu gibi
  *
- * Güvenlik: yalnız React string escaping; HTML asla enjekte edilmez.
- * Ekran okuyucu alternatifi, görsel temsilin BİREBIR düz metin
- * karşılığıdır (WCAG: renk/görsele tek başına anlam yüklenmez).
+ * Güvenlik: yalnız React string escaping; HTML asla enjekte edilmez
+ * (dangerouslySetInnerHTML YOK). Script/event-handler/javascript:
+ * girdileri düz metin olarak kalır ve çalıştırılamaz.
+ *
+ * Dayanıklılık: renderer beklenmeyen hatada sayfayı çökertmez;
+ * güvenli düz metin fallback'ine düşer (MathTextErrorBoundary).
+ * Uzun formüller satır sonunda kırılır (break-words); mobil yatay
+ * taşma üretmez. Ekran okuyucu alternatifi, görsel temsilin BİREBIR
+ * düz metin karşılığıdır (WCAG: renk/görsele tek başına anlam
+ * yüklenmez).
  */
 
-import { Fragment, type ReactNode } from "react"
+import { Component, Fragment, type ReactNode } from "react"
 
 function splitWithMath(text: string): ReactNode[] {
   const tokens: ReactNode[] = []
@@ -90,6 +97,35 @@ function splitWithMath(text: string): ReactNode[] {
   return tokens
 }
 
+/**
+ * Renderer hatası sayfayı çökertmez: güvenli düz metin fallback'i.
+ * Fallback, orijinal metnin birebir kendisidir (içerik uydurma YOK).
+ * Test edilebilirlik için dışa aktarılmıştır.
+ */
+export class MathTextErrorBoundary extends Component<
+  { text: string; className?: string; children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false }
+
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+
+  componentDidCatch() {
+    // Hatayı yut; ham hata metni kullanıcıya asla gösterilmez.
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <span className={this.props.className}>{this.props.text}</span>
+      )
+    }
+    return this.props.children
+  }
+}
+
 export default function MathText({
   text,
   className,
@@ -99,6 +135,27 @@ export default function MathText({
 }) {
   if (!text) return null
 
+  const wrapperClass = [
+    "min-w-0 break-words [overflow-wrap:anywhere]",
+    className ?? "",
+  ]
+    .filter(Boolean)
+    .join(" ")
+
+  return (
+    <MathTextErrorBoundary text={text} className={wrapperClass}>
+      <SafeMathSpan text={text} className={wrapperClass} />
+    </MathTextErrorBoundary>
+  )
+}
+
+function SafeMathSpan({
+  text,
+  className,
+}: {
+  text: string
+  className?: string
+}) {
   // Yerel desenler: matchAll 'g' bayraklı regex kullanır ve lastIndex
   // taşımaz (her çağrıda taze nesne; global mutable state yok).
   const hasMath =

@@ -8,9 +8,9 @@
  */
 
 import { render, screen } from "@testing-library/react"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
-import MathText from "./MathText"
+import MathText, { MathTextErrorBoundary } from "./MathText"
 
 describe("MathText", () => {
   it("düz metni değiştirmeden render eder", () => {
@@ -52,5 +52,49 @@ describe("MathText", () => {
 
     expect(container.querySelector("img")).toBeNull()
     expect(screen.getByLabelText("1 bölü 2")).toBeInTheDocument()
+  })
+})
+
+describe("MathText — Faz 11 güvenlik ve dayanıklılık", () => {
+  it("script/event-handler/javascript: sentinel'leri çalıştırmaz; düz metin kalır", () => {
+    const { container } = render(
+      <MathText text='<script>alert(1)</script> javascript:alert(2) <a href="javascript:alert(3)">tıkla</a> 3/4' />
+    )
+
+    expect(container.querySelector("script")).toBeNull()
+    expect(container.querySelector("a")).toBeNull()
+    expect(screen.getByLabelText("3 bölü 4")).toBeInTheDocument()
+    // Metin çalıştırılmaz; kaçırılmış HTML parçaları düz metin olarak görünür.
+    expect(screen.getByText(/javascript:alert\(2\)/)).toBeInTheDocument()
+  })
+
+  it("long formülde kırılma sınıflarını taşır (mobil yatay taşma önlemi)", () => {
+    const { container } = render(
+      <MathText text="123456789012345678901234567890/999999999999999999999999999999" />
+    )
+
+    const wrapper = container.firstElementChild as HTMLElement
+    expect(wrapper.className).toContain("break-words")
+    expect(wrapper.className).toContain("min-w-0")
+  })
+
+  it("renderer hatasında sayfayı çökertmez; birebir düz metin fallback gösterir", () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined)
+
+    function Boom(): never {
+      throw new Error("render patlaması")
+    }
+
+    const { container } = render(
+      <MathTextErrorBoundary text="Güvenli düz metin" className="deneme">
+        <Boom />
+      </MathTextErrorBoundary>
+    )
+
+    expect(container.textContent).toBe("Güvenli düz metin")
+    expect(container.textContent).not.toContain("render patlaması")
+    consoleError.mockRestore()
   })
 })

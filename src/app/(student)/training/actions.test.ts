@@ -18,7 +18,7 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: createClientMock,
 }))
 
-import { submitTrainingAttemptAction } from "./actions"
+import { fetchAttemptFeedbackAction, submitTrainingAttemptAction } from "./actions"
 import { SESSION_EXPIRED_MESSAGE } from "@/lib/training/errors"
 
 function makeClient() {
@@ -157,5 +157,58 @@ describe("submitTrainingAttemptAction", () => {
       )
       expect(response.message).not.toContain("dogrulamasi")
     }
+  })
+})
+
+describe("fetchAttemptFeedbackAction — Faz 11", () => {
+  it("oturum yoksa oturum-süresi mesajı döner ve RPC çağrılmaz", async () => {
+    getUserMock.mockResolvedValue({ data: { user: null } })
+
+    const response = await fetchAttemptFeedbackAction(
+      "33333333-3333-3333-3333-000000000001"
+    )
+
+    expect(response).toEqual({ ok: false, message: SESSION_EXPIRED_MESSAGE })
+    expect(rpcMock).not.toHaveBeenCalled()
+  })
+
+  it("geçersiz soru kimliğini özel mesajla reddeder (RPC'ye gitmez)", async () => {
+    getUserMock.mockResolvedValue({
+      data: { user: { id: "99999999-8888-4000-8000-000000000901" } },
+    })
+
+    const response = await fetchAttemptFeedbackAction("not-a-uuid")
+
+    expect(response.ok).toBe(false)
+    if (!response.ok) {
+      expect(response.message).toBe("questionId geçerli bir UUID değil.")
+    }
+    expect(rpcMock).not.toHaveBeenCalled()
+  })
+
+  it("kabul edilmiş cevapta onaylı geri bildirim DTO'su döner", async () => {
+    getUserMock.mockResolvedValue({
+      data: { user: { id: "99999999-8888-4000-8000-000000000901" } },
+    })
+    rpcMock.mockResolvedValue({
+      data: { found: true, correct_answer: "B", solution_text: "Ankara." },
+      error: null,
+    })
+
+    const response = await fetchAttemptFeedbackAction(
+      "33333333-3333-3333-3333-000000000001"
+    )
+
+    expect(response.ok).toBe(true)
+    if (response.ok) {
+      expect(response.data).toEqual({
+        found: true,
+        correctAnswer: "B",
+        solutionText: "Ankara.",
+      })
+    }
+    expect(rpcMock).toHaveBeenCalledWith("get_attempt_feedback", {
+      p_question_id: "33333333-3333-3333-3333-000000000001",
+    })
   })
 })

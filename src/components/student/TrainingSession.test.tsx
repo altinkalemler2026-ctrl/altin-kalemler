@@ -4,10 +4,11 @@ import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import TrainingSession, {
+  type FeedbackActionResponse,
   type SubmitActionFn,
   type SubmitActionResponse,
 } from "./TrainingSession"
-import type { SubmitResult, TrainingQuestion } from "@/lib/training/types"
+import type { AttemptFeedback, SubmitResult, TrainingQuestion } from "@/lib/training/types"
 
 const Q1: TrainingQuestion = {
   id: "33333333-3333-3333-3333-000000000001",
@@ -48,6 +49,23 @@ function okResult(
   }
 }
 
+function feedbackData(
+  overrides: Partial<AttemptFeedback> = {}
+): AttemptFeedback {
+  return {
+    found: true,
+    correctAnswer: "B",
+    solutionText: "Ankara Türkiye'nin başkentidir. Oran: 3/4, üs: 2^5.",
+    ...overrides,
+  }
+}
+
+function okFeedback(
+  overrides: Partial<AttemptFeedback> = {}
+): FeedbackActionResponse {
+  return { ok: true, data: feedbackData(overrides) }
+}
+
 function createSubmitAction(
   impl?: (input: Parameters<SubmitActionFn>[0]) => Promise<SubmitActionResponse>
 ) {
@@ -55,6 +73,15 @@ function createSubmitAction(
     impl ? impl(input) : okResult()
   ) as unknown as ReturnType<typeof vi.fn> &
     ((input: Parameters<SubmitActionFn>[0]) => Promise<SubmitActionResponse>)
+}
+
+function createFeedbackAction(
+  impl?: (questionId: string) => Promise<FeedbackActionResponse>
+) {
+  return vi.fn(async (questionId: string) =>
+    impl ? impl(questionId) : okFeedback()
+  ) as unknown as ReturnType<typeof vi.fn> &
+    ((questionId: string) => Promise<FeedbackActionResponse>)
 }
 
 beforeEach(() => {
@@ -73,6 +100,7 @@ describe("TrainingSession — render ve güvenlik", () => {
         subjectName="Matematik"
         questions={[Q1]}
         submitAction={submitAction}
+        feedbackAction={createFeedbackAction()}
       />
     )
 
@@ -94,6 +122,7 @@ describe("TrainingSession — render ve güvenlik", () => {
         subjectName="Matematik"
         questions={[poisoned]}
         submitAction={createSubmitAction()}
+        feedbackAction={createFeedbackAction()}
       />
     )
 
@@ -109,6 +138,7 @@ describe("TrainingSession — render ve güvenlik", () => {
         subjectName="Matematik"
         questions={[Q1]}
         submitAction={createSubmitAction()}
+        feedbackAction={createFeedbackAction()}
       />
     )
 
@@ -134,6 +164,7 @@ describe("TrainingSession — render ve güvenlik", () => {
         subjectName="Matematik"
         questions={[mathQ]}
         submitAction={createSubmitAction()}
+        feedbackAction={createFeedbackAction()}
       />
     )
 
@@ -150,6 +181,7 @@ describe("TrainingSession — render ve güvenlik", () => {
         subjectName="Matematik"
         questions={[Q1]}
         submitAction={createSubmitAction()}
+        feedbackAction={createFeedbackAction()}
       />
     )
 
@@ -171,8 +203,193 @@ describe("TrainingSession — render ve güvenlik", () => {
   })
 })
 
+describe("TrainingSession — Faz 11 cevap öncesi sızıntı yok", () => {
+  it("cevap gönderilmeden doğru cevap veya açıklama DOM'da yoktur; feedback isteği yapılmaz", () => {
+    const feedbackAction = createFeedbackAction()
+    const { container } = render(
+      <TrainingSession
+        subjectName="Matematik"
+        questions={[Q1]}
+        submitAction={createSubmitAction()}
+        feedbackAction={feedbackAction}
+      />
+    )
+
+    expect(feedbackAction).not.toHaveBeenCalled()
+    expect(container.textContent).not.toContain("Doğru cevap")
+    expect(container.textContent).not.toContain("Çözüm açıklaması")
+    expect(container.textContent).not.toContain("Ankara Türkiye'nin")
+  })
+
+  it("kabul edilmiş cevap sonrası açık Türkçe geri bildirim, doğru cevap ve onaylı açıklama görünür", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    const feedbackAction = createFeedbackAction()
+    render(
+      <TrainingSession
+        subjectName="Matematik"
+        questions={[Q1]}
+        submitAction={createSubmitAction()}
+        feedbackAction={feedbackAction}
+      />
+    )
+
+    await user.click(screen.getByLabelText(/Ankara/))
+    await user.click(screen.getByRole("button", { name: "Cevapla" }))
+
+    // Sunucu kabul etmeden feedback çağrısı yapılmaz.
+    await waitFor(() => expect(feedbackAction).toHaveBeenCalledTimes(1))
+    expect(feedbackAction.mock.calls[0][0]).toBe(Q1.id)
+
+    // Görsel geri bildirim bölgesi: durum + doğru cevap + açıklama.
+    const panel = screen.getByRole("region", {
+      name: "Cevap geri bildirimi",
+    })
+    expect(panel).toHaveTextContent("Doğru")
+    expect(panel).toHaveTextContent("Doğru cevap: B")
+    expect(panel).toHaveTextContent("Ankara")
+    expect(panel).toHaveTextContent("Ankara Türkiye'nin başkentidir.")
+    expect(screen.getByLabelText("3 bölü 4")).toBeInTheDocument()
+    expect(screen.getByText("2 üzeri 5")).toBeInTheDocument()
+    // Açıklama yok durumu GÖRÜNMEZ (açıklama bulundu).
+    expect(screen.queryByText("Çözüm açıklaması hazırlanıyor.")).toBeNull()
+
+    // Tek soruluk oturumda panel kapatma düğmesi oturumu bitirir.
+    expect(
+      screen.getByRole("button", { name: "Oturumu Bitir" })
+    ).toHaveClass("min-h-11")
+  })
+
+  it("yanlış cevapta açık Türkçe 'Yanlış' bildirimi görünür", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(
+      <TrainingSession
+        subjectName="Matematik"
+        questions={[Q1]}
+        submitAction={createSubmitAction(async () => okResult({ result: "wrong" }))}
+        feedbackAction={createFeedbackAction(async () =>
+          okFeedback({ correctAnswer: "B" })
+        )}
+      />
+    )
+
+    await user.click(screen.getByLabelText(/İstanbul/))
+    await user.click(screen.getByRole("button", { name: "Cevapla" }))
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("region", { name: "Cevap geri bildirimi" })
+      ).toHaveTextContent("Yanlış")
+    )
+  })
+
+  it("açıklama yoksa içerik uydurulmaz; güvenli hazırlık mesajı görünür", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(
+      <TrainingSession
+        subjectName="Matematik"
+        questions={[Q1]}
+        submitAction={createSubmitAction()}
+        feedbackAction={createFeedbackAction(async () =>
+          okFeedback({ solutionText: null })
+        )}
+      />
+    )
+
+    await user.click(screen.getByLabelText(/Ankara/))
+    await user.click(screen.getByRole("button", { name: "Cevapla" }))
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("Çözüm açıklaması hazırlanıyor.")
+      ).toBeInTheDocument()
+    )
+  })
+
+  it("feedback çağrısı hatasında sayfa çökmez; ham hata sızmaz, güvenli mesaj görünür", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(
+      <TrainingSession
+        subjectName="Matematik"
+        questions={[Q1]}
+        submitAction={createSubmitAction()}
+        feedbackAction={createFeedbackAction(async () => {
+          throw new Error(
+            "relation public.question_solution_assets does not exist"
+          )
+        })}
+      />
+    )
+
+    await user.click(screen.getByLabelText(/Ankara/))
+    await user.click(screen.getByRole("button", { name: "Cevapla" }))
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("Çözüm açıklaması hazırlanıyor.")
+      ).toBeInTheDocument()
+    )
+    // Ham DB hatası istemciye sızmaz.
+    expect(document.body.textContent).not.toContain("does not exist")
+    expect(document.body.textContent).not.toContain("question_solution_assets")
+  })
+
+  it("PII/UUID/ham hata sentinel'leri geri bildirimde bile DOM'a sızmaz", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(
+      <TrainingSession
+        subjectName="Matematik"
+        questions={[Q1]}
+        submitAction={createSubmitAction()}
+        feedbackAction={createFeedbackAction(async () =>
+          okFeedback({
+            solutionText:
+              "Çözüm: a@ornek.com kullanıcısı 99999999-8888-4000-8000-000000000901",
+          })
+        )}
+      />
+    )
+
+    await user.click(screen.getByLabelText(/Ankara/))
+    await user.click(screen.getByRole("button", { name: "Cevapla" }))
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("region", { name: "Cevap geri bildirimi" })
+      ).toBeInTheDocument()
+    )
+  })
+
+  it("XSS sentinel açıklama metni çalıştırılmaz; düz metin kalır", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(
+      <TrainingSession
+        subjectName="Matematik"
+        questions={[Q1]}
+        submitAction={createSubmitAction()}
+        feedbackAction={createFeedbackAction(async () =>
+          okFeedback({
+            solutionText:
+              '<img src=x onerror=alert(1)> <script>alert(2)</script> javascript:alert(3) 1/2',
+          })
+        )}
+      />
+    )
+
+    await user.click(screen.getByLabelText(/Ankara/))
+    await user.click(screen.getByRole("button", { name: "Cevapla" }))
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("1 bölü 2")).toBeInTheDocument()
+    )
+    expect(document.querySelector("img")).toBeNull()
+    expect(document.querySelector("script")).toBeNull()
+    // javascript: URL render edilmemiş link yok.
+    expect(document.querySelectorAll("a")).toHaveLength(0)
+  })
+})
+
 describe("TrainingSession — cevap akışı", () => {
-  it("seçim + Cevapla: choice gönderilir, action boştur", async () => {
+  it("seçim + Cevapla: choice gönderilir, action boştur; Sonraki Soru ile ilerlenir", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     const submitAction = createSubmitAction()
     render(
@@ -180,6 +397,7 @@ describe("TrainingSession — cevap akışı", () => {
         subjectName="Matematik"
         questions={[Q1, Q2]}
         submitAction={submitAction}
+        feedbackAction={createFeedbackAction()}
       />
     )
 
@@ -197,6 +415,10 @@ describe("TrainingSession — cevap akışı", () => {
     expect(input.clientKey).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
     )
+
+    // Faz 11: geri bildirim paneli manuel ilerleme bekler.
+    await user.click(screen.getByRole("button", { name: "Sonraki Soru" }))
+    expect(screen.getByText("İkinci soru metni.")).toBeInTheDocument()
   })
 
   it("klavye ile seçim yapılabilir (tab + ok tuşları)", async () => {
@@ -206,6 +428,7 @@ describe("TrainingSession — cevap akışı", () => {
         subjectName="Matematik"
         questions={[Q1]}
         submitAction={createSubmitAction()}
+        feedbackAction={createFeedbackAction()}
       />
     )
 
@@ -235,6 +458,7 @@ describe("TrainingSession — cevap akışı", () => {
         subjectName="Matematik"
         questions={[Q1]}
         submitAction={submitAction}
+        feedbackAction={createFeedbackAction()}
       />
     )
 
@@ -272,6 +496,7 @@ describe("TrainingSession — cevap akışı", () => {
         subjectName="Matematik"
         questions={[Q1]}
         submitAction={submitAction}
+        feedbackAction={createFeedbackAction()}
       />
     )
 
@@ -293,6 +518,14 @@ describe("TrainingSession — cevap akışı", () => {
     await waitFor(() => expect(callCount).toBe(2))
     expect(keys[0]).toBe(keys[1])
 
+    // Kabul edilen cevap sonrası panel açılır; oturumu bitir.
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Oturumu Bitir" })
+      ).toBeInTheDocument()
+    )
+    await user.click(screen.getByRole("button", { name: "Oturumu Bitir" }))
+
     await waitFor(() =>
       expect(screen.getByText(/Oturum Özeti/)).toBeInTheDocument()
     )
@@ -309,17 +542,27 @@ describe("TrainingSession — cevap akışı", () => {
         subjectName="Matematik"
         questions={[Q1]}
         submitAction={submitAction}
+        feedbackAction={createFeedbackAction()}
       />
-
     )
 
     await user.click(screen.getByLabelText(/Ankara/))
     await user.click(screen.getByRole("button", { name: "Cevapla" }))
 
     await waitFor(() =>
-      expect(screen.getByText(/Oturum Özeti/)).toBeInTheDocument()
+      expect(
+        screen.getByRole("region", { name: "Cevap geri bildirimi" })
+      ).toBeInTheDocument()
     )
     expect(submitAction).toHaveBeenCalledTimes(1)
+    expect(
+      screen.getAllByText(/kayıtlıydı/).length
+    ).toBeGreaterThan(0)
+
+    await user.click(screen.getByRole("button", { name: "Oturumu Bitir" }))
+    await waitFor(() =>
+      expect(screen.getByText(/Oturum Özeti/)).toBeInTheDocument()
+    )
     // Tek çağrı + özet ekranı = duplicate ikinci attempt oluşturmadı.
     expect(screen.getByText("1 soru yanıtlandı.")).toBeInTheDocument()
   })
@@ -334,6 +577,7 @@ describe("TrainingSession — pas/boş/süre davranışı", () => {
         subjectName="Matematik"
         questions={[Q1]}
         submitAction={submitAction}
+        feedbackAction={createFeedbackAction()}
       />
     )
 
@@ -353,6 +597,7 @@ describe("TrainingSession — pas/boş/süre davranışı", () => {
         subjectName="Matematik"
         questions={[Q1]}
         submitAction={submitAction}
+        feedbackAction={createFeedbackAction()}
       />
     )
 
@@ -369,6 +614,7 @@ describe("TrainingSession — pas/boş/süre davranışı", () => {
         subjectName="Matematik"
         questions={[Q1]}
         submitAction={submitAction}
+        feedbackAction={createFeedbackAction()}
       />
     )
 
@@ -395,6 +641,7 @@ describe("TrainingSession — pas/boş/süre davranışı", () => {
         subjectName="Matematik"
         questions={[Q1]}
         submitAction={submitAction}
+        feedbackAction={createFeedbackAction()}
       />
     )
 
@@ -405,8 +652,8 @@ describe("TrainingSession — pas/boş/süre davranışı", () => {
     expect(input.action).toBe("timeout")
     expect(input.choice).toBeUndefined()
 
-    // Aşırı durum: süre zaten doldu; ikinci tetikleme (retry/timer yarışı)
-    // yeni attempt üretmemeli — submittingRef + tek client_key koruması.
+    // Aşırı durum: süre zaten doldu; ikinci tetikleme (retry/timer yarısı)
+    // yeni attempt üretmemeli — panel açık; timer söküldü + ref kilidi.
     await vi.advanceTimersByTimeAsync(5_000)
     expect(submitAction).toHaveBeenCalledTimes(1)
   })
@@ -423,17 +670,29 @@ describe("TrainingSession — pas/boş/süre davranışı", () => {
         subjectName="Matematik"
         questions={[Q1, Q2]}
         submitAction={submitAction}
+        feedbackAction={createFeedbackAction()}
       />
     )
 
     await user.click(screen.getByLabelText(/Ankara/))
     await user.click(screen.getByRole("button", { name: "Cevapla" }))
 
-    // İkinci soru ekrana gelmeli.
+    // Faz 11: panelde manuel ilerleme.
     await waitFor(() =>
-      expect(screen.getByText("İkinci soru metni.")).toBeInTheDocument()
+      expect(
+        screen.getByRole("button", { name: "Sonraki Soru" })
+      ).toBeInTheDocument()
     )
+    await user.click(screen.getByRole("button", { name: "Sonraki Soru" }))
+    expect(screen.getByText("İkinci soru metni.")).toBeInTheDocument()
+
     await user.click(screen.getByRole("button", { name: "Pas Geç" }))
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Oturumu Bitir" })
+      ).toBeInTheDocument()
+    )
+    await user.click(screen.getByRole("button", { name: "Oturumu Bitir" }))
 
     await waitFor(() =>
       expect(screen.getByText(/Oturum Özeti/)).toBeInTheDocument()
@@ -456,6 +715,7 @@ describe("TrainingSession — pas/boş/süre davranışı", () => {
         subjectName="Matematik"
         questions={[]}
         submitAction={createSubmitAction()}
+        feedbackAction={createFeedbackAction()}
         backHref="/panel"
       />
     )
@@ -472,6 +732,7 @@ describe("TrainingSession — pas/boş/süre davranışı", () => {
         subjectName="Matematik"
         questions={[]}
         submitAction={createSubmitAction()}
+        feedbackAction={createFeedbackAction()}
       />
     )
 

@@ -126,3 +126,20 @@ export interface SubmitResult {
   result: SubmitOutcome
   duplicate: boolean
 }
+
+/**
+ * Faz 11: cevap KABUL edildikten SONRA gösterilen güvenli geri
+ * bildirim DTO'su (get_attempt_feedback, 109).
+ *
+ * - found=false: soru için kabul edilmiş deneme yok; doğru cevap ve
+ *   açıklama ASLA dönmez (cevap öncesi sızıntı fail-closed kapısı).
+ * - correctAnswer: onaylı sorunun cevap anahtarı ('A'..'E'); soru
+ *   onaylı/aktif değilse null.
+ * - solutionText: onaylı (validation_status='valid', is_active) metin
+ *   çözüm; yoksa null (UI uydurma açıklama ÜRETMEZ).
+ */
+export interface AttemptFeedback {
+  found: boolean
+  correctAnswer: string | null
+  solutionText: string | null
+}
