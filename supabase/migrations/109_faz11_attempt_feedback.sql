@@ -11,11 +11,18 @@
 --
 -- SÖZLEŞME KAYNAKLARI:
 --   - Doğruluk: questions.correct_answer (070 tek kaynak; CHECK A..E).
---     Yalnız is_active + approval_status='approved' sorularda açılır.
+--     Yalnız is_active + approval_status='approved' + AKTİF PRACTICE
+--     VAULT MEMBERSHIP (practice_eligible=true) sorularda açılır. Bu üçlü
+--     kapı teacher select RPC'lerindeki (068/096/097) eligibility ile
+--     birebir tutarlıdır: exposure yalnız practice vault'lardan üretilir;
+--     feedback de aynı koşulu arar.
 --   - Açıklama: question_solution_assets (004) — asset_type=
---     'text_solution', is_active=true, validation_status='valid'
---     satırları. Yapay içerik üretilmez; yoksa solution_text NULL
---     döner (UI "Çözüm açıklaması hazırlanıyor." gösterir).
+--     'text_solution', is_active=true, validation_status='valid' satırları.
+--     Soru aynı practice-eligibility kapısından geçmedikçe (is_active +
+--     approval_status='approved' + aktif practice vault membership)
+--     solution_text ASLA dönmez. Yapay içerik üretilmez; yoksa
+--     solution_text NULL döner (UI "Çözüm açıklaması hazırlanıyor."
+--     gösterir).
 --
 -- GÜVENLİK MODELİ (070/098 desenleriyle aynı):
 --   - SECURITY DEFINER + set search_path='' + auth.uid() türetimi;
@@ -86,17 +93,31 @@ begin
   end if;
 
   -- ----------------------------------------------------------
-  -- Doğru cevap: yalnız aktif + onaylı soruda açılır.
+  -- Doğru cevap: yalnız aktif + onaylı + practice uygun (practice
+  -- vault membership) soruda açılır. 068/096/097 eligibility koşulu.
   -- ----------------------------------------------------------
   select q.correct_answer into v_correct
     from public.questions q
    where q.id = p_question_id
      and q.is_active
-     and q.approval_status = 'approved';
+     and q.approval_status = 'approved'
+     and exists (
+       select 1
+         from public.question_vault_memberships m
+         join public.question_vaults v
+           on v.id = m.vault_id
+        where m.question_id = q.id
+          and m.membership_status = 'active'
+          and m.practice_eligible = true
+          and v.is_active = true
+          and v.vault_type not in ('competition', 'one_v_one')
+     );
 
   -- ----------------------------------------------------------
   -- Onaylı metin çözüm (004 sözleşmesi): yalnız text_solution +
-  -- is_active + validation_status='valid'. Yoksa NULL (UI uydurmaz).
+  -- is_active + validation_status='valid'. Soru yukarıdaki aynı
+  -- practice-eligibility kapısından geçmedikçe solution ASLA dönmez.
+  -- Yoksa NULL (UI uydurmaz).
   -- ----------------------------------------------------------
   select sa.asset_text into v_solution
     from public.question_solution_assets sa
@@ -104,6 +125,24 @@ begin
      and sa.asset_type = 'text_solution'
      and sa.is_active = true
      and sa.validation_status = 'valid'
+     and exists (
+       select 1
+         from public.questions q
+        where q.id = p_question_id
+          and q.is_active
+          and q.approval_status = 'approved'
+          and exists (
+            select 1
+              from public.question_vault_memberships m
+              join public.question_vaults v
+                on v.id = m.vault_id
+             where m.question_id = q.id
+               and m.membership_status = 'active'
+               and m.practice_eligible = true
+               and v.is_active = true
+               and v.vault_type not in ('competition', 'one_v_one')
+          )
+     )
    order by sa.created_at asc, sa.id asc
    limit 1;
 
@@ -116,7 +155,7 @@ end;
 $$;
 
 comment on function public.get_attempt_feedback(uuid) is
-  'Faz 11: cevap KABULunden sonra dogru cevap + onayli metin cozumu. Kapilar: auth.uid() + training exposure + mevcut deneme. Cevap oncesi {found:false}. Aclama yoksa solution_text NULL.';
+  'Faz 11: cevap KABULunden sonra dogru cevap + onayli metin cozumu. Kapilar: auth.uid() + training exposure + mevcut deneme + aktif/onayli/practice-vault-uygun soru. Cevap oncesi {found:false}. Practice kapisindan gecmeyen soruda correct_answer ve solution_text NULL. Aclama yoksa solution_text NULL.';
 
 -- ------------------------------------------------------------
 -- ACL (070 deseni): tam revoke → yalnız authenticated.

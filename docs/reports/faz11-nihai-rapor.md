@@ -19,7 +19,8 @@
 | vitest unit | ✅ 704 passed / 52 suite / 0 failed |
 | lint (CI scope) | ✅ 0 hata (yeni dosyalar lint scope dışı) |
 | next build | ✅ /ilerleme route mevcut |
-| DB QA | ✅ 28/28 PASS (3 çalıştırma: RUN-1, RUN-2, RUN-3) |
+| DB QA (çalışma ağacı, güncel güvenlik fix'i) | ✅ 41/41 PASS × 2 (RUN-1, RUN-2) |
+| DB QA (commit edilmiş kod, fix'siz) | ✅ 28/28 PASS (CI: practice-vault'suz sürüm) |
 | E2E (Playwright) | ✅ 8/8 PASSED (375×812, 768×1024, 1440×900) |
 | CI parser matrix | ✅ Pozitif/Negatif test edildi |
 | Git | Commit YAPILMADI (onay bekleniyor) |
@@ -332,4 +333,116 @@ CI_ROOT_CAUSE: vitest.config exclude E2E_DB_CONTAINER absent in CI env
 CI_FIX: bb6c9e9 (E2E_DB_CONTAINER added to ci.yml)
 CI_RUN: 34587554865 SUCCESS
 FAZ_11_COMPLETE: YES
+```
+
+**CI kapsam notu:** CI run 34587554865, Actions checkout'u üzerinden **commit edilmiş** migration 109 (practice-vault kapısı OLMAYAN sürüm) ve commit edilmiş QA script'ini (eski 28 testlik suite) çalıştırmıştır. Çalışma ağacındaki practice-vault güvenlik düzeltmesi ve 41 testlik genişletilmiş suite **CI'da koşmamıştır** — yalnız yerel disposable doğrulaması geçerlidir (bkz. §12).
+
+---
+
+## 12. Kapanış Tutarlılığı Giderilmesi (2026-09-11)
+
+**Amaç:** Faz 11 kapanışında "yerel doğrulama" ile "commit edilmiş kodun CI doğrulaması" ayrımını netleştirmek; mevcut kanıtların hangi kod durumuna ait olduğunu dosya zamanı yerine **içerik kanıtıyla** eşleştirmektir.
+
+### 12.1 Kod Durumu Eşleştirme
+
+| Kanıt | Test Ettiği Kod Durumu | Durum |
+|---|---|---|
+| DB QA `41\|41\|0` × 2 (RUN-1, RUN-2) — `faz11-dbqa-run1.log`, `faz11-dbqa-run2.log` | **Çalışma ağacı** (güncel): practice-vault kapısı + Q6/Q7 fixture + T-05b, T-08h/i, T-10a..d, T-10e..h, T-11a/b | ✅ **PROVEN** (güncel diff ile birebir içerik uyumlu; üç disposable DB'de fonksiyon sürümü doğrulandı) |
+| DB QA `28\|28\|0` (§5.1, §9) | Commit edilmiş migration 109 (practice-vault kapısı YOK) + eski suite | ⚠️ Yalnız eski kod durumu için geçerli; güncel diff'i kapsamaz |
+| CI run #34587554865 → 23/23 | Commit edilmiş kod (practice-vault'suz 109 + eski 28 test suite) | ⚠️ Commit edilmiş kod için PROVEN; **güncel güvenlik fix'i için NOT_PROVEN** |
+
+**Sonuç:** Güncel çalışma ağacındaki attempt-feedback güvenlik düzeltmesi (migration 109 practice-vault kapısı) **yalnız yerel disposable doğrulamasıyla (41/41 × 2) kanıtlıdır.** CI, commit edilmiş (güvenlik fix'siz) kodu doğrulamıştır.
+
+### 12.2 Migration 109'un Uygulanma Durumu (kalıcı ortam)
+
+Yalnız kayıt/yapılandırma kanıtı kullanıldı; hiçbir kalıcı/hosted ortama bağlanılmadı:
+
+- `supabase/.temp` **yok** → CLI `login`/`link`/`db push` yapılmamış; hosted projeye migration gönderim kanıtı yok.
+- CI (`.github/workflows/ci.yml`) yalnız `supabase start` + `db reset` ile **taze/disposable** GitHub Actions runner'ında çalışır; token/link yok (setup-cli yorumunda açıkça belirtilmiş).
+- Ana stack (`supabase_db_yarisma-programi`, 54322) ve `qa-iso19`: bu oturumda **dokunulmadı** (kısıt). Bu ortamlarda migration 109'un hangi sürümünün uygulanmış olduğu kayıtlardan **kanıtlanamadı → durum belirsiz** olarak işaretlenir; migration dosyası yeniden değiştirilmedi.
+- Disposable Faz 11 ortamları (`db_f11_clean` 54354, `supabase_db_faz11iso` 54352, `db_qa_f11_sec` 54350): üçünde de `get_attempt_feedback` **güncel (practice-vault'lı)** sürüm doğrulandı → 41/41 loglarının güncel kodla üretildiği teyit edildi.
+
+### 12.3 Düzeltilmiş Kapanış İfadesi
+
+```
+YEREL DOĞRULAMA (çalışma ağacı, güncel güvenlik fix'i): 41/41 PASS × 2  ← FAZ11 GÜVENLİK FIX'I BU
+CI DOĞRULAMA (commit edilmiş kod, practice-vault'suz): 23/23 SUCCESS   ← COMMIT EDİLMİŞ KOD BU
+FAZ11_GUNCELL_FIX_TESI: LOCAL_ONLY (CI kapsamına girmedi)
+```
+
+### 12.4 Kesin Dosya Listesi (Faz 11 güvenlik fix'i + kanıt)
+
+| Dosya | Rol |
+|---|---|
+| `supabase/migrations/109_faz11_attempt_feedback.sql` | Güncel fix (practice-vault kapısı; çalışma ağacında, commitsiz) |
+| `scripts/qa_faz11_progress_feedback_local.sql` | 41 testlik genişletilmiş suite (çalışma ağacında, commitsiz) |
+| `docs/reports/faz11-dbqa-run1.log`, `docs/reports/faz11-dbqa-run2.log` | 41/41 kanıtı (RUN-1, RUN-2) |
+| `docs/reports/faz11-nihai-rapor.md` | Bu rapor (kapanış ayrımı) |
+
+**Kalan belirsizlikler:**
+1. Ana stack ve `qa-iso19` ortamlarında migration 109 sürümü kayıtlardan kanıtlanamadı (erişim kısıtı).
+2. Güncel güvenlik fix'i CI'da koşmadı; commit sonrası yeniden doğrulanmalı.
+3. Commit/push yapılmadı (kullanıcı onayı bekleniyor).
+
+---
+
+## 13. Son Doğrulama — Faz 11 Kapanış (2026-09-11, devam oturumu)
+
+**Amaç:** §12'deki nihai durumun çalışma ağacında hâlâ geçerliliğini doğrulamak.
+
+### 13.1 Çalışma Ağacı Değişiklik Denetimi
+
+| Denetim | Sonuç |
+|---|---|
+| `git status` — HEAD = origin/main = `9439e16` | ✅ Aynı SHA |
+| Staged dosya | 0 |
+| `git diff --cached --check` | ✅ Temiz |
+| `src/` değişikliği | YOK — tsc/unit/lint/build sonuçları HÂLÂ GEÇERLİ |
+| Migration 109 (practice-vault gate) | Aynı diff (mtime 10.09 15:31) — DB QA loglarından sonra değişmedi |
+| QA script (41 test) | Aynı diff (mtime 10.09 15:42) — DB QA loglarından sonra değişmedi |
+| `git diff --check` (tüm repo) | ✅ Yalnız CRLF uyarıları |
+
+**Sonuç:** §12'den bu yana çalışma ağacında herhangi bir kod değişikliği olmamıştır; tüm mevcut kanıtlar güncel kod durumuyla tutarlıdır.
+
+### 13.2 Kanıt-Eşleştirme Tablosu (güncel düzeltme = practice-vault gate)
+
+| Kontrol | Sonuç | Kaynak |
+|---|---|---|
+| DB QA 41/41 × 2 | PASS × 2 | `faz11-dbqa-run1.log`, `faz11-dbqa-run2.log` |
+| T-05b (draft soruda solution_text sızıntı yok) | PASS | dbqa run logları |
+| T-10a/b (practice_eligible=false → correct_answer/solution_text NULL) | PASS | dbqa run logları |
+| T-10c/d (pasif soruda correct_answer/solution_text NULL) | PASS | dbqa run logları |
+| T-10e–h (authenticated INSERT izni YOK) | PASS | dbqa run logları |
+| T-11a/b (kullanıcı izolasyonu) | PASS | dbqa run logları |
+| T-08h/i (sunucu kabul sonrası feedback) | PASS | dbqa run logları |
+| Type drift guard | SCHEMA DRIFT YOK | `faz11-typedrift-kontrol.md` |
+| E2E 8/8 | PASSED (test-results/) | `.last-run.json` (status=passed, failedTests=[]) |
+| Unit (704/704) | PASS | rapor §10.3 — src/ değişmediği için hâlâ geçerli |
+| TSC (0 hata) | PASS | rapor §10.3 — src/ değişmediği için hâlâ geçerli |
+| Lint (0 error) | PASS | rapor §10.3 — src/ değişmediği için hâlâ geçerli |
+| Build (22 route) | PASS | rapor §10.3 — src/ değişmediği için hâlâ geçerli |
+| diff-check | Temiz (CRLF uyarıları) | `git diff --check` |
+
+### 13.3 Kesin Commit Dosya Listesi (Faz 11 güvenlik düzeltmesi)
+
+`git diff --numstat HEAD` (gerçek değerler) vs `git diff --stat HEAD` (yalnız görsel çubuk genişliği 55/213 — sayı DEĞİL):
+
+| Dosya | numstat INSERT | numstat DELETE | Net |
+|---|---|---|---|
+| `supabase/migrations/109_faz11_attempt_feedback.sql` | +47 | −8 | +39 |
+| `scripts/qa_faz11_progress_feedback_local.sql` | +206 | −7 | +199 |
+| `docs/reports/faz11-nihai-rapor.md` | +106 | −1 | +105 |
+
+| Dosya | Değişiklik Özeti |
+|---|---|
+| `supabase/migrations/109_faz11_attempt_feedback.sql` | Practice-vault eligibility kapısı eklendi: correct_answer ve solution_text SELECT'lerine `exists (question_vault_memberships active + practice_eligible + vault is_active + vault_type not in ('competition','one_v_one'))` subquery'leri eklendi (numstat +47/−8) |
+| `scripts/qa_faz11_progress_feedback_local.sql` | 28→41 test: T-05b, T-10a–d (gate kapalı), T-10e–h (INSERT izni), T-11a/b (izolasyon) eklendi (numstat +206/−7) |
+
+### 13.4 Sonuç
+
+```
+ATTEMPT_FEEDBACK_SECURITY: PASS
+FAZ_11_LOCAL_VERIFICATION: SUCCESS
+SAFE_FOR_LOCAL_COMMIT: YES
+CI_DURUMU (güvenlik fix'i): NOT_RUN
 ```

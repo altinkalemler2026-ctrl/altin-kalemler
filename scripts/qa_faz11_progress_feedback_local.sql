@@ -111,9 +111,11 @@ begin
   execute 'set local role authenticated';
   perform set_config('request.jwt.claims',
     jsonb_build_object('sub', p_user, 'role', 'authenticated')::text, true);
+  perform set_config('request.jwt.claim.sub', p_user::text, true);
 
   execute p_body into v_out;
 
+  perform set_config('request.jwt.claim.sub', '', true);
   perform set_config('request.jwt.claims', '', true);
   execute 'reset role';
   return v_out;
@@ -178,8 +180,13 @@ insert into public.curriculum_schedule_items
 --   Q1: approved + aktif; A cevabi VAR; valid + pending text_solution VAR
 --   Q2: approved + aktif; A cevabi VAR; yalnız PENDING text_solution VAR
 --   Q3: approved + aktif; A exposure VAR, deneme YOK (cevap öncesi)
---   Q4: approval_status='draft'; A denemesi VAR (onay kapısı)
+--   Q4: approval_status='draft'; A denemesi VAR (onay kapısı);
+--       VALID text_solution asset VAR (draft soruda çözüm sızmamalı)
 --   Q5: exposure YOK; A denemesi VAR (gösterim kapısı)
+--   Q6: approved + aktif AMA practice_eligible=false membership (practice
+--       kapısı); A exposure + deneme + VALID solution asset VAR
+--   Q7: approved + PASİF (is_active=false); A exposure + deneme +
+--       VALID solution asset VAR (pasif soruda çözüm sızmamalı)
 insert into public.questions
   (id, question_code, grade_level, subject_id, approval_status, is_active,
    difficulty, cognitive_type, primary_question_type, correct_answer,
@@ -199,7 +206,13 @@ values
    'easy', 'learning', 'coktan_secmeli', 'A', true, 45),
   ('99999999-9999-9999-9999-999999991005', 'QA11-Q5', 5,
    '430903f3-527e-4e12-b7e8-ac0afdb784aa', 'approved', true,
-   'easy', 'learning', 'coktan_secmeli', 'E', true, 45);
+   'easy', 'learning', 'coktan_secmeli', 'E', true, 45),
+  ('99999999-9999-9999-9999-999999991006', 'QA11-Q6', 5,
+   '430903f3-527e-4e12-b7e8-ac0afdb784aa', 'approved', true,
+   'easy', 'learning', 'coktan_secmeli', 'A', true, 45),
+  ('99999999-9999-9999-9999-999999991007', 'QA11-Q7', 5,
+   '430903f3-527e-4e12-b7e8-ac0afdb784aa', 'approved', false,
+   'easy', 'learning', 'coktan_secmeli', 'B', true, 45);
 
 insert into public.question_curriculum_mappings
   (question_id, curriculum_version_id, topic_id, review_status)
@@ -214,7 +227,14 @@ select q.id, '99999999-9999-9999-9999-999999990020', 'approved'
   from public.questions q
  where q.question_code like 'QA11-%';
 
--- Metin çözümleri: Q1 valid + pending; Q2 yalnız pending.
+-- Metin çözümleri:
+--   Q1: valid + pending (valid precedence deterministik kontrolü)
+--   Q2: yalnız pending
+--   Q3: VALID (cevap ÖNCESİ sızıntı kanıtı: exposure var, deneme yok;
+--       valid asset VAR ama RPC yine de {found:false} dönmeli)
+--   Q4: VALID (draft soruda çözüm sızmamalı — sızıntı kanıtı)
+--   Q6: VALID (practice_eligible=false soruda çözüm sızmamalı)
+--   Q7: VALID (is_active=false soruda çözüm sızmamalı)
 insert into public.question_solution_assets
   (question_id, asset_type, asset_text, source_type, validation_status,
    is_active, created_at)
@@ -227,14 +247,49 @@ values
    'manual', 'pending', true, now() - interval '1 minute'),
   ('99999999-9999-9999-9999-999999991002', 'text_solution',
    'QA11 BEKLEYEN COZUM Q2 (dondurulmemeli).',
-   'manual', 'pending', true, now());
+   'manual', 'pending', true, now()),
+  ('99999999-9999-9999-9999-999999991003', 'text_solution',
+   'QA11 VALID COZUM Q3 (deneme yokken SIZMAMALI).',
+   'manual', 'valid', true, now() - interval '30 seconds'),
+  ('99999999-9999-9999-9999-999999991004', 'text_solution',
+   'QA11 VALID COZUM Q4 (draft soruda SIZMAMALI).',
+   'manual', 'valid', true, now() - interval '30 seconds'),
+  ('99999999-9999-9999-9999-999999991006', 'text_solution',
+   'QA11 VALID COZUM Q6 (practice_eligible=false soruda SIZMAMALI).',
+   'manual', 'valid', true, now() - interval '30 seconds'),
+  ('99999999-9999-9999-9999-999999991007', 'text_solution',
+   'QA11 VALID COZUM Q7 (is_active=false soruda SIZMAMALI).',
+   'manual', 'valid', true, now() - interval '30 seconds');
 
--- A'nin training exposure'lari: Q1..Q4 (Q5 exposure'suz).
+-- Practice vault uygunluk kapısı (096 ile birebir):
+--   Q1-Q3, Q5, Q7: aktif practice kasasında, practice_eligible=true
+--   Q6: aktif kasada AMA practice_eligible=false (practice kapısı)
+--   Q4: draft + inactive; kasaya üyelik yok (onay kapısı ayrıca test edilir)
+insert into public.question_vaults
+  (id, vault_code, name, vault_type, grade_level, subject_id, is_active) values
+  ('99999999-9999-9999-9999-999999990050', 'QA11-V-PRACTICE',
+   'QA11 Practice Kasasi', 'practice', 5,
+   '430903f3-527e-4e12-b7e8-ac0afdb784aa', true);
+
+insert into public.question_vault_memberships
+  (vault_id, question_id, membership_status, practice_eligible)
+select '99999999-9999-9999-9999-999999990050', q.id, 'active', true
+  from public.questions q
+ where q.question_code in ('QA11-Q1', 'QA11-Q2', 'QA11-Q3', 'QA11-Q5', 'QA11-Q7');
+
+insert into public.question_vault_memberships
+  (vault_id, question_id, membership_status, practice_eligible)
+select '99999999-9999-9999-9999-999999990050', q.id, 'active', false
+  from public.questions q
+ where q.question_code = 'QA11-Q6';
+
+-- A'nin training exposure'lari: Q1..Q4 + Q6..Q7 (Q5 exposure'suz).
 insert into public.student_question_exposures
   (user_id, question_id, attempt_context)
 select '99999999-9999-9999-9999-000000000091', q.id, 'training'
   from public.questions q
- where q.question_code in ('QA11-Q1', 'QA11-Q2', 'QA11-Q3', 'QA11-Q4');
+ where q.question_code in ('QA11-Q1', 'QA11-Q2', 'QA11-Q3', 'QA11-Q4',
+                           'QA11-Q6', 'QA11-Q7');
 
 -- B'nin training exposure'i: Q1 (denemesi YOK).
 insert into public.student_question_exposures
@@ -243,7 +298,8 @@ select '99999999-9999-9999-9999-000000000092', q.id, 'training'
   from public.questions q
  where q.question_code = 'QA11-Q1';
 
--- Denemeler: A Q1 'correct', Q2 'wrong', Q4 'correct', Q5 exposure'suz deneme.
+-- Denemeler: A Q1 'correct', Q2 'wrong', Q4 'correct', Q5 exposure'suz deneme,
+-- Q6 'correct' (practice kapısı), Q7 'correct' (pasif kapısı).
 insert into public.student_question_attempts
   (user_id, question_id, subject_id, attempt_context, result,
    attempt_number, time_ms, academic_year, week, answered_at, metadata)
@@ -267,6 +323,16 @@ values
    '99999999-9999-9999-9999-999999991005',
    '430903f3-527e-4e12-b7e8-ac0afdb784aa', 'training', 'correct',
    1, 15000, 'QA11-Y', 5, now() - interval '7 minutes',
+   '{"source":"qa11"}'::jsonb),
+  ('99999999-9999-9999-9999-000000000091',
+   '99999999-9999-9999-9999-999999991006',
+   '430903f3-527e-4e12-b7e8-ac0afdb784aa', 'training', 'correct',
+   1, 15000, 'QA11-Y', 5, now() - interval '6 minutes',
+   '{"source":"qa11"}'::jsonb),
+  ('99999999-9999-9999-9999-000000000091',
+   '99999999-9999-9999-9999-999999991007',
+   '430903f3-527e-4e12-b7e8-ac0afdb784aa', 'training', 'correct',
+   1, 15000, 'QA11-Y', 5, now() - interval '5 minutes',
    '{"source":"qa11"}'::jsonb);
 
 -- B'nin AYRI metrikleri (izolasyon karsi-tarafi; A'nin kapsaminda YOK).
@@ -405,14 +471,46 @@ begin
     'out=' || left(v_out::text, 120));
 
   -- T-05: onaylı olmayan soruda correct_answer NULL (Q4 draft).
+  -- Q4'te artık VALID solution asset de var → çözüm de açılmamalı.
   v_out := public._qa_f11_as_user('99999999-9999-9999-9999-000000000091',
     'select public.get_attempt_feedback(''99999999-9999-9999-9999-999999991004''::uuid)');
   perform public._qa_f11_true('T-05a',
     'draft soruda correct_answer NULL (cevap anahtari acilmaz)',
     (v_out ->> 'found') = 'true' and v_out ->> 'correct_answer' is null,
     'out=' || left(v_out::text, 120));
+  perform public._qa_f11_true('T-05b',
+    'draft soruda solution_text NULL (valid asset VAR olsa bile sizmaz)',
+    (v_out ->> 'found') = 'true' and v_out ->> 'solution_text' is null,
+    'out=' || left(v_out::text, 120));
+
+  -- T-10a: practice_eligible=false soruda correct_answer + solution NULL
+  -- (Q6: approved + aktif, exposure + deneme VAR, valid asset VAR).
+  v_out := public._qa_f11_as_user('99999999-9999-9999-9999-000000000091',
+    'select public.get_attempt_feedback(''99999999-9999-9999-9999-999999991006''::uuid)');
+  perform public._qa_f11_true('T-10a',
+    'practice_eligible=false soruda correct_answer NULL',
+    (v_out ->> 'found') = 'true' and v_out ->> 'correct_answer' is null,
+    'out=' || left(v_out::text, 120));
+  perform public._qa_f11_true('T-10b',
+    'practice_eligible=false soruda solution_text NULL',
+    (v_out ->> 'found') = 'true' and v_out ->> 'solution_text' is null,
+    'out=' || left(v_out::text, 120));
+
+  -- T-10c: pasif (is_active=false) soruda correct_answer + solution NULL
+  -- (Q7: approved + pasif, exposure + deneme VAR, valid asset VAR).
+  v_out := public._qa_f11_as_user('99999999-9999-9999-9999-000000000091',
+    'select public.get_attempt_feedback(''99999999-9999-9999-9999-999999991007''::uuid)');
+  perform public._qa_f11_true('T-10c',
+    'pasif soruda correct_answer NULL',
+    (v_out ->> 'found') = 'true' and v_out ->> 'correct_answer' is null,
+    'out=' || left(v_out::text, 120));
+  perform public._qa_f11_true('T-10d',
+    'pasif soruda solution_text NULL',
+    (v_out ->> 'found') = 'true' and v_out ->> 'solution_text' is null,
+    'out=' || left(v_out::text, 120));
 
   -- T-06: B (başka öğrenci) Q1 için KENDİ denemesi olmadığından sızamaz.
+  -- A'nın Q1'de denemesi + valid solution'ı VAR; yine de B görmez.
   v_out := public._qa_f11_as_user('99999999-9999-9999-9999-000000000092',
     'select public.get_attempt_feedback(''99999999-9999-9999-9999-999999991001''::uuid)');
   perform public._qa_f11_true('T-06a',
@@ -436,6 +534,7 @@ do $blk$
 declare
   v_first  jsonb;
   v_second jsonb;
+  v_out    jsonb;
   v_attempts int;
   v_ledger_before int;
   v_ledger_after int;
@@ -499,6 +598,106 @@ begin
     not has_function_privilege('authenticated',
       'public.ingest_student_attempt(uuid, text, text, integer, uuid, jsonb)',
       'EXECUTE'));
+
+  -- Senaryo #3 ters yön: SUNUCU kabulü (submit_training_attempt) gerçekleşti;
+  -- şimdi get_attempt_feedback cevabı + çözümü AÇABİLİR olmalı.
+  v_out := public._qa_f11_as_user('99999999-9999-9999-9999-000000000091',
+    'select public.get_attempt_feedback(''99999999-9999-9999-9999-999999991001''::uuid)');
+  perform public._qa_f11_true('T-08h',
+    'sunucu kabulunden sonra feedback found=true (kendi denemesi)',
+    (v_out ->> 'found') = 'true',
+    'out=' || left(v_out::text, 120));
+  perform public._qa_f11_true('T-08i',
+    'sunucu kabulunden sonra correct_answer=B + valid solution acilir',
+    v_out ->> 'correct_answer' = 'B'
+      and v_out ->> 'solution_text'
+        = 'QA11 ONAYLI COZUM Q1: 3/4 ile 2^5 karsilastirmasi.',
+    'out=' || left(v_out::text, 120));
+end;
+$blk$;
+
+-- ============================================================
+-- T-10: DAVRANIŞSAL GÜVENLİK — SAHTE/GEÇERSİZ ATTEMPT/EXPOSURE
+-- İstemci (authenticated), kendi api erişim hakkını UYDURAMAZ:
+--   - student_question_exposures'a doğrudan INSERT yasak (062)
+--   - student_question_attempts'a doğrudan INSERT yasak (061)
+-- ============================================================
+
+do $blk$
+begin
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    jsonb_build_object(
+      'sub', '99999999-9999-9999-9999-000000000092',
+      'role', 'authenticated')::text, true);
+
+  begin
+    insert into public.student_question_exposures
+      (user_id, question_id, attempt_context)
+    values ('99999999-9999-9999-9999-000000000092',
+            '99999999-9999-9999-9999-999999991001', 'training');
+    perform public._qa_f11_true('T-10e',
+      'authenticated exposure INSERT reddedilir (42501)',
+      false, 'INSERT uygulandi (beklenmiyordu)');
+  exception when insufficient_privilege then
+    perform public._qa_f11_true('T-10e',
+      'authenticated exposure INSERT reddedilir (42501)',
+      true, 'sqlstate=42501 permission denied');
+  end;
+
+  begin
+    insert into public.student_question_attempts
+      (user_id, question_id, subject_id, attempt_context, result,
+       attempt_number, time_ms, academic_year, week, metadata)
+    values ('99999999-9999-9999-9999-000000000092',
+            '99999999-9999-9999-9999-999999991001',
+            '430903f3-527e-4e12-b7e8-ac0afdb784aa', 'training',
+            'correct', 1, 10000, 'QA11-Y', 5, '{}'::jsonb);
+    perform public._qa_f11_true('T-10f',
+      'authenticated attempt INSERT reddedilir (42501)',
+      false, 'INSERT uygulandi (beklenmiyordu)');
+  exception when insufficient_privilege then
+    perform public._qa_f11_true('T-10f',
+      'authenticated attempt INSERT reddedilir (42501)',
+      true, 'sqlstate=42501 permission denied');
+  end;
+
+  -- RLS/grant izin matrisi (sönümleme/fail-closed doğrulama).
+  perform public._qa_f11_true('T-10g',
+    'attempt tablosuna authenticated INSERT izni YOK (has_table_privilege)',
+    not has_table_privilege('authenticated',
+      'public.student_question_attempts', 'INSERT'));
+  perform public._qa_f11_true('T-10h',
+    'exposure tablosuna authenticated INSERT izni YOK (has_table_privilege)',
+    not has_table_privilege('authenticated',
+      'public.student_question_exposures', 'INSERT'));
+
+  reset role;
+end;
+$blk$;
+
+-- T-11: SENARYO #2 TERS YÜZ — B kendi denemesine sahip olsa bile
+-- A'nın verisini görmez (kullanıcı parametresi YOK; auth.uid()).
+-- B'nin Q1'de kendi denemesi, A'nınkine erişim sağlamaz.
+
+do $blk$
+declare
+  v_out jsonb;
+begin
+  v_out := public._qa_f11_as_user('99999999-9999-9999-9999-000000000092',
+    'select public.get_attempt_feedback(''99999999-9999-9999-9999-999999991001''::uuid)');
+  perform public._qa_f11_true('T-11a',
+    'B kendi denemesi olmadan A denemesi ile veri alamaz',
+    v_out = '{"found": false}', 'out=' || left(v_out::text, 120));
+
+  -- B kendi denemesinde A'nın SONUÇ değerine de erişemez (RLS select-only).
+  v_out := public._qa_f11_as_user('99999999-9999-9999-9999-000000000092',
+    'select coalesce(jsonb_agg(to_jsonb(x)), ''[]''::jsonb)::text '
+    || '  from public.student_question_attempts x '
+    || ' where x.question_id = ''99999999-9999-9999-9999-999999991001''');
+  perform public._qa_f11_true('T-11b',
+    'B, Q1 deneme kayitlarini GOREMEZ (yazar okuyamaz)',
+    v_out = '[]', 'out=' || left(v_out::text, 120));
 end;
 $blk$;
 
