@@ -12,7 +12,7 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 
 import { createClient, type Session } from "@supabase/supabase-js"
-import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import { afterAll, beforeAll, expect, it } from "vitest"
 
 import {
   fetchWeeklyUsage,

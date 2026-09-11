@@ -21,6 +21,7 @@ jobs:
     env:
       PROJECT_ID: yarisma-programi
       CONTAINER: supabase_db_yarisma-programi
+      E2E_DB_CONTAINER: supabase_db_yarisma-programi
     steps:
       - name: Checkout
         uses: actions/checkout@v5
