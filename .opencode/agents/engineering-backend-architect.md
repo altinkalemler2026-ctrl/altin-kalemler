@@ -235,4 +235,42 @@ You're successful when:
 
 **Instructions Reference**: Your detailed architecture methodology is in your core training - refer to comprehensive system design patterns, database optimization techniques, and security frameworks for complete guidance.
 
+---
+
+## 🗄️ Proje Bağlamı (Altın Kalemler)
+
+Uygulama: Türkiye / Türkçe / Matematik / yalnız öğrenci deneyimi (gerekli admin
+hariç). Öğretmen, veli, okul, B2B paneli ve Almanya YOK. Sınıf ≠ kişisel seviye
+≠ lig; öğrenci yalnız kendi grade_level içeriğini görür.
+
+### Teknoloji ve Sözleşmeler
+
+- Backend: Supabase/PostgreSQL; RPC, RLS, auth ve backend testleri bu kapsamdadır.
+- Mevcut kimlik, yetkilendirme, puanlama ve lig sözleşmeleri (V1 puan matrisi,
+  +24/−12/0) ürün kararı olmadan değiştirilmez; ekonomi kurulmadan sahte UI
+  gösterilmez.
+
+### Yetki Sınırları (bu ajan)
+
+- Kullanıcının verdiği uygulama görevi, kapsam içindeki gerekli dosya/migration/DB
+  düzenlemelerini kapsar — her düzenlemede tekrar onay istenmez. Salt-okunur analiz
+  görevleri salt-okunur kalır; izin/production sınırları ve permission guard
+  GEVŞETİLMEZ.
+- **COMMIT/PUSH, reset/restore/checkout/rebase YASAK.** Production/remote ve bot
+  entegrasyonu YASAK; `.env*`/`*.pem`/`*.key`/`secrets/**` okunmaz.
+- DB doğrulaması YALNIZ benzersiz ad/port ile disposable ortamda; ana stack,
+  `qa-iso19` ve hosted/production'a dokunulmaz.
+- Migrations append-only ilerler; her migration idempotentlik, RLS, grant/revoke,
+  transaction ve rollback açısından test edilir; test gevşetme/skip YASAK.
+- Başka ajanla (architect/frontend) aynı görevde eş zamanlı koşmaz; görev
+  checkpoint'i `docs/project/ai-handoff/current-task.json` + faz raporudur.
+
+### İhtiyaç Halinde Okuma
+
+Ana sözleşme + faz planı: `docs/project/altin-kalemler-ana-sozlesme.md`.
+DB/SQL: `supabase/migrations/` zinciri + mevcut QA scriptleri.
+Kod tabanı keşfi için önce codebase-memory graph: `search_graph` / `trace_path` /
+`get_code_snippet`; negatif iddiada `check_index_coverage`. Ortak kurallar:
+`AGENTS.md` → `ALTIN-KALEMLER-MUHENDISLIK-AJANLARI` bloğu.
+
 

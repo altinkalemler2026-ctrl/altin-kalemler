@@ -224,3 +224,38 @@ You're successful when:
 
 **Instructions Reference**: Your detailed frontend methodology is in your core training - refer to comprehensive component patterns, performance optimization techniques, and accessibility guidelines for complete guidance.
 
+---
+
+## 🖥️ Proje Bağlamı (Altın Kalemler)
+
+Uygulama: Türkiye / Türkçe / Matematik / yalnız öğrenci deneyimi (gerekli admin
+hariç). Öğretmen, veli, okul, B2B paneli ve Almanya YOK. Sınıf ≠ kişisel seviye
+≠ lig; öğrenci yalnız kendi grade_level içeriğini görür.
+
+### Belge Okuma (ihtiyaç odaklı)
+
+Bu Next sürümü standart eğitimden farklıdır; ancak her görevde tüm Next.js
+belgelerini yeniden okuma zorunluluğu YOK. Sürüme bağlı veya belirsiz bir API
+kullanacağın zaman YALNIZCA ilgili resmî belgeyi oku (`node_modules/next/dist/docs/`
+veya Context7). Üstteki `nextjs-agent-rules`, `AGENTS.md` çalışma yönergesidir.
+
+### Yetki Sınırları (bu ajan)
+
+- Kullanıcının verdiği uygulama görevi, kapsam içindeki gerekli dosya düzenlemelerini
+  kapsar — her düzenlemede tekrar onay istenmez. Salt-okunur analiz görevleri
+  salt-okunur kalır; izin/production sınırları ve permission guard GEVŞETİLMEZ.
+- **COMMIT/PUSH, reset/restore/checkout/rebase YASAK.** Production/remote ve bot
+  entegrasyonu YASAK; `.env*`/`*.pem`/`*.key`/`secrets/**` okunmaz.
+- UI/alışkanlık kuralları: doğal Türkçe, `lang="tr"`, a11y
+  (klavye, görünür focus, aria-live, ≥44px), 375×812 + 768×1024 + 1440×900;
+  test gevşetme/skip YASAK; en küçük güvenli değişiklik.
+- Başka ajanla (architect/backend) aynı görevde eş zamanlı koşmaz; görev
+  checkpoint'i `docs/project/ai-handoff/current-task.json` + faz raporudur.
+
+### İhtiyaç Halinde Okuma
+
+Ana sözleşme + faz planı: `docs/project/altin-kalemler-ana-sozlesme.md`.
+Kod tabanı keşfi için önce codebase-memory graph: `search_graph` / `trace_path` /
+`get_code_snippet`; negatif iddiada `check_index_coverage`. Ortak kurallar:
+`AGENTS.md` → `ALTIN-KALEMLER-MUHENDISLIK-AJANLARI` bloğu.
+

@@ -111,4 +111,30 @@ Avoid DDD when the system is mostly data entry, reporting, or simple CRUD with l
 - Always present at least two options with trade-offs
 - Challenge assumptions respectfully â€” "What happens when X fails?"
 
+---
+
+## 🏛️ Proje Bağlamı (Altın Kalemler)
+
+Uygulama: Türkiye / Türkçe / Matematik / yalnız öğrenci deneyimi (gerekli admin
+hariç). Öğretmen, veli, okul, B2B paneli ve Almanya YOK. Sınıf ≠ kişisel seviye
+≠ lig; öğrenci yalnız kendi grade_level içeriğini görür.
+
+### Yetki Sınırları (bu ajan)
+
+- Analiz ve öneri **salt-okunur** üretilir; dosya/migration/DB değişikliği yalnız
+  kullanıcının açık görev onayıyla.
+- **COMMIT/PUSH, reset/restore/checkout/rebase YASAK.** Production/remote ve bot
+  entegrasyonu YASAK; `.env*`/`*.pem`/`*.key`/`secrets/**` okunmaz.
+- Öneri mimari kararlar verirken V1 puan matrisi/lig sözleşmesini, harcanabilir
+  yalnız yıldız kuralını ve "ekonomi kurulmadan sahte UI yok" kuralını bozmaz.
+- Başka ajanla (backend/frontend) aynı görevde eş zamanlı koşmaz; görev
+  checkpoint'i `docs/project/ai-handoff/current-task.json` + faz raporudur.
+
+### İhtiyaç Halinde Okuma
+
+Ana sözleşme + faz planı: `docs/project/altin-kalemler-ana-sozlesme.md`.
+Kod tabanı keşfi için önce codebase-memory graph: `search_graph` / `trace_path` /
+`get_code_snippet`; negatif iddiada `check_index_coverage`. Ortak kurallar:
+`AGENTS.md` → `ALTIN-KALEMLER-MUHENDISLIK-AJANLARI` bloğu.
+
 
