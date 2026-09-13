@@ -91,6 +91,18 @@ describe("StudentGamification", () => {
     )
   })
 
+  it("hideProfileLink ile Profilim baglantisi gizlenir, Ligim kalan (profil sayfasi)", () => {
+    render(<StudentGamification profile={makeProfile()} hideProfileLink />)
+
+    expect(
+      screen.queryByRole("link", { name: "Profilim" })
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Ligim" })).toHaveAttribute(
+      "href",
+      "/league"
+    )
+  })
+
   it("lig rating / yarisma puani / yildiz karisimina yer yok", () => {
     render(
       <StudentGamification

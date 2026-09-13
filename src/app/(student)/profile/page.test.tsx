@@ -230,7 +230,9 @@ describe("ProfilePage", () => {
     render(await ProfilePage())
 
     expect(screen.getByText("Avatarlar hazırlanıyor")).toBeInTheDocument()
-    expect(screen.queryByRole("radio")).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole("radio", { name: /karakter/i })
+    ).not.toBeInTheDocument()
   })
 
   it("oyunlastirma RPC hatasinda ham hata sizmaz; guvenli uyari gorunur", async () => {
@@ -311,7 +313,7 @@ describe("ProfilePage", () => {
     ).toBeInTheDocument()
   })
 
-  it("Profil ve Lig baglantilari oyunlastirma kartinda yer alir", async () => {
+  it("Profil sayfasinda kendine giden Profilim baglantisi YOK; Ligim yerinde", async () => {
     mockUser({ id: "u1" })
     fetchOwnProfileSummaryMock.mockResolvedValue(SUMMARY)
     fetchAvatarCatalogMock.mockResolvedValue(CATALOG)
@@ -319,12 +321,80 @@ describe("ProfilePage", () => {
 
     render(await ProfilePage())
 
-    expect(screen.getByRole("link", { name: "Profilim" })).toHaveAttribute(
-      "href",
-      "/profile"
-    )
+    // Faz 12: profil sayfası kendisine dönen "Profilim" bağlantısı
+    // içermez (dashboard kartının aksine); Ligim bağlantısı durur.
     expect(
-      screen.getByRole("link", { name: "Ligim" })
-    ).toHaveAttribute("href", "/league")
+      screen.queryByRole("link", { name: "Profilim" })
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Ligim" })).toHaveAttribute(
+      "href",
+      "/league"
+    )
+  })
+
+  it("bolum sirasi: Bilgilerin -> Gelisimin -> Takma adin ve avatarin", async () => {
+    mockUser({ id: "u1" })
+    fetchOwnProfileSummaryMock.mockResolvedValue(SUMMARY)
+    fetchAvatarCatalogMock.mockResolvedValue(CATALOG)
+    fetchGamificationProfileMock.mockResolvedValue(gamificationProfile())
+
+    render(await ProfilePage())
+
+    const level2Headings = screen
+      .getAllByRole("heading", { level: 2 })
+      .map((heading) => heading.textContent)
+
+    expect(level2Headings).toEqual([
+      "Bilgilerin",
+      "Gelişimin",
+      "Takma adın ve avatarın",
+    ])
+  })
+
+  it("sinif degistirilemez bilgisi yalniz profil ozetinde BIR KEZ gorunur", async () => {
+    mockUser({ id: "u1" })
+    fetchOwnProfileSummaryMock.mockResolvedValue(SUMMARY)
+    fetchAvatarCatalogMock.mockResolvedValue(CATALOG)
+    fetchGamificationProfileMock.mockResolvedValue(gamificationProfile())
+
+    render(await ProfilePage())
+
+    expect(screen.getAllByText(/değiştirilemez/)).toHaveLength(1)
+    expect(screen.getByText(/sınıf değiştirilemez/)).toBeInTheDocument()
+  })
+
+  it("tema kartinda iki onayli tema secenegi vardir (Faz 12)", async () => {
+    mockUser({ id: "u1" })
+    fetchOwnProfileSummaryMock.mockResolvedValue(SUMMARY)
+    fetchAvatarCatalogMock.mockResolvedValue(CATALOG)
+    fetchGamificationProfileMock.mockResolvedValue(gamificationProfile())
+
+    render(await ProfilePage())
+
+    expect(
+      screen.getByRole("heading", { name: "Tema", level: 3 })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole("radio", { name: /Altın Arena/ })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole("radio", { name: /Renkli Atölye/ })
+    ).toBeInTheDocument()
+  })
+
+  it("tema kartta sahte UI yoktur; harcanabilir yildiz/mağaza gosterme yok", async () => {
+    mockUser({ id: "u1" })
+    fetchOwnProfileSummaryMock.mockResolvedValue(SUMMARY)
+    fetchAvatarCatalogMock.mockResolvedValue(CATALOG)
+    fetchGamificationProfileMock.mockResolvedValue(gamificationProfile())
+
+    render(await ProfilePage())
+
+    expect(screen.queryByText(/mağaza/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/yıldız/i)).not.toBeInTheDocument()
+
+    const themeSurface = document.querySelector("[data-theme-surface]")
+    expect(themeSurface).not.toBeNull()
+    expect(themeSurface?.getAttribute("data-theme")).toBe("arena")
   })
 })

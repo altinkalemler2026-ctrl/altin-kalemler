@@ -9,6 +9,7 @@ import { leagueTierLabel } from "@/lib/league/mappers"
 import { getMyLeagueRanking } from "@/lib/league/service"
 import type { LeagueRankingDto } from "@/lib/league/types"
 import { createClient } from "@/lib/supabase/server"
+import { ThemeSurface } from "@/lib/ui/theme-context"
 
 export const metadata = {
   title: "Lig | Altın Kalemler",
@@ -48,7 +49,7 @@ function OwnRankCard({ dto }: { dto: LeagueRankingDto }) {
       </h2>
 
       <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-3">
-        <p className="text-4xl font-bold text-navy-800">
+        <p className="text-4xl font-bold text-ink">
           <span className="sr-only">Sıralaman: </span>
           {my?.rank ?? "—"}
         </p>
@@ -163,15 +164,17 @@ export default async function LeaguePage() {
 
   if (hasError || !dto) {
     return (
-      <main className="mx-auto w-full max-w-3xl p-6">
-        <h1 className="text-3xl font-bold text-ink">Lig</h1>
-        <div className="mt-6">
-          <Alert variant="danger" title="Lig verisi yüklenemedi">
-            Lig bilgisi şu anda gösterilemiyor. Lütfen sayfayı yenileyip
-            tekrar dene.
-          </Alert>
-        </div>
-      </main>
+      <ThemeSurface className="min-h-full bg-page">
+        <main className="mx-auto w-full max-w-3xl p-6">
+          <h1 className="text-3xl font-bold text-ink">Lig</h1>
+          <div className="mt-6">
+            <Alert variant="danger" title="Lig verisi yüklenemedi">
+              Lig bilgisi şu anda gösterilemiyor. Lütfen sayfayı yenileyip
+              tekrar dene.
+            </Alert>
+          </div>
+        </main>
+      </ThemeSurface>
     )
   }
 
@@ -179,20 +182,52 @@ export default async function LeaguePage() {
 
   if (dto.status === "no_active_season") {
     return (
-      <main className="mx-auto w-full max-w-3xl p-6">
-        <h1 className="text-3xl font-bold text-ink">Lig</h1>
-        <div className="mt-6">
-          <EmptyState
-            title="Şu anda aktif bir lig sezonu yok"
-            description="Yeni sezon açıldığında bu sayfada aynı sınıf düzeyindeki öğrencilerle lig sıralamanı göreceksin."
-          />
-        </div>
-      </main>
+      <ThemeSurface className="min-h-full bg-page">
+        <main className="mx-auto w-full max-w-3xl p-6">
+          <h1 className="text-3xl font-bold text-ink">Lig</h1>
+          <div className="mt-6">
+            <EmptyState
+              title="Şu anda aktif bir lig sezonu yok"
+              description="Yeni sezon açıldığında bu sayfada aynı sınıf düzeyindeki öğrencilerle lig sıralamanı göreceksin."
+            />
+          </div>
+        </main>
+      </ThemeSurface>
     )
   }
 
   if (dto.status === "no_membership") {
     return (
+      <ThemeSurface className="min-h-full bg-page">
+        <main className="mx-auto w-full max-w-3xl p-6">
+          <h1 className="text-3xl font-bold text-ink">
+            {dto.gradeLevel}. Sınıf Ligi
+          </h1>
+
+          {dto.season && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Badge variant="navy">{dto.season.name}</Badge>
+              {seasonEnd && (
+                <span className="text-sm text-ink-muted">
+                  Sezon bitişi: {seasonEnd}
+                </span>
+              )}
+            </div>
+          )}
+
+          <div className="mt-6">
+            <EmptyState
+              title="Henüz lig üyeliğin yok"
+              description="Sezon içinde ilk yarışmanı tamamladığında Bronz Lig'e yerleştirilirsin ve sıralamada yerini görürsün."
+            />
+          </div>
+        </main>
+      </ThemeSurface>
+    )
+  }
+
+  return (
+    <ThemeSurface className="min-h-full bg-page">
       <main className="mx-auto w-full max-w-3xl p-6">
         <h1 className="text-3xl font-bold text-ink">
           {dto.gradeLevel}. Sınıf Ligi
@@ -201,6 +236,7 @@ export default async function LeaguePage() {
         {dto.season && (
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <Badge variant="navy">{dto.season.name}</Badge>
+            <Badge variant="success">Aktif sezon</Badge>
             {seasonEnd && (
               <span className="text-sm text-ink-muted">
                 Sezon bitişi: {seasonEnd}
@@ -209,36 +245,9 @@ export default async function LeaguePage() {
           </div>
         )}
 
-        <div className="mt-6">
-          <EmptyState
-            title="Henüz lig üyeliğin yok"
-            description="Sezon içinde ilk yarışmanı tamamladığında Bronz Lig'e yerleştirilirsin ve sıralamada yerini görürsün."
-          />
-        </div>
+        <OwnRankCard dto={dto} />
+        <RankingList dto={dto} />
       </main>
-    )
-  }
-
-  return (
-    <main className="mx-auto w-full max-w-3xl p-6">
-      <h1 className="text-3xl font-bold text-ink">
-        {dto.gradeLevel}. Sınıf Ligi
-      </h1>
-
-      {dto.season && (
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <Badge variant="navy">{dto.season.name}</Badge>
-          <Badge variant="success">Aktif sezon</Badge>
-          {seasonEnd && (
-            <span className="text-sm text-ink-muted">
-              Sezon bitişi: {seasonEnd}
-            </span>
-          )}
-        </div>
-      )}
-
-      <OwnRankCard dto={dto} />
-      <RankingList dto={dto} />
-    </main>
+    </ThemeSurface>
   )
 }

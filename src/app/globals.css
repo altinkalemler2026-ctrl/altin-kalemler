@@ -22,6 +22,7 @@
   --color-teal-600: #0f766e;
   --color-teal-100: #d6efec;
 
+  --color-page: #ffffff;
   --color-surface: #ffffff;
   --color-surface-muted: #f5f7fa;
 
@@ -53,4 +54,42 @@ body {
   background: var(--color-surface);
   color: var(--color-ink);
   font-family: var(--font-sans);
+}
+
+/*
+ * Iki onayli tema (Faz 12): Altin Arena (lacivert zemin + olculu altin)
+ * ve Renkli Atolye (krem zemin + beyaz kartlar). Tema, ilgili bolgenin
+ * ustundeki `data-theme` ozelligiyle uygulanir; :root/acik tema kalici
+ * kalir (giris ve yonetim ekranlari etkilenmez). Kullanici tercihi yalniz
+ * localStorage'da saklanir; DB degisikligi yoktur.
+ */
+[data-theme='arena'] {
+  --color-page: #0a122a;
+  --color-surface: #141c3a;
+  --color-surface-muted: #0f162e;
+  --color-ink: #eef3ff;
+  --color-ink-muted: #a7b0ce;
+  --color-border: #263152;
+  --color-border-strong: #3a4773;
+  --color-teal-700: #2fd6c4;
+  --color-teal-600: #2dd4bf;
+  --color-teal-100: #12343b;
+  --color-danger-700: #f17878;
+  --color-danger-100: #45151c;
+  --color-success-700: #4ade80;
+  --color-success-100: #12301c;
+  --color-warning-900: #fbbf24;
+  --color-warning-100: #3a2c06;
+  --shadow-card: 0 1px 3px rgb(0 0 0 / 0.45), 0 8px 20px rgb(0 0 0 / 0.35);
+  --shadow-modal: 0 10px 40px rgb(0 0 0 / 0.55);
+}
+
+[data-theme='atolye'] {
+  --color-page: #faf9f5;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f0efe9;
+  --color-ink: #1e1b4b;
+  --color-ink-muted: #5a5780;
+  --color-border: #e6e2d8;
+  --color-border-strong: #d2cdc0;
 }

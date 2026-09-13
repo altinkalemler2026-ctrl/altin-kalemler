@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation"
 
-import { createClient } from "@/lib/supabase/server"
 import StudentNav from "@/components/student/StudentNav"
+import { ThemeProvider } from "@/lib/ui/theme-context"
+import { createClient } from "@/lib/supabase/server"
 
 /**
  * Öğrenci alanı merkezî oturum koruması.
@@ -48,13 +49,15 @@ export default async function StudentLayout({
   }
 
   return (
-    <div className="flex min-h-full flex-col">
-      <StudentNav
-        nickname={profile?.nickname ?? "öğrenci"}
-        logout={logout}
-      />
+    <ThemeProvider>
+      <div className="flex min-h-full flex-col">
+        <StudentNav
+          nickname={profile?.nickname ?? "öğrenci"}
+          logout={logout}
+        />
 
-      <div className="flex-1 pb-20 sm:pb-0">{children}</div>
-    </div>
+        <div className="flex-1 pb-20 sm:pb-0">{children}</div>
+      </div>
+    </ThemeProvider>
   )
 }

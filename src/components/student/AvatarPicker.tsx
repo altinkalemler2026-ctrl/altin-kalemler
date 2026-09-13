@@ -76,7 +76,7 @@ export default function AvatarPicker({
                 htmlFor={optionId}
                 className={`flex min-h-11 cursor-pointer items-start gap-3 rounded-xl border p-3 transition focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-teal-700 ${
                   isSelected
-                    ? "border-teal-700 bg-teal-50"
+                    ? "border-teal-700 bg-teal-100"
                     : "border-border bg-surface hover:bg-surface-muted"
                 }`}
               >
@@ -118,14 +118,14 @@ export default function AvatarPicker({
         </Button>
       </div>
 
-      <div aria-live="polite" className="mt-3 min-h-6">
+      <div aria-live="polite">
         {message && (
           <p
             role="status"
             className={
               message.tone === "success"
-                ? "text-sm font-medium text-success-700"
-                : "text-sm font-medium text-danger-700"
+                ? "mt-3 text-sm font-medium text-success-700"
+                : "mt-3 text-sm font-medium text-danger-700"
             }
           >
             {message.text}

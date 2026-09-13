@@ -119,9 +119,12 @@ describe("NicknameForm", () => {
     expect(action).toHaveBeenCalledTimes(1)
   })
 
-  it("sinif notu gorunur: sınıf değiştirilemez", () => {
+  it("sinif notu formda tekrar edilmez (profil ozetinde bir kez gosterilir)", () => {
     setup()
 
-    expect(screen.getByText(/Sınıfın değiştirilemez/)).toBeInTheDocument()
+    expect(
+      screen.queryByText(/Sınıfın değiştirilemez/)
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/değiştirilemez/)).not.toBeInTheDocument()
   })
 })

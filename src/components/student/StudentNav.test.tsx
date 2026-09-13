@@ -8,7 +8,7 @@
  * - Sinif secimi/degistirme navigasyonu yoktur
  */
 
-import { render, screen, fireEvent } from "@testing-library/react"
+import { render, screen, fireEvent, within, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const usePathnameMock = vi.hoisted(() => vi.fn())
@@ -109,5 +109,84 @@ describe("StudentNav", () => {
 
     expect(hrefs).not.toContain("/grade")
     expect(hrefs).not.toContain("/class")
+  })
+})
+
+describe("StudentNav mobil 'Diğer' menüsü (Faz 12)", () => {
+  it("acilir, Ilerleme/Tekrar icerir ve odak ilk baglantiya gider", async () => {
+    usePathnameMock.mockReturnValue("/dashboard")
+    render(<StudentNav nickname="altinkalem" logout={vi.fn()} />)
+
+    const moreButton = screen.getByRole("button", { name: "Diğer" })
+    expect(moreButton.getAttribute("aria-expanded")).toBe("false")
+
+    fireEvent.click(moreButton)
+
+    expect(moreButton.getAttribute("aria-expanded")).toBe("true")
+
+    const menu = document.getElementById("student-more-menu")
+    expect(menu).not.toBeNull()
+    within(menu as HTMLElement).getByRole("link", { name: "İlerleme" })
+    within(menu as HTMLElement).getByRole("link", { name: "Tekrar" })
+
+    await waitFor(() => {
+      expect(document.activeElement).toHaveAttribute("href", "/ilerleme")
+    })
+  })
+
+  it("aktif route icin panel baglantisi aria-current tasir", () => {
+    usePathnameMock.mockReturnValue("/ilerleme")
+    render(<StudentNav nickname="altinkalem" logout={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole("button", { name: "Diğer" }))
+
+    const menu = document.getElementById("student-more-menu") as HTMLElement
+    expect(
+      within(menu).getByRole("link", { name: "İlerleme" })
+    ).toHaveAttribute("aria-current", "page")
+  })
+
+  it("Escape menuyu kapatir ve odak dugmeye doner", () => {
+    usePathnameMock.mockReturnValue("/dashboard")
+    render(<StudentNav nickname="altinkalem" logout={vi.fn()} />)
+
+    const moreButton = screen.getByRole("button", { name: "Diğer" })
+    fireEvent.click(moreButton)
+    expect(moreButton.getAttribute("aria-expanded")).toBe("true")
+
+    fireEvent.keyDown(document, { key: "Escape" })
+
+    expect(moreButton.getAttribute("aria-expanded")).toBe("false")
+    expect(document.activeElement).toBe(moreButton)
+  })
+
+  it("dis tiklamada menü kapanir", () => {
+    usePathnameMock.mockReturnValue("/dashboard")
+    render(<StudentNav nickname="altinkalem" logout={vi.fn()} />)
+
+    const moreButton = screen.getByRole("button", { name: "Diğer" })
+    fireEvent.click(moreButton)
+    expect(moreButton.getAttribute("aria-expanded")).toBe("true")
+
+    fireEvent.pointerDown(document.body)
+
+    expect(moreButton.getAttribute("aria-expanded")).toBe("false")
+  })
+
+  it("menu icindeki baglantiya tiklaninca menü kapanir", () => {
+    usePathnameMock.mockReturnValue("/dashboard")
+    render(<StudentNav nickname="altinkalem" logout={vi.fn()} />)
+
+    const moreButton = screen.getByRole("button", { name: "Diğer" })
+    fireEvent.click(moreButton)
+    expect(moreButton.getAttribute("aria-expanded")).toBe("true")
+
+    const menu = document.getElementById("student-more-menu") as HTMLElement
+    fireEvent.click(within(menu).getByRole("link", { name: "İlerleme" }))
+
+    expect(moreButton.getAttribute("aria-expanded")).toBe("false")
+    expect(
+      document.getElementById("student-more-menu")
+    ).not.toBeInTheDocument()
   })
 })

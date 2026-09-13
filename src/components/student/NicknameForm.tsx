@@ -15,6 +15,8 @@ import { Input } from "@/components/ui/Input"
  * - Kaydetme sırasında buton kilitlenir; çift gönderim engellenir.
  * - Başarısız işlem mevcut takma adı bozmaz (değer formda kalır).
  * - Başarı/hata mesajları aria-live ile duyurulur.
+ * - Sınıf notu bu formda YOKTUR; "sınıf değiştirilemez" bilgisi
+ *   yalnız profil özetinde bir kez gösterilir.
  */
 export default function NicknameForm({
   currentNickname,
@@ -72,24 +74,20 @@ export default function NicknameForm({
         disabled={pending}
       />
 
-      <div className="mt-3 flex items-center gap-3">
+      <div className="mt-3">
         <Button type="submit" loading={pending}>
           Kaydet
         </Button>
-
-        <p className="text-xs text-ink-muted" aria-hidden="true">
-          Sınıfın değiştirilemez.
-        </p>
       </div>
 
-      <div aria-live="polite" className="mt-3 min-h-6">
+      <div aria-live="polite">
         {message && (
           <p
             role="status"
             className={
               message.tone === "success"
-                ? "text-sm font-medium text-success-700"
-                : "text-sm font-medium text-danger-700"
+                ? "mt-3 text-sm font-medium text-success-700"
+                : "mt-3 text-sm font-medium text-danger-700"
             }
           >
             {message.text}

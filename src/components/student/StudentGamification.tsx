@@ -14,33 +14,35 @@ import type { GamificationProfile } from "@/lib/gamification/types"
  */
 export default function StudentGamification({
   profile,
+  hideProfileLink = false,
 }: {
   profile: GamificationProfile
+  hideProfileLink?: boolean
 }) {
   const { xp, streak, dailyQuota, badges } = profile
 
   return (
     <section
       aria-labelledby="gamification-heading"
-      className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
+      className="rounded-2xl border border-border bg-surface p-6 shadow-card"
     >
-      <h2 id="gamification-heading" className="text-xl font-semibold text-gray-900">
+      <h2 id="gamification-heading" className="text-xl font-semibold text-ink">
         Gelişimin
       </h2>
 
       <dl className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="rounded-xl border border-gray-200 p-4">
-          <dt className="text-sm font-medium text-gray-500">
+        <div className="rounded-xl border border-border p-4">
+          <dt className="text-sm font-medium text-ink-muted">
             Seviye ve XP
           </dt>
           <dd className="mt-1">
-            <span className="text-2xl font-bold text-gray-900">
+            <span className="text-2xl font-bold text-ink">
               {xp.level}. Seviye
             </span>
-            <span className="ml-2 text-sm text-gray-600">
+            <span className="ml-2 text-sm text-ink-muted">
               {xp.totalXp} XP
             </span>
-            <p className="mt-1 text-sm text-gray-600">
+            <p className="mt-1 text-sm text-ink-muted">
               {xp.nextLevelRequiredTotalXp === null
                 ? "Maksimum seviyedesin."
                 : `Sonraki seviyeye ${xp.xpToNextLevel} XP kaldı.`}
@@ -48,40 +50,40 @@ export default function StudentGamification({
           </dd>
         </div>
 
-        <div className="rounded-xl border border-gray-200 p-4">
-          <dt className="text-sm font-medium text-gray-500">Çalışma serisi</dt>
+        <div className="rounded-xl border border-border p-4">
+          <dt className="text-sm font-medium text-ink-muted">Çalışma serisi</dt>
           <dd className="mt-1">
-            <span className="text-2xl font-bold text-gray-900">
+            <span className="text-2xl font-bold text-ink">
               {streak.current} gün
             </span>
-            <p className="mt-1 text-sm text-gray-600">
+            <p className="mt-1 text-sm text-ink-muted">
               En uzun serin: {streak.longest} gün
             </p>
           </dd>
         </div>
 
-        <div className="rounded-xl border border-gray-200 p-4">
-          <dt className="text-sm font-medium text-gray-500">
+        <div className="rounded-xl border border-border p-4">
+          <dt className="text-sm font-medium text-ink-muted">
             Bugünkü soru hakkı
           </dt>
           <dd className="mt-1">
-            <span className="text-2xl font-bold text-gray-900">
+            <span className="text-2xl font-bold text-ink">
               {dailyQuota.remaining}
             </span>
-            <span className="ml-2 text-sm text-gray-600">
+            <span className="ml-2 text-sm text-ink-muted">
               / {dailyQuota.limit} soru kaldı
             </span>
-            <p className="mt-1 text-sm text-gray-600">
+            <p className="mt-1 text-sm text-ink-muted">
               Bugün {dailyQuota.questionsUsed} soru çözdün.
             </p>
           </dd>
         </div>
 
-        <div className="rounded-xl border border-gray-200 p-4">
-          <dt className="text-sm font-medium text-gray-500">Rozetler</dt>
+        <div className="rounded-xl border border-border p-4">
+          <dt className="text-sm font-medium text-ink-muted">Rozetler</dt>
           <dd className="mt-1">
             {badges.length === 0 ? (
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-ink-muted">
                 Henüz rozetin yok. İlk doğru cevabınla &quot;İlk
                 Adım&quot; rozetini kazanabilirsin.
               </p>
@@ -90,7 +92,7 @@ export default function StudentGamification({
                 {badges.map((badge) => (
                   <li
                     key={badge.badgeCode}
-                    className="rounded-full border border-teal-700 bg-teal-50 px-3 py-1 text-sm font-medium text-teal-900"
+                    className="rounded-full border border-teal-700 bg-teal-100 px-3 py-1 text-sm font-medium text-teal-700"
                   >
                     {badge.name}
                   </li>
@@ -102,15 +104,17 @@ export default function StudentGamification({
       </dl>
 
       <div className="mt-5 flex flex-wrap gap-3">
-        <Link
-          href="/profile"
-          className="inline-flex min-h-11 items-center rounded-xl border border-gray-200 px-4 text-sm font-semibold text-gray-900 transition hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
-        >
-          Profilim
-        </Link>
+        {!hideProfileLink && (
+          <Link
+            href="/profile"
+            className="inline-flex min-h-11 items-center rounded-xl border border-border px-4 text-sm font-semibold text-ink transition hover:bg-surface-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+          >
+            Profilim
+          </Link>
+        )}
         <Link
           href="/league"
-          className="inline-flex min-h-11 items-center rounded-xl border border-gray-200 px-4 text-sm font-semibold text-gray-900 transition hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+          className="inline-flex min-h-11 items-center rounded-xl border border-border px-4 text-sm font-semibold text-ink transition hover:bg-surface-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
         >
           Ligim
         </Link>
