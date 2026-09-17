@@ -5180,47 +5180,6 @@ export type Database = {
           },
         ]
       }
-      curriculum_teaching_approvals: {
-        Row: {
-          academic_year: string
-          approved_by: string | null
-          created_at: string
-          id: string
-          notes: string | null
-          schedule_item_id: string
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          academic_year: string
-          approved_by?: string | null
-          created_at?: string
-          id?: string
-          notes?: string | null
-          schedule_item_id: string
-          status?: string
-          updated_at?: string
-        }
-        Update: {
-          academic_year?: string
-          approved_by?: string | null
-          created_at?: string
-          id?: string
-          notes?: string | null
-          schedule_item_id?: string
-          status?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "curriculum_teaching_approvals_schedule_item_id_fkey"
-            columns: ["schedule_item_id"]
-            isOneToOne: false
-            referencedRelation: "curriculum_schedule_items"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       curriculum_versions: {
         Row: {
           academic_year: string
@@ -9637,85 +9596,6 @@ export type Database = {
           },
         ]
       }
-      student_training_queues: {
-        Row: {
-          created_at: string
-          id: string
-          outcome_id: string | null
-          question_id: string
-          question_order: number
-          status: string
-          subject_id: string
-          topic_id: string | null
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          outcome_id?: string | null
-          question_id: string
-          question_order: number
-          status?: string
-          subject_id: string
-          topic_id?: string | null
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          outcome_id?: string | null
-          question_id?: string
-          question_order?: number
-          status?: string
-          subject_id?: string
-          topic_id?: string | null
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "student_training_queues_outcome_id_fkey"
-            columns: ["outcome_id"]
-            isOneToOne: false
-            referencedRelation: "curriculum_outcomes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "student_training_queues_question_id_fkey"
-            columns: ["question_id"]
-            isOneToOne: false
-            referencedRelation: "question_publication_overview"
-            referencedColumns: ["question_id"]
-          },
-          {
-            foreignKeyName: "student_training_queues_question_id_fkey"
-            columns: ["question_id"]
-            isOneToOne: false
-            referencedRelation: "question_solve_time_overview"
-            referencedColumns: ["question_id"]
-          },
-          {
-            foreignKeyName: "student_training_queues_question_id_fkey"
-            columns: ["question_id"]
-            isOneToOne: false
-            referencedRelation: "questions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "student_training_queues_subject_id_fkey"
-            columns: ["subject_id"]
-            isOneToOne: false
-            referencedRelation: "subjects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "student_training_queues_topic_id_fkey"
-            columns: ["topic_id"]
-            isOneToOne: false
-            referencedRelation: "topics"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       student_visibility_settings: {
         Row: {
           additional_visibility: Json
@@ -11362,42 +11242,6 @@ export type Database = {
       }
     }
     Functions: {
-      _faz15_daily_remaining: {
-        Args: { p_day: string; p_user: string }
-        Returns: number
-      }
-      _faz15_eligible_scope: {
-        Args: {
-          p_outcome_id?: string
-          p_subject_id: string
-          p_topic_id?: string
-        }
-        Returns: Json
-      }
-      _faz15_lock_payload: {
-        Args: {
-          p_daily_left: number
-          p_kind: string
-          p_subject_id: string
-          p_week: number
-          p_weekly_left: number
-          p_year: string
-        }
-        Returns: Json
-      }
-      _faz15_queue_progress: {
-        Args: { p_subject: string; p_user: string }
-        Returns: Json
-      }
-      _faz15_weekly_remaining: {
-        Args: {
-          p_subject: string
-          p_user: string
-          p_week: number
-          p_year: string
-        }
-        Returns: number
-      }
       _faz2_consume_weekly_capacity: {
         Args: {
           p_academic_year: string
@@ -11549,10 +11393,6 @@ export type Database = {
       }
       advance_competition_progress: {
         Args: { p_competition_id: string }
-        Returns: Json
-      }
-      advance_training_session: {
-        Args: { p_question_id: string; p_subject_id: string }
         Returns: Json
       }
       approve_competition_ai_generation_request: {
@@ -11824,14 +11664,6 @@ export type Database = {
           wrong: number
         }[]
       }
-      get_training_session_state: {
-        Args: {
-          p_outcome_id?: string
-          p_subject_id: string
-          p_topic_id?: string
-        }
-        Returns: Json
-      }
       has_admin_permission: {
         Args: { p_permission_code: string; p_user_id: string }
         Returns: boolean
@@ -11859,10 +11691,6 @@ export type Database = {
       is_current_user_super_admin: { Args: never; Returns: boolean }
       join_matchmaking_queue: { Args: { p_subject_id: string }; Returns: Json }
       leave_matchmaking_queue: { Args: never; Returns: Json }
-      list_curriculum_teaching_approvals: {
-        Args: { p_academic_year: string; p_subject_id: string }
-        Returns: Json
-      }
       list_training_outcomes: { Args: { p_subject_id: string }; Returns: Json }
       list_training_topics: { Args: { p_subject_id: string }; Returns: Json }
       normalize_excel_answer: { Args: { p_value: string }; Returns: string }
@@ -12013,10 +11841,6 @@ export type Database = {
         }
         Returns: string
       }
-      select_gated_targeted_review_questions: {
-        Args: { p_limit?: number; p_outcome_id: string; p_subject_id: string }
-        Returns: Json
-      }
       select_own_avatar: { Args: { p_character_code: string }; Returns: Json }
       select_targeted_review_questions: {
         Args: { p_limit?: number; p_outcome_id: string; p_subject_id: string }
@@ -12033,15 +11857,6 @@ export type Database = {
       }
       set_competition_player_ready: {
         Args: { p_competition_id: string }
-        Returns: Json
-      }
-      set_curriculum_teaching_approval: {
-        Args: {
-          p_academic_year: string
-          p_notes?: string
-          p_schedule_item_id: string
-          p_status?: string
-        }
         Returns: Json
       }
       start_answer_verification: {
@@ -12078,16 +11893,6 @@ export type Database = {
           p_staging_question_id: string
         }
         Returns: string
-      }
-      start_training_session: {
-        Args: {
-          p_force_new?: boolean
-          p_limit?: number
-          p_outcome_id?: string
-          p_subject_id: string
-          p_topic_id?: string
-        }
-        Returns: Json
       }
       submit_answer_solver_result: {
         Args: {
