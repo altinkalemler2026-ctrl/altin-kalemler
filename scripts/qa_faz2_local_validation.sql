@@ -135,10 +135,13 @@ insert into public.student_profiles (id, grade_level, nickname) values
   ('99999999-9999-9999-9999-999999999901', 12, 'QA2-NICK-A'),
   ('99999999-9999-9999-9999-999999999902', 12, 'QA2-NICK-B');
 
--- Akademik takvim: bugunu kapsayan hafta 5 (+ sonraki hafta 6).
-insert into public.academic_weeks (academic_year, week, starts_at, ends_at) values
-  ('QA-Y-2099', 5, current_date - 3, current_date + 4),
-  ('QA-Y-2099', 6, current_date + 4, current_date + 11);
+-- Donem resmi takvimden (111: 2026-2027 K1-K41) gelir; QA-Y-2099 icin
+-- sahte academic_weeks YAZILMAZ (074 global exclusion + 111 takvimiyle
+-- cakisirdi). Sayaç/exposure anahtarlari resolved donemde olusur; suite
+-- boyunca ayni donemi tek noktadan veren session-level temp tablo:
+create temporary table _qa2_period as
+  select academic_year as per_year, week as per_week
+    from public._faz2_require_period();
 
 -- Konular / alt konu / kazanım.
 insert into public.topics
@@ -162,8 +165,8 @@ insert into public.curriculum_outcomes
    '430903f3-527e-4e12-b7e8-ac0afdb784aa',
    'QA2 kazanım metni');
 
--- Schedule items:
---   T_ALLOWED: start 1 (islenmis), end_week 3 < guncel hafta 5 ->
+-- Schedule items (resolved hafta = 1; 2026-2027 K1):
+--   T_ALLOWED: start 1 (islenmis), end_week 3 >= guncel hafta 1 ->
 --              antrenman ERISIMI acik kalmali (end_week kapataz).
 --   T_FUTURE : start 6 -> henuz sorulamaz.
 insert into public.curriculum_schedule_items
@@ -175,11 +178,13 @@ insert into public.curriculum_schedule_items
    '430903f3-527e-4e12-b7e8-ac0afdb784aa',
    '66666666-6666-6666-6666-000000000002', 6, null);
 
+-- Outcome item: start 1 (resolved hafta 1'de erisilebilir; eski "hafta 5"
+-- kurgusunda 2 idi, resolved 1'e gore acik kalmasi icin uyumlandi).
 insert into public.curriculum_schedule_items
   (schedule_profile_id, grade_level, subject_id, outcome_id, start_week) values
   ('77777777-7777-7777-7777-777777777701', 12,
    '430903f3-527e-4e12-b7e8-ac0afdb784aa',
-   '44444444-4444-4444-4444-000000000001', 2);
+   '44444444-4444-4444-4444-000000000001', 1);
 
 -- Sorular: NN -> 01..17.
 --   01..05 : islenmis konu / kazanım kapsaminda
@@ -603,7 +608,8 @@ begin
   select c.new_questions_used into v_used
     from public.student_weekly_counters c
    where c.user_id = '99999999-9999-9999-9999-999999999901'
-     and c.academic_year = 'QA-Y-2099' and c.week = 5
+     and c.academic_year = (select per_year from _qa2_period)
+     and c.week = (select per_week from _qa2_period)
      and c.subject_id = '430903f3-527e-4e12-b7e8-ac0afdb784aa';
 
   perform public._qa_true('T-02c',
@@ -664,7 +670,8 @@ begin
   select c.new_questions_used into v_used
     from public.student_weekly_counters c
    where c.user_id = '99999999-9999-9999-9999-999999999901'
-     and c.academic_year = 'QA-Y-2099' and c.week = 5
+     and c.academic_year = (select per_year from _qa2_period)
+     and c.week = (select per_week from _qa2_period)
      and c.subject_id = '430903f3-527e-4e12-b7e8-ac0afdb784aa';
 
   select count(*) into v_exposure
@@ -702,7 +709,8 @@ begin
   select c.new_questions_used into v_used
     from public.student_weekly_counters c
    where c.user_id = '99999999-9999-9999-9999-999999999901'
-     and c.academic_year = 'QA-Y-2099' and c.week = 5
+     and c.academic_year = (select per_year from _qa2_period)
+     and c.week = (select per_week from _qa2_period)
      and c.subject_id = '430903f3-527e-4e12-b7e8-ac0afdb784aa';
 
   perform public._qa_true('T-03',
@@ -736,7 +744,8 @@ select '22222222-2222-2222-2222-00000000000a',
 update public.student_weekly_counters
    set new_questions_used = 498
  where user_id = '99999999-9999-9999-9999-999999999901'
-   and academic_year = 'QA-Y-2099' and week = 5
+   and academic_year = (select per_year from _qa2_period)
+    and week = (select per_week from _qa2_period)
    and subject_id = '430903f3-527e-4e12-b7e8-ac0afdb784aa';
 
 do $blk$
@@ -771,7 +780,8 @@ begin
   select c.new_questions_used into v_used
     from public.student_weekly_counters c
    where c.user_id = '99999999-9999-9999-9999-999999999901'
-     and c.academic_year = 'QA-Y-2099' and c.week = 5
+     and c.academic_year = (select per_year from _qa2_period)
+     and c.week = (select per_week from _qa2_period)
      and c.subject_id = '430903f3-527e-4e12-b7e8-ac0afdb784aa';
 
   perform public._qa_true('T-04b',
@@ -787,7 +797,8 @@ select public._qa_expect('T-04c',
   $sql$update public.student_weekly_counters
       set new_questions_used = 501
     where user_id = '99999999-9999-9999-9999-999999999901'
-      and academic_year = 'QA-Y-2099' and week = 5
+      and academic_year = (select per_year from _qa2_period)
+    and week = (select per_week from _qa2_period)
       and subject_id = '430903f3-527e-4e12-b7e8-ac0afdb784aa'$sql$);
 
 
@@ -1060,7 +1071,8 @@ begin
   select c.new_questions_used into v_bused
     from public.student_weekly_counters c
    where c.user_id = '99999999-9999-9999-9999-999999999902'
-     and c.academic_year = 'QA-Y-2099' and c.week = 5
+     and c.academic_year = (select per_year from _qa2_period)
+     and c.week = (select per_week from _qa2_period)
      and c.subject_id = '430903f3-527e-4e12-b7e8-ac0afdb784aa';
 
   perform public._qa_true('T-08e',
@@ -1267,8 +1279,8 @@ begin
 
   perform public._qa_true('T-12',
     'kullanim goruntusu: yil/hafta/ders/500 dogru',
-    v_usage->>'academic_year' = 'QA-Y-2099'
-      and v_usage->>'week' = '5'
+    v_usage->>'academic_year' = (select per_year from _qa2_period)
+      and v_usage->>'week' = (select per_week from _qa2_period)::text
       and (v_usage->'subjects'->0->>'new_questions_used') = '500'
       and (v_usage->'subjects'->0->>'limit') = '500',
     v_usage::text);
@@ -1277,34 +1289,51 @@ $blk$;
 
 
 -- ============================================================
--- T-11: AKADEMIK DONEM YOKSA FAIL-CLOSED (karar #1)
+-- T-11: AKADEMIK DONEM GERCEGI (111 sözlesmesi - karar #1)
 -- ============================================================
+-- Karar #1'in orijinal kosulu (bos takvim -> fail-closed P0001) 111 ile
+-- ortadan kalkti: resmi takvim (2026-2027 K1..K41) KALICIDIR ve bugunu
+-- her zaman kapsar; QA fixture yillari 074 kuraliyla gercek takvime
+-- cakismaz. Bu nedenle T-11, takvimin GERCEK + dolu + resolved'a bagli
+-- oldugunu dogrular (geriye donuk lilgilisaman: std.)
 
 delete from public.academic_weeks where academic_year = 'QA-Y-2099';
 
 do $blk$
+declare
+  v_y text;
+  v_w integer;
 begin
   -- 070 sonrasi: postgres rolu + JWT claim'leri (bkz. T-06 notu).
   perform set_config('request.jwt.claims',
     '{"sub":"99999999-9999-9999-9999-999999999901","role":"authenticated"}', true);
 
-  perform public._qa_expect('T-11a',
-    'donem yok: secim fail-closed',
-    'P0001',
-    $sql$select public.select_training_questions(
-      '430903f3-527e-4e12-b7e8-ac0afdb784aa', 5)$sql$);
+  select academic_year, week into v_y, v_w
+    from public._faz2_require_period();
 
-  perform public._qa_expect('T-11b',
-    'donem yok: ingest fail-closed',
-    'P0001',
-    $sql$select public.ingest_student_attempt(
-      '33333333-3333-3333-3333-000000000002',
-      'training', 'correct', 5000)$sql$);
+  perform public._qa_true('T-11a',
+    'resolved donem dolu ve 111 gercek takvimidir',
+    v_y = '2026-2027' and v_w = 1,
+    'resolved=' || v_y || '/K' || v_w);
 
-  perform public._qa_expect('T-11c',
-    'donem yok: usage goruntusu fail-closed',
-    'P0001',
-    $sql$select public.get_my_weekly_usage()$sql$);
+  perform public._qa_true('T-11b',
+    'resolver tekil donetir (111 sözlesmesi; takvim asla bos kalmaz)',
+    (select count(*) from public.resolve_current_academic_period()) = 1
+      and (select true from public.resolve_current_academic_period() r
+            join public.academic_weeks w
+              on w.academic_year = r.academic_year
+             and w.week = r.week
+           where (current_timestamp at time zone 'utc')::date >= w.starts_at
+             and (current_timestamp at time zone 'utc')::date < w.ends_at),
+    null);
+
+  perform public._qa_true('T-11c',
+    'resolved donemde secim + usage akisi acik (fail-closed degil)',
+    (select jsonb_array_length(
+       public.select_training_questions(
+         '430903f3-527e-4e12-b7e8-ac0afdb784aa', 5) -> 'questions') >= 1)
+      and (public.get_my_weekly_usage() ->> 'academic_year') = '2026-2027',
+    null);
 
   perform set_config('request.jwt.claims', '', true);
 end;

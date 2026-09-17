@@ -143,8 +143,9 @@ insert into public.curriculum_schedule_profiles
   ('98989898-9898-9898-9898-989898980002', 'QA6-SCHED', 'QA6 Profil',
    '98989898-9898-9898-9898-989898980001', true, true);
 
-insert into public.academic_weeks (academic_year, week, starts_at, ends_at) values
-  ('QA6-Y', 5, current_date - 3, current_date + 4);
+-- Donem resmi takvimden (111: 2026-2027 K1-K41) gelir; QA6-Y icin
+-- sahte academic_weeks YAZILMAZ (074 global exclusion + 111 takvimiyle
+-- cakisirdi). _faz2_require_period resolved donemi kullanir.
 
 -- Islenmis konular (5. ve 6. sinif).
 insert into public.topics
@@ -760,7 +761,11 @@ declare
   v_res  jsonb;
   v_ids  text[];
   v_used integer;
+  v_year text;
+  v_week integer;
 begin
+  select * into v_year, v_week from public._faz2_require_period();
+
   -- 3 gun once yanlis (P1-P3): redeem paydasi icin ek bekleyen hatalar.
   insert into public.student_question_attempts
     (user_id, question_id, subject_id, attempt_context, result,
@@ -811,8 +816,8 @@ begin
     'haftalik kapasite yalniz YENI soru icin tuketildi (used=4, limit=500)',
     (v_res -> 'weekly' ->> 'new_questions_used')::int = 4
       and (v_res -> 'weekly' ->> 'limit')::int = 500
-      and v_res -> 'weekly' ->> 'academic_year' = 'QA6-Y'
-      and (v_res -> 'weekly' ->> 'week')::int = 5,
+      and v_res -> 'weekly' ->> 'academic_year' = v_year
+      and (v_res -> 'weekly' ->> 'week')::int = v_week,
     (v_res -> 'weekly')::text);
 
   select count(*) into v_used

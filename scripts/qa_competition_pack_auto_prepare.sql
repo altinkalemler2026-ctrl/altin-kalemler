@@ -120,11 +120,10 @@ insert into public.student_profiles (id, grade_level, nickname) values
   ('82000000-0000-0000-0000-00000000008c', 12, 'QA82-NICK-C'),
   ('82000000-0000-0000-0000-00000000008d', 8,  'QA82-NICK-D');
 
--- academic weeks (required by prepare_competition_pack)
-insert into public.academic_weeks (academic_year, week, starts_at, ends_at) values
-  ('2025-2026', 1, current_date - 7, current_date + 7),
-  ('2025-2026', 2, current_date + 7, current_date + 14)
-on conflict do nothing;
+-- Donem resmi takvimden (111: 2026-2027 K1-K41) gelir; QA82 icin
+-- sahte academic_weeks YAZILMAZ (074 global exclusion + 111 takvimiyle
+-- cakisirdi). prepare_competition_pack, _faz2_require_period uzerinden
+-- resolved donemi kullanir.
 
 -- curriculum version + schedule profile (required for _faz2_require_period)
 insert into public.curriculum_versions

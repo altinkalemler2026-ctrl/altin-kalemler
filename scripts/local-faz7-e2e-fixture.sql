@@ -99,15 +99,20 @@ DELETE FROM public.questions
  WHERE question_code LIKE 'E2E7-Q-%';
 
 -- ------------------------------------------------------------
--- 4. Akademik baglam: donem + varsayilan program profili
+-- 4. Akademik baglam: donem + program profili
 --    (_faz2_student_context / _faz2_require_period gereklilikleri).
+--    Donem RESMI takvimden gelir (111: 2026-2027 K1-K41); bu fixture
+--    artik sahte academic_weeks YAZMAZ (074 global exclusion + 111
+--    takvimiyle cakisirdi; POSTCONDITION donemin varligini dogrular).
+--    E2E7-FAZ7 surumu/profili varsayilan DEGILDIR (111: TYMM-2026
+--    tek varsayilan; 059 tek-default-per-year).
 --    Idempotent: benzersiz anahtarlarda ON CONFLICT DO NOTHING.
 -- ------------------------------------------------------------
 INSERT INTO public.curriculum_versions
   (id, academic_year, framework, is_default, is_active, published_at)
 VALUES
   ('e2e70000-0000-4000-8000-0000000000c1', '2026-2027',
-   'E2E7-FAZ7', true, true, now())
+   'E2E7-FAZ7', false, true, now())
 ON CONFLICT (academic_year, framework) DO NOTHING;
 
 INSERT INTO public.curriculum_schedule_profiles
@@ -115,15 +120,8 @@ INSERT INTO public.curriculum_schedule_profiles
 VALUES
   ('e2e70000-0000-4000-8000-0000000000c2', 'E2E7-PROF-2026-2027',
    'E2E7 Ders Programi',
-   'e2e70000-0000-4000-8000-0000000000c1', true, true)
+   'e2e70000-0000-4000-8000-0000000000c1', false, true)
 ON CONFLICT (code) DO NOTHING;
-
-INSERT INTO public.academic_weeks (academic_year, week, starts_at, ends_at)
-SELECT '2026-2027', gs.wk,
-       date '2026-08-31' + (gs.wk - 1) * 7,
-       date '2026-08-31' + gs.wk * 7
-  FROM generate_series(1, 44) AS gs(wk)
-ON CONFLICT (academic_year, week) DO NOTHING;
 
 -- ------------------------------------------------------------
 -- 5. 5 yarisma sorusu (pozitif akis tam seti; 065 kasa limiti 5)

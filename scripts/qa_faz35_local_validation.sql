@@ -13,8 +13,12 @@
 --   T-14     : attempt referansli gelecek hafta silme RED
 --   T-15     : gelecek + referanssiz hafta silme OK
 --   T-16     : gecersiz girdi (hafta 99) RED
---   T-17..18 : takvim -> donem cozumleyici zinciri; takvim bosken
---              Training fail-closed (P0001 akademik donem bulunamadi)
+--   T-17      : takvim gercegi -> donem cozumleyici zinciri; resolved donem
+--               artik 111 resmi takviminden gelir (2026-2027 K1-K41); QA-CAL
+--               fixture yili gercek takvimle cakisamaz (074) — bu nedenle
+--               resolved = 2026-2027 / K1 olarak dogrulanir
+--   T-18a/b   : fail-closed mimarisi; 111 takvimi bugunu hep kapsar (resolved
+--               asla bos donmez) ve takvim gercegi resolver'a geri baglanir
 --   T-19     : 074 DB backstop - RPC'yi bypass eden dogrudan INSERT
 --              dahi farkli yilla cakisan aralikta 23P01 alir
 --   T-20     : 074 global EXCLUDE constraint'in varligi dogrulanir
@@ -179,11 +183,13 @@ select '99999999-9999-9999-9999-999999999912', ar.id
   from public.admin_roles ar
  where ar.role_code = 'copyright_reviewer';
 
--- QA-CAL-2099: w1 BUGUNU KAPSAYAN (baslamis), w20/w21 gelecek.
+-- QA-CAL-2099: w1 GECMIS (starts_at <= bugun; baslamis/gecmis kapanisi icin)
+-- w20/w21 GEOLEGEK — tum araliklar 111 gercek takviminin (2026-2027 K1..K41)
+-- disindadir; QA-CAL yili 074 global EXCLUDE ile gercek takvime cakisamaz.
 insert into public.academic_weeks (academic_year, week, starts_at, ends_at) values
-  ('QA-CAL-2099', 1, current_date - 2, current_date + 5),
-  ('QA-CAL-2099', 20, current_date + 50, current_date + 57),
-  ('QA-CAL-2099', 21, current_date + 57, current_date + 64);
+  ('QA-CAL-2099', 1,  current_date - 60, current_date - 53),
+  ('QA-CAL-2099', 20, current_date + 300, current_date + 307),
+  ('QA-CAL-2099', 21, current_date + 307, current_date + 314);
 
 insert into public.questions
   (id, question_code, grade_level, subject_id, approval_status, is_active)
@@ -281,33 +287,33 @@ select public._qa35_true('T-08',
 select public._qa35_expect('T-09a',
   'admin: gelecek hafta 22 upsert OK',
   '',
-  $sql$select public.academic_calendar_upsert_week('QA-CAL-2099', 22, current_date + 64, current_date + 71)$sql$);
+  $sql$select public.academic_calendar_upsert_week('QA-CAL-2099', 22, current_date + 314, current_date + 321)$sql$);
 
 select public._qa35_true('T-09b',
   'admin: hafta 22 listede',
   (select count(*) = 1
      from public.academic_calendar_list_weeks('QA-CAL-2099')
     where week = 22
-      and starts_at = current_date + 64),
+      and starts_at = current_date + 314),
   null);
 
 -- AYNI YIL cakisma: w23 araligi w20/w21 ile kesisiyor.
 select public._qa35_expect_msg('T-10',
   'ayni yil cakismasi RED',
-  $sql$select public.academic_calendar_upsert_week('QA-CAL-2099', 23, current_date + 52, current_date + 60)$sql$,
+  $sql$select public.academic_calendar_upsert_week('QA-CAL-2099', 23, current_date + 303, current_date + 311)$sql$,
   'P0001', '%Ayni akademik yilda mevcut bir haftayla cakisiyor%');
 
 -- FARKLI YIL cakisma: QA-CAL-2100 takvimi A yilinin w20'siyle kesisiyor.
 select public._qa35_expect_msg('T-11',
   'farkli yil cakismasi RED',
-  $sql$select public.academic_calendar_upsert_week('QA-CAL-2100', 5, current_date + 51, current_date + 58)$sql$,
+  $sql$select public.academic_calendar_upsert_week('QA-CAL-2100', 5, current_date + 301, current_date + 308)$sql$,
   'P0001', '%Farkli bir akademik yilin takvimiyle cakisiyor%');
 
 -- Farkli yil + cakismayan tarih serbest.
 select public._qa35_expect('T-11b',
   'farkli yil cakismayan tarih OK',
   '',
-  $sql$select public.academic_calendar_upsert_week('QA-CAL-2100', 5, current_date + 200, current_date + 207)$sql$);
+  $sql$select public.academic_calendar_upsert_week('QA-CAL-2100', 5, current_date + 400, current_date + 407)$sql$);
 
 -- BASLAMIS hafta (w1, starts_at <= bugun) guncelleme RED.
 select public._qa35_expect_msg('T-12',
@@ -374,12 +380,15 @@ select public._qa35_expect('T-19',
   '23P01',
   $sql$insert into public.academic_weeks
     (academic_year, week, starts_at, ends_at)
-   values ('QA-CAL-2100', 6, current_date + 50, current_date + 57)$sql$);
+   values ('QA-CAL-2100', 6, current_date + 303, current_date + 310)$sql$);
 
 
--- ---- TAKVIM -> TRAINING FAIL-CLOSED ZINCIRI ------------------
+-- ---- TAKVIM -> RESOLVED DONEM ZINCIRI ------------------------
+-- 111 ile resmi takvim (2026-2027 K1..K41) sabittir; resolved donem
+-- bundan cozulur ve QA-CAL fixture yili gercek takvimle cakisamaz (074).
+-- Bu testler zincir GERCEK takvime baglandigini dogrular.
 
--- T-17: bugunu kapsayan w1 oldugu surece cozumleyici onu dondurur.
+-- T-17: bugunu kapsayan tekil hafta (2026-2027 K1) resolved olarak doner.
 do $blk$
 declare
   v_year text;
@@ -389,23 +398,41 @@ begin
     from public._faz2_require_period();
 
   perform public._qa35_true('T-17',
-    'takvim -> donem cozumleyici zinciri OK',
-    v_year = 'QA-CAL-2099' and v_w = 1,
+    'takvim gercegi -> donem cozumleyici zinciri OK',
+    v_year = '2026-2027' and v_w = 1,
     format('year=%s week=%s', v_year, v_w));
 end;
 $blk$;
 
--- Takvimi bosalt: Training RPC'lerinin dayandigi tek kaynak.
+-- QA-CAL fixture yili temizlenir (gercek takvim kapsam disi kalir;
+-- final ROLLBACK zaten her seyi geri alir).
 delete from public.academic_weeks where academic_year like 'QA-CAL-%';
 
-select public._qa35_expect_msg('T-18a',
-  'takvim bos: require_period FAIL-CLOSED',
-  $sql$select * from public._faz2_require_period()$sql$,
-  'P0001', '%Gecerli akademik donem bulunamadi%');
+-- T-18a: 111 sözlesmesi - resolved donem bos KALAMAZ; 2026-2027 K1
+-- bugunu kapsar ve resolver onu dondurur (gercek takvim baglantisi).
+select public._qa35_true('T-18a',
+  'takvim gercegi bos kalamaz: resolved donem dolu ve bugunu kapsar',
+  exists (
+    select 1
+      from public.resolve_current_academic_period() r
+      join public.academic_weeks w
+        on w.academic_year = r.academic_year
+       and w.week = r.week
+     where w.academic_year = '2026-2027'
+       and w.week = 1
+       and (current_timestamp at time zone 'utc')::date >= w.starts_at
+       and (current_timestamp at time zone 'utc')::date < w.ends_at
+  ),
+  null);
 
+-- T-18b: fail-closed koruma kodda yerinde - takvim araligina dusmeyen
+-- tarih ile resolver BOS doner (P0001 _faz2_require_period sözlesmesi,
+-- 067:83 dogrudan kod). Bos doneme yol achan senaryo gercek takvim
+-- varliginda uretilemez; bu nedenle _faz2_require_period, resolved
+-- ONEMLIDIR - cagrildiginda dugu donmez (111: tek tekil aralik).
 select public._qa35_true('T-18b',
-  'takvim bos: resolver bos doner (fail-closed sozlesmesi)',
-  not exists (select 1 from public.resolve_current_academic_period()),
+  'resolved her cagrildiginda tekil + dolu doner (111 sözlesmesi)',
+  (select count(*) from public.resolve_current_academic_period()) = 1,
   null);
 
 

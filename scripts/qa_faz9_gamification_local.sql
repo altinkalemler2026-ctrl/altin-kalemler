@@ -170,7 +170,10 @@ values
   ('9f910000-0000-0000-0000-000000000003', 'QA9-Q-HARD',   12,
    '9f905000-0000-0000-0000-000000000001', 'QA9 zor soru',    'A', 'hard',   true, 'approved');
 
--- Akademik hafta fallback: bugunu kapsayan hafta yoksa ekle.
+-- Akademik hafta gercegi: bugunu kapsayan hafta 111 resmi takviminden
+-- (2026-2027 K1-K41) cozulur. QA9-YIL icin sahte academic_weeks YAZILMAZ
+-- (074 global exclusion + 111 takvimiyle cakisirdi). Fail-closed kanit:
+-- bugunu kapsayan gercek hafta YOKSA fixture durur.
 do $blk$
 begin
   if not exists (
@@ -179,11 +182,8 @@ begin
      where (current_timestamp at time zone 'utc')::date >= w.starts_at
        and (current_timestamp at time zone 'utc')::date < w.ends_at
   ) then
-    insert into public.academic_weeks
-      (academic_year, week, starts_at, ends_at)
-    values ('QA9-YIL', 1,
-            (current_timestamp at time zone 'utc')::date,
-            (current_timestamp at time zone 'utc')::date + 1);
+    raise exception 'FIXTURE_FAIL: bugunu kapsayan gercek akademik hafta yok'
+      using errcode = 'P0001';
   end if;
 end;
 $blk$;

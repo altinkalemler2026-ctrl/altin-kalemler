@@ -83,10 +83,11 @@ insert into public.student_profiles (id, grade_level, nickname) values
   ('99999999-9999-9999-9999-999999999904', 12, 'QA2-NICK-D')
 on conflict (id) do nothing;
 
-insert into public.academic_weeks (academic_year, week, starts_at, ends_at)
-select 'QA-P-2099', w, current_date - 30, current_date + 30
-  from generate_series(1, 10) w
-on conflict do nothing;
+-- Donem resmi takvimden (111: 2026-2027 K1-K41) gelir; QA-P-2099 icin
+-- sahte academic_weeks YAZILMAZ (074 global exclusion + 111 takvimiyle
+-- cakisirdi). select_training_questions/_faz2_lock_weekly_counter,
+-- _faz2_require_period uzerinden resolved doneme (2026-2027 / K1) yazar;
+-- verify bloğu da resolved yila gore sorgular.
 
 insert into public.topics (id, subject_id, grade_level, name, slug,
                            curriculum_version_id) values
@@ -318,7 +319,8 @@ select c.user_id,
                      and e.attempt_context = 'training')
            then 'PASS' else 'FAIL' end                             as durum
   from public.student_weekly_counters c
- where c.academic_year = 'QA-P-2099'
+ where c.academic_year =
+       (select academic_year from public._faz2_require_period())
  order by c.user_id;
 
 do $$
@@ -336,10 +338,11 @@ begin
                      and e.attempt_context = 'training'))
     into v_rows, v_bad
     from public.student_weekly_counters c
-   where c.academic_year = 'QA-P-2099';
+   where c.academic_year =
+         (select academic_year from public._faz2_require_period());
 
   if v_rows = 0 then
-    raise exception 'VERIFY_FAIL: QA-P-2099 icin sayac satiri yok'
+    raise exception 'VERIFY_FAIL: resolved donem icin sayac satiri yok'
       using errcode = 'P0001';
   end if;
 

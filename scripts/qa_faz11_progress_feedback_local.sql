@@ -148,9 +148,9 @@ insert into public.curriculum_schedule_profiles
   ('99999999-9999-9999-9999-999999990002', 'QA11-SCHED', 'QA11 Profil',
    '99999999-9999-9999-9999-999999990001', true, true);
 
-insert into public.academic_weeks (academic_year, week, starts_at, ends_at) values
-  ('QA11-Y', 5, current_date - 3, current_date + 4)
-on conflict do nothing;
+-- Donem resmi takvimden (111: 2026-2027 K1-K41) gelir; QA11-Y icin
+-- sahte academic_weeks YAZILMAZ (074 global exclusion + 111 takvimiyle
+-- cakisirdi). Denemeler answered_at bazli okunur (109 yil/hafta filtrelemez).
 
 insert into public.topics
   (id, subject_id, grade_level, name, slug, curriculum_version_id) values

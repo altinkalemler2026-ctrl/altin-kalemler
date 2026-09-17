@@ -135,8 +135,9 @@ insert into public.curriculum_schedule_profiles
   ('94949494-9494-9494-9494-949494940002', 'QA94-SCHED', 'QA94 Profil',
    '94949494-9494-9494-9494-949494940001', true, true);
 
-insert into public.academic_weeks (academic_year, week, starts_at, ends_at) values
-  ('QA94-Y', 5, current_date - 3, current_date + 4);
+-- Donem resmi takvimden (111: 2026-2027 K1-K41) gelir; QA94-Y icin
+-- sahte academic_weeks YAZILMAZ (074 global exclusion + 111 takvimiyle
+-- cakisirdi). _faz2_require_period resolved donemi kullanir.
 
 insert into public.topics
   (id, subject_id, grade_level, name, slug, curriculum_version_id) values

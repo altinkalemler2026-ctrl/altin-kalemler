@@ -29,7 +29,11 @@ delete from public.student_weekly_counters
 );
 
 -- Ders: mevcut matematik seed'i.
--- Akademik donem + mufredat baglami (7. sinif ogrenciler).
+-- Mufredat baglami (7. sinif ogrenciler). Donem RESMI takvimden gelir
+-- (111: 2026-2027 K1-K41); QA11E-Y icin sahte academic_weeks yazilmaz
+-- (074 global exclusion + 111 takvimiyle cakisirdi). QA11E-SCHED
+-- profilinin is_default'i sayesinde _faz2_student_context QA11E kapsamini
+-- cozer; _faz2_require_period resolved (gercek) donemi kullanir.
 insert into public.curriculum_versions
   (id, academic_year, framework, is_active) values
   ('77777777-7777-7777-7777-777777770001', 'QA11E-Y', 'MEB-QA11E', true)
@@ -41,13 +45,7 @@ insert into public.curriculum_schedule_profiles
    '77777777-7777-7777-7777-777777770001', true, true)
 on conflict (id) do nothing;
 
-insert into public.academic_weeks (academic_year, week, starts_at, ends_at)
-select 'QA11E-Y', 5, current_date - 3, current_date + 4
-where not exists (
-  select 1 from public.academic_weeks
-   where academic_year = 'QA11E-Y' and week = 5
-)
-on conflict do nothing;
+-- (academic_weeks insert kaldi: donem 111 resmi takviminden cozulur.)
 
 insert into public.topics
   (id, subject_id, grade_level, name, slug, curriculum_version_id) values
