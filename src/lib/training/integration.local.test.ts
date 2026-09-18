@@ -60,6 +60,10 @@ let serviceKey = ""
 let session: Session | null = null
 let shouldSkip = false
 
+// Runtime'da resmî takvimden çözülen aktif akademik dönem (111'de yüklü).
+let activeYear = ""
+let activeWeek = 0
+
 function supabaseStatusEnv(): string {
   // CI'da setup-cli ile PATH'e kurulan CLI tercih edilir (npx indirmesi
   // takılabilir). Yerelde CLI PATH'te yoksa npx yedegi kullanılır.
@@ -157,6 +161,51 @@ function runSql(label: string, sql: string): void {
   }
 }
 
+/**
+ * Runtime'da resmî takvimden (111) AKTİF akademik dönemi çözer.
+ * RPC'ler aynı mantığı (_faz2_require_period / resolve_current_academic_period)
+ * kullandığı için test beklentileri gerçek döneme bağlanır; sahte hafta
+ * yazılmaz.
+ */
+function resolveActivePeriod(): { academicYear: string; week: number } {
+  const query = spawnSync(
+    "docker",
+    [
+      "exec",
+      CONTAINER,
+      "psql",
+      "-U",
+      "postgres",
+      "-d",
+      "postgres",
+      "-tA",
+      "-F",
+      "|",
+      "-c",
+      `select w.academic_year, w.week
+         from public.academic_weeks w
+        where (current_timestamp at time zone 'utc')::date >= w.starts_at
+          and (current_timestamp at time zone 'utc')::date < w.ends_at
+        order by w.starts_at
+        limit 1;`,
+    ],
+    { encoding: "utf8" }
+  )
+  if (query.status !== 0) {
+    throw new Error(
+      `aktif dönem çözülemedi:\n${query.stdout}\n${query.stderr}`
+    )
+  }
+  const [academicYear, weekRaw] = query.stdout.trim().split("|")
+  const week = Number(weekRaw)
+  if (!academicYear || !Number.isInteger(week) || week < 1) {
+    throw new Error(
+      `aktif akademik dönem bulunamadı (resmî 2026-2027 takvimi yüklü mü?): '${query.stdout.trim()}'`
+    )
+  }
+  return { academicYear, week }
+}
+
 function cleanupFixtures(): void {
   runSql(
     "tui_cleanup",
@@ -175,7 +224,6 @@ delete from public.curriculum_schedule_items where schedule_profile_id = '${PROF
 delete from public.subtopics where id = '${SUBTOPIC_ID}';
 delete from public.topics where id in ('${TOPIC_ID}', '${TOPIC_F5_ID}');
 delete from public.curriculum_outcomes where id = '${OUTCOME_ID}';
-delete from public.academic_weeks where academic_year = '${YEAR}';
 delete from public.student_profiles where id = '${USER_ID}';
 delete from public.curriculum_schedule_profiles where id = '${PROFILE_ID}';
 delete from public.curriculum_versions where id = '${VERSION_ID}';
@@ -225,9 +273,6 @@ insert into public.student_profiles (id, grade_level, nickname)
 values ('${USER_ID}', 12, 'TUI-NICK')
 on conflict (id) do nothing;
 
-insert into public.academic_weeks (academic_year, week, starts_at, ends_at)
-values ('${YEAR}', 5, current_date - 3, current_date + 4);
-
 insert into public.topics (id, subject_id, grade_level, name, slug, curriculum_version_id)
 values ('${TOPIC_ID}', '${SUBJECT_ID}', 12, 'TUI Konu', 'tui-konu', '${VERSION_ID}');
 
@@ -240,11 +285,11 @@ values ('${OUTCOME_ID}', '${VERSION_ID}', 12, '${SUBJECT_ID}', 'TUI kazanim');
 
 insert into public.curriculum_schedule_items
   (schedule_profile_id, grade_level, subject_id, topic_id, start_week, end_week) values
-  ('${PROFILE_ID}', 12, '${SUBJECT_ID}', '${TOPIC_ID}', 1, 3);
+  ('${PROFILE_ID}', 12, '${SUBJECT_ID}', '${TOPIC_ID}', ${activeWeek}, ${activeWeek + 2});
 
 insert into public.curriculum_schedule_items
   (schedule_profile_id, grade_level, subject_id, outcome_id, start_week) values
-  ('${PROFILE_ID}', 12, '${SUBJECT_ID}', '${OUTCOME_ID}', 2);
+  ('${PROFILE_ID}', 12, '${SUBJECT_ID}', '${OUTCOME_ID}', ${activeWeek});
 
 insert into public.questions
   (id, question_code, grade_level, subject_id, approval_status, is_active,
@@ -308,7 +353,7 @@ values ('${TOPIC_F5_ID}', '${SUBJECT_ID}', 12, 'TUI F5 Konu', 'tui-f5-konu', '${
 -- Konu ancak işlenmişse (dönem kapılı) listelenir ve filtrede geçerlidir.
 insert into public.curriculum_schedule_items
   (schedule_profile_id, grade_level, subject_id, topic_id, start_week, end_week)
-values ('${PROFILE_ID}', 12, '${SUBJECT_ID}', '${TOPIC_F5_ID}', 1, 3);
+values ('${PROFILE_ID}', 12, '${SUBJECT_ID}', '${TOPIC_F5_ID}', ${activeWeek}, ${activeWeek + 2});
 
 -- Yalnız COMPETITION kasada olan soru (practice_eligible=true bile olsa
 -- vault_type='competition' oldugu icin antrenmana GIREMEMELI).
@@ -372,6 +417,9 @@ beforeAll(async () => {
     return
   }
   cleanupFixtures()
+  const period = resolveActivePeriod()
+  activeYear = period.academicYear
+  activeWeek = period.week
   await adminCreateUser("tui-student@test.local", "Tui-Test-1234!")
   await insertFixtures()
   insertFaz5Fixtures()
@@ -479,7 +527,7 @@ it.skipIf(shouldSkip)(
 
     const timedOut = await submitTrainingAttempt(client, {
       questionId: selection.questions[4]!.id,
-      action: "timeout",
+action: "timeout",
       timeMs: 30_000,
       clientKey: crypto.randomUUID(),
     })
@@ -487,7 +535,7 @@ it.skipIf(shouldSkip)(
 
     // 7) Haftalık kullanım görünümü gerçek sayaçları gösterir.
     const usage = await fetchWeeklyUsage(client)
-    expect(usage.academicYear).toBe(YEAR)
+    expect(usage.academicYear).toBe(activeYear)
     const subjectUsage = usage.subjects.find(
       (item) => item.subjectId === SUBJECT_ID
     )
@@ -598,7 +646,6 @@ it.skipIf(shouldSkip)("test verisi temizlenir — kalıntı sıfır", async () =
           (select count(*) from public.student_weekly_counters where user_id='${USER_ID}') +
           (select count(*) from public.questions where question_code like 'TUI-%') +
           (select count(*) from public.subjects where slug like 'tui-%') +
-          (select count(*) from public.academic_weeks where academic_year='${YEAR}') +
           (select count(*) from auth.users where id='${USER_ID}');`,
       ],
       { encoding: "utf8" }
