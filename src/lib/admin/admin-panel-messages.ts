@@ -52,6 +52,11 @@ export const ADMIN_NAV_ITEMS = [
     href: "/admin/teacher-reviews",
   },
   {
+    title: "Öğretmen Konu Onayı",
+    description: "Takvimdeki konuların öğretmen onayı durumunu yönetin.",
+    href: "/admin/curriculum-teaching",
+  },
+  {
     title: "Denetim Kaydı",
     description: "Soru düzenleme işlemlerinin denetim kaydı (salt okunur).",
     href: "/admin/audit",
