@@ -260,11 +260,14 @@ jobs:
           echo "Tip dosyasi migration zinciriyle uyumlu (drift yok)."
 
       # ----------------------------------------------------------
-      # SQL QA suretleri: Faz 1 / Faz 2 / Faz 3 / Faz 3.5 / Faz 4.
+      # SQL QA suretleri: Faz 1 / Faz 2 / Faz 3 / Faz 3.5 / Faz 4 /
+      # Faz 5 / Faz 6 / Faz 10 / Faz 10B / Faz 11 + sabitlere.
       # - Faz 3 kendi icinde FAIL durumunda exception firlatir
       #   (psql ON_ERROR_STOP ile exit != 0) ve "TAMAM: kalan=0"
       #   satiri basar.
-      # - Faz 1/2/3.5/4 exception firlatmadigi icin cikti ayristirilir:
+      # - Faz 5 "OZET: N PASS / M FAIL" satiri basar (M=0 olmali);
+      #   FAIL kayitlari "|FAIL|" satiri olarak gorunur.
+      # - Diger suretler exception firlatmadigi icin cikti ayristirilir:
       #   son satir "toplam|gecen|kalan" ozeti olmali, kalan=0 ve
       #   hicbir "|FAIL|" satiri bulunmamali.
       # ----------------------------------------------------------
@@ -293,6 +296,26 @@ jobs:
                 echo "::error::$file basari isareti yok."
                 exit 1
               }
+            elif [ "$kind" = "summary" ]; then
+              if grep -q '|FAIL|' "/tmp/${name}.out"; then
+                echo "::error::$file icinde FAIL satirlari var."
+                exit 1
+              fi
+              local line pass fail
+              line=$(tail -n 1 "/tmp/${name}.out")
+              if [[ "$line" =~ ^OZET:\ ([0-9]+)\ PASS\ /\ ([0-9]+)\ FAIL$ ]]; then
+                pass="${BASH_REMATCH[1]}"
+                fail="${BASH_REMATCH[2]}"
+                if [ "$fail" -eq 0 ] && [ "$pass" -gt 0 ]; then
+                  echo "$file OK: $pass PASS / $fail FAIL"
+                else
+                  echo "::error::$file basarisiz: toplam=$pass fail=$fail"
+                  exit 1
+                fi
+              else
+                echo "::error::$file ozet satiri ayristirilamadi: '$line'"
+                exit 1
+              fi
             else
               if grep -q '|FAIL|' "/tmp/${name}.out"; then
                 echo "::error::$file icinde FAIL satirlari var."
@@ -318,6 +341,7 @@ jobs:
           run_suite faz3 scripts/qa_faz3_local_validation.sql self-raising
           run_suite faz35 scripts/qa_faz35_local_validation.sql parsed
           run_suite faz4 scripts/qa_faz4_local_validation.sql parsed
+          run_suite faz5 scripts/qa_faz5_local_validation.sql summary
           run_suite grade093 scripts/qa_grade_hardening_093_local.sql parsed
           run_suite scoring094 scripts/qa_scoring_v1_094_local.sql parsed
           run_suite boundary095 scripts/qa_data_boundary_095_local.sql parsed
@@ -495,4 +519,4 @@ jobs:
       - name: Summary
         if: always()
         run: |
-          echo "CI adimlari tamamlandi: tsc, eslint(scope), vitest(unit), next build, supabase start+health, tip drift guard, db reset(dinamik zincir), QA f1/f2/f3/f3.5/f4/grade093/scoring094/boundary095/faz6, parallel probe(work+same), rate-limit probe(faz4), API readiness(auth+rest), vitest(unit tekrar)+integration(sirali)."
+          echo "CI adimlari tamamlandi: tsc, eslint(scope), vitest(unit), next build, supabase start+health, tip drift guard, db reset(dinamik zincir), QA f1/f2/f3/f3.5/f4/f5/grade093/scoring094/boundary095/faz6/faz10/faz10b/faz11, parallel probe(work+same), rate-limit probe(faz4), API readiness(auth+rest), vitest(unit tekrar)+integration(sirali)."
