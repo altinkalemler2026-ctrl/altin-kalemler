@@ -22,10 +22,12 @@ import {
   hasCandidateBatchReadPermission,
   listCandidateQuestionBatches,
   getCandidateBatchDetail,
+  getCandidateBatchOperationStatus,
   mapCandidateBatchListItem,
   mapCandidate,
   mapCandidatePreview,
   mapCandidateGateRun,
+  mapOperationGateCounts,
   CANDIDATE_BATCH_PAGE_SIZE,
 } from "./candidate-batches"
 
@@ -411,5 +413,207 @@ describe("getCandidateBatchDetail", () => {
       }),
     }))
     expect((await getCandidateBatchDetail(BATCH_UUID)).status).toBe("error")
+  })
+})
+
+describe("getCandidateBatchOperationStatus (Faz 20)", () => {
+  beforeEach(() => {
+    createClientMock.mockReset()
+  })
+
+  const STATUS_ROW = {
+    batch: {
+      batch_id: BATCH_UUID,
+      batch_key: "AK-2026-0001",
+      status: "validating",
+      counts: {
+        total_items: 3,
+        valid_items: 2,
+        invalid_items: 1,
+        inserted_items: 2,
+        duplicate_items: 0,
+      },
+      created_at: "2026-09-01T10:00:00.000Z",
+      updated_at: "2026-09-01T10:30:00.000Z",
+      error_data: { some: "HAM-HATA" },
+      raw_payload: { some: "HAM-PAYLOAD" },
+    },
+    phase: {
+      candidate_counts: {
+        pending: 0,
+        valid: 2,
+        invalid: 1,
+        duplicate: 0,
+        inserted: 2,
+        failed: 0,
+      },
+    },
+    gates: {
+      answer_verification: {
+        total: 2,
+        waiting_solver_1: 2,
+        waiting_solver_2: 0,
+        needs_human_review: 0,
+        verified: 0,
+        rejected: 0,
+        other: 0,
+      },
+      curriculum_fit: {
+        total: 1,
+        waiting_reviewer_1: 1,
+        waiting_reviewer_2: 0,
+        verified: 0,
+        rejected: 0,
+        other: 0,
+      },
+      solve_time_verification: {
+        total: 1,
+        waiting_reviewer_1: 1,
+        waiting_reviewer_2: 0,
+        verified: 0,
+        rejected: 0,
+        other: 0,
+      },
+      originality_verification: {
+        total: 0,
+        waiting_reviewer_1: 0,
+        waiting_reviewer_2: 0,
+        verified: 0,
+        blocked: 0,
+        rejected: 0,
+        other: 0,
+      },
+      question_quality: {
+        total: 0,
+        waiting_reviewer_1: 0,
+        waiting_reviewer_2: 0,
+        verified: 0,
+        rejected: 0,
+        other: 0,
+      },
+      readiness: {
+        total: 0,
+        not_ready: 0,
+        ready_for_human_review: 0,
+        human_review_required: 0,
+        blocked: 0,
+        rejected: 0,
+        already_promoted: 0,
+      },
+      final_review: {
+        total: 0,
+        approve: 0,
+        request_changes: 0,
+        reject: 0,
+      },
+    },
+    provider: {
+      has_batch_error_data: true,
+      candidate_validation_error_count: 1,
+    },
+    retry: {
+      supported: false,
+      reason_key: "gate_retry_not_supported",
+    },
+  }
+
+  it("işlem durumu RPC çıktısını allowlist DTO'ya eşler", async () => {
+    const rpcMock = vi.fn().mockResolvedValue({ data: STATUS_ROW, error: null })
+    createClientMock.mockImplementation(async () => ({ rpc: rpcMock }))
+
+    const result = await getCandidateBatchOperationStatus(BATCH_UUID)
+
+    expect(result.status).toBe("ok")
+    expect(result.item?.batch.batchKey).toBe("AK-2026-0001")
+    expect(result.item?.batch.status).toBe("validating")
+    expect(result.item?.gates.answerVerification.waitingSolver1).toBe(2)
+    expect(result.item?.gates.curriculumFit.waitingReviewer1).toBe(1)
+    expect(result.item?.provider.hasBatchErrorData).toBe(true)
+    expect(result.item?.provider.candidateValidationErrorCount).toBe(1)
+    expect(result.item?.retry.supported).toBe(false)
+    expect(result.item?.retry.reasonKey).toBe("gate_retry_not_supported")
+    expect(rpcMock.mock.calls[0]?.[0]).toBe(
+      "get_candidate_question_batch_operation_status"
+    )
+    expect(rpcMock.mock.calls[0]?.[1]).toEqual({ p_batch_id: BATCH_UUID })
+  })
+
+  it("DTO dışı keyfi/raw alan taşınmaz", async () => {
+    createClientMock.mockImplementation(async () => ({
+      rpc: vi.fn().mockResolvedValue({ data: STATUS_ROW, error: null }),
+    }))
+    const result = await getCandidateBatchOperationStatus(BATCH_UUID)
+    const json = JSON.stringify(result)
+    expect(json).not.toContain("HAM-HATA")
+    expect(json).not.toContain("HAM-PAYLOAD")
+    expect(json).not.toContain("error_data")
+    expect(json).not.toContain("raw_payload")
+  })
+
+  it("bulunamadı hatası ok+null'a düşer", async () => {
+    createClientMock.mockImplementation(async () => ({
+      rpc: vi.fn().mockResolvedValue({
+        data: null,
+        error: { message: "Aday paketi bulunamadi." },
+      }),
+    }))
+    const result = await getCandidateBatchOperationStatus(BATCH_UUID)
+    expect(result.status).toBe("ok")
+    expect(result.item).toBeNull()
+  })
+
+  it("diğer RPC hataları error'a düşer; ham hata taşınmaz", async () => {
+    createClientMock.mockImplementation(async () => ({
+      rpc: vi.fn().mockResolvedValue({
+        data: null,
+        error: { message: "connection reset" },
+      }),
+    }))
+    const result = await getCandidateBatchOperationStatus(BATCH_UUID)
+    expect(result.status).toBe("error")
+    expect(JSON.stringify(result)).not.toContain("connection reset")
+  })
+
+  it("oluşturulamayan anomali dönüşler error'a düşer", async () => {
+    createClientMock.mockImplementation(async () => ({
+      rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
+    }))
+    expect((await getCandidateBatchOperationStatus(BATCH_UUID)).status).toBe(
+      "error"
+    )
+
+    createClientMock.mockImplementation(async () => ({
+      rpc: vi.fn().mockResolvedValue({ data: "junk", error: null }),
+    }))
+    expect((await getCandidateBatchOperationStatus(BATCH_UUID)).status).toBe(
+      "error"
+    )
+  })
+})
+
+describe("mapOperationGateCounts (Faz 20)", () => {
+  it("yalnız bilinen anahtarları okur; keyfi alan sızmaz", () => {
+    const counts = mapOperationGateCounts({
+      total: 5,
+      waiting_reviewer_1: 2,
+      waiting_reviewer_2: 1,
+      verified: 2,
+      rejected: 0,
+      bazuka: 99,
+      api_key: "GIZLI",
+    })
+    expect(counts.total).toBe(5)
+    expect(counts.waitingReviewer1).toBe(2)
+    expect(counts.waitingReviewer2).toBe(1)
+    expect(counts.verified).toBe(2)
+    expect(counts.rejected).toBe(0)
+    expect(JSON.stringify(counts)).not.toContain("bazuka")
+    expect(JSON.stringify(counts)).not.toContain("GIZLI")
+  })
+
+  it("geçersiz tip null olur", () => {
+    const counts = mapOperationGateCounts({ total: "abc", verified: 3 })
+    expect(counts.total).toBeNull()
+    expect(counts.verified).toBe(3)
   })
 })

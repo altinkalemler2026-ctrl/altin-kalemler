@@ -41,6 +41,15 @@ describe("candidateBatchErrorKind", () => {
     ).toBe("forbidden")
   })
 
+  it("işlem durumu yetki hatası forbidden olarak sınıflandırılır (Faz 20)", () => {
+    expect(
+      candidateBatchErrorKind({
+        message:
+          "Iislem durumu icin ai.manage veya questions.approve yetkisi gerekli.",
+      })
+    ).toBe("forbidden")
+  })
+
   it("zorunlu parametre hatası required olarak sınıflandırılır", () => {
     expect(candidateBatchErrorKind({ message: "p_batch_id zorunludur." })).toBe(
       "required"

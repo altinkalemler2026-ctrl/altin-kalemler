@@ -123,8 +123,67 @@ export interface CandidateBatchDetail {
   candidates: CandidateRecord[]
 }
 
+export interface OperationGateCounts {
+  total: number | null
+  waitingReviewer1: number | null
+  waitingReviewer2: number | null
+  waitingSolver1: number | null
+  waitingSolver2: number | null
+  needsHumanReview: number | null
+  verified: number | null
+  blocked: number | null
+  rejected: number | null
+  readyForHumanReview: number | null
+  humanReviewRequired: number | null
+  notReady: number | null
+  alreadyPromoted: number | null
+  approve: number | null
+  requestChanges: number | null
+  other: number | null
+}
+
+/** Faz 20 — üretim/denetim işlem durumu (yalnız izinli alanlar). */
+export interface CandidateBatchOperationStatus {
+  batch: {
+    batchId: string
+    batchKey: string
+    status: string | null
+    counts: CandidateBatchCounts
+    createdAt: string | null
+    updatedAt: string | null
+  }
+  phase: {
+    candidateCounts: {
+      pending: number | null
+      valid: number | null
+      invalid: number | null
+      duplicate: number | null
+      inserted: number | null
+      failed: number | null
+    }
+  }
+  gates: {
+    answerVerification: OperationGateCounts
+    curriculumFit: OperationGateCounts
+    solveTimeVerification: OperationGateCounts
+    originalityVerification: OperationGateCounts
+    questionQuality: OperationGateCounts
+    readiness: OperationGateCounts
+    finalReview: OperationGateCounts
+  }
+  provider: {
+    hasBatchErrorData: boolean
+    candidateValidationErrorCount: number | null
+  }
+  retry: {
+    supported: boolean
+    reasonKey: string | null
+  }
+}
+
 export type CandidateBatchListResult = ListPageResult<CandidateBatchListItem>
 export type CandidateBatchDetailResult = DetailResult<CandidateBatchDetail>
+export type CandidateBatchOperationStatusResult = DetailResult<CandidateBatchOperationStatus>
 
 type PermissionRpc = (
   functionName: "teacher_review_admin_has_permission",
@@ -146,6 +205,11 @@ type ListBatchesRpc = (
 
 type BatchDetailRpc = (
   functionName: "get_candidate_question_batch_detail",
+  args: { p_batch_id: string },
+) => Promise<{ data: unknown | null; error: { message: string } | null }>
+
+type BatchOperationStatusRpc = (
+  functionName: "get_candidate_question_batch_operation_status",
   args: { p_batch_id: string },
 ) => Promise<{ data: unknown | null; error: { message: string } | null }>
 
@@ -504,4 +568,155 @@ export async function getCandidateBatchDetail(
       candidates: asRecordArray(obj.candidates).map(mapCandidate),
     },
   }
+}
+
+// ---------------------------------------------------------------------------
+// Faz 20 — üretim/denetim işlem durumu (yalnızca okuma)
+// ---------------------------------------------------------------------------
+
+const OPERATION_GATE_KEYS: Readonly<Record<keyof OperationGateCounts, string>> = {
+  total: "total",
+  waitingReviewer1: "waiting_reviewer_1",
+  waitingReviewer2: "waiting_reviewer_2",
+  waitingSolver1: "waiting_solver_1",
+  waitingSolver2: "waiting_solver_2",
+  needsHumanReview: "needs_human_review",
+  verified: "verified",
+  blocked: "blocked",
+  rejected: "rejected",
+  readyForHumanReview: "ready_for_human_review",
+  humanReviewRequired: "human_review_required",
+  notReady: "not_ready",
+  alreadyPromoted: "already_promoted",
+  approve: "approve",
+  requestChanges: "request_changes",
+  other: "other",
+}
+
+/** Gate durum sayaçları → izinli DTO (yalnızallowlist anahtarları). */
+export function mapOperationGateCounts(raw: unknown): OperationGateCounts {
+  const obj = asRecord(raw)
+  const out: OperationGateCounts = {
+    total: null,
+    waitingReviewer1: null,
+    waitingReviewer2: null,
+    waitingSolver1: null,
+    waitingSolver2: null,
+    needsHumanReview: null,
+    verified: null,
+    blocked: null,
+    rejected: null,
+    readyForHumanReview: null,
+    humanReviewRequired: null,
+    notReady: null,
+    alreadyPromoted: null,
+    approve: null,
+    requestChanges: null,
+    other: null,
+  }
+  for (const key of Object.keys(OPERATION_GATE_KEYS) as (keyof OperationGateCounts)[]) {
+    out[key] = asNumber(obj[OPERATION_GATE_KEYS[key]])
+  }
+  return out
+}
+
+/**
+ * İşlem durumu jsonb → izinli DTO. Ham error_data / raw_payload asla
+ * taşınmaz; yalnız provider boolean'ı ve sayılar okunur.
+ */
+export function mapCandidateBatchOperationStatus(
+  row: Record<string, unknown>
+): CandidateBatchOperationStatus | null {
+  const batchRaw = asRecord(row.batch)
+  const phaseRaw = asRecord(row.phase)
+  const candidateCountsRaw = asRecord(phaseRaw.candidate_counts)
+  const gatesRaw = asRecord(row.gates)
+  const providerRaw = asRecord(row.provider)
+  const retryRaw = asRecord(row.retry)
+
+  if (!batchRaw.batch_id) return null
+
+  const countsRaw = asRecord(batchRaw.counts)
+
+  return {
+    batch: {
+      batchId: asString(batchRaw.batch_id) ?? "",
+      batchKey: asString(batchRaw.batch_key) ?? "",
+      status: asString(batchRaw.status),
+      counts: {
+        totalItems: asNumber(countsRaw.total_items),
+        validItems: asNumber(countsRaw.valid_items),
+        invalidItems: asNumber(countsRaw.invalid_items),
+        insertedItems: asNumber(countsRaw.inserted_items),
+        duplicateItems: asNumber(countsRaw.duplicate_items),
+      },
+      createdAt: asString(batchRaw.created_at),
+      updatedAt: asString(batchRaw.updated_at),
+    },
+    phase: {
+      candidateCounts: {
+        pending: asNumber(candidateCountsRaw.pending),
+        valid: asNumber(candidateCountsRaw.valid),
+        invalid: asNumber(candidateCountsRaw.invalid),
+        duplicate: asNumber(candidateCountsRaw.duplicate),
+        inserted: asNumber(candidateCountsRaw.inserted),
+        failed: asNumber(candidateCountsRaw.failed),
+      },
+    },
+    gates: {
+      answerVerification: mapOperationGateCounts(gatesRaw.answer_verification),
+      curriculumFit: mapOperationGateCounts(gatesRaw.curriculum_fit),
+      solveTimeVerification: mapOperationGateCounts(
+        gatesRaw.solve_time_verification
+      ),
+      originalityVerification: mapOperationGateCounts(
+        gatesRaw.originality_verification
+      ),
+      questionQuality: mapOperationGateCounts(gatesRaw.question_quality),
+      readiness: mapOperationGateCounts(gatesRaw.readiness),
+      finalReview: mapOperationGateCounts(gatesRaw.final_review),
+    },
+    provider: {
+      hasBatchErrorData:
+        typeof providerRaw.has_batch_error_data === "boolean"
+          ? providerRaw.has_batch_error_data
+          : false,
+      candidateValidationErrorCount: asNumber(
+        providerRaw.candidate_validation_error_count
+      ),
+    },
+    retry: {
+      supported:
+        typeof retryRaw.supported === "boolean" ? retryRaw.supported : false,
+      reasonKey: asString(retryRaw.reason_key),
+    },
+  }
+}
+
+/**
+ * Paketin üretim/denetim işlem durumunu okur; bulunamayan paket
+ * ok+null döner. Ham RPC hatası dışarı sızmaz (fail-closed).
+ */
+export async function getCandidateBatchOperationStatus(
+  batchId: string
+): Promise<CandidateBatchOperationStatusResult> {
+  const supabase = await createClient()
+  const { data, error } = await (
+    supabase.rpc.bind(supabase) as unknown as BatchOperationStatusRpc
+  )("get_candidate_question_batch_operation_status", {
+    p_batch_id: batchId,
+  })
+
+  if (error) {
+    const kind = candidateBatchErrorKind(error)
+    if (kind === "notFound") return { status: "ok", item: null }
+    return { status: "error", item: null }
+  }
+
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return { status: "error", item: null }
+  }
+
+  const item = mapCandidateBatchOperationStatus(asRecord(data))
+  return item ? { status: "ok", item } : { status: "error", item: null }
 }

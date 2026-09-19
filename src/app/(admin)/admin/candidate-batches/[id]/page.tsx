@@ -12,6 +12,7 @@ import {
 } from "@/lib/admin/candidate-batches"
 import { parseBatchUuid } from "@/lib/admin/candidate-batches-errors"
 import { ADMIN_CANDIDATE_BATCH_DETAIL_MESSAGES as M } from "@/lib/admin/admin-panel-messages"
+import { ADMIN_CANDIDATE_BATCH_OPERATION_STATUS_MESSAGES as OM } from "@/lib/admin/admin-panel-messages"
 
 type Params = Promise<{ id: string }>
 
@@ -375,10 +376,20 @@ function DetailBody({ detail }: { detail: CandidateBatchDetail }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
       <div className="border-b border-gray-200 bg-gray-50 px-6 py-4">
-        <h1 className="text-2xl font-bold text-gray-900">{M.title}</h1>
-        <p className="mt-1 font-semibold text-gray-700">
-          {detail.batch.batchKey}
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">{M.title}</h1>
+            <p className="mt-1 font-semibold text-gray-700">
+              {detail.batch.batchKey}
+            </p>
+          </div>
+          <Link
+            href={`/admin/candidate-batches/${detail.batch.batchId}/islem-durumu`}
+            className="rounded-xl border border-gray-300 bg-white px-4 py-2 font-medium text-gray-700 hover:bg-gray-100"
+          >
+            {OM.detailLinkLabel}
+          </Link>
+        </div>
       </div>
 
       <DetailSection title={M.batchInfoTitle}>
