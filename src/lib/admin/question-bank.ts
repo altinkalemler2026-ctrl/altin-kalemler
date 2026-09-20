@@ -20,6 +20,7 @@ export const DIFFICULTIES = ["easy", "medium", "hard"] as const
 export const APPROVAL_STATUSES = [
   "approved",
   "pending",
+  "needs_review",
   "draft",
   "rejected",
 ] as const

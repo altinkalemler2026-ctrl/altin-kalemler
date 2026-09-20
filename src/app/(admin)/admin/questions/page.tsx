@@ -131,6 +131,8 @@ function approvalStatusLabel(value: string): string {
       return M.statusApproved
     case "pending":
       return M.statusPending
+    case "needs_review":
+      return M.statusNeedsReview
     case "draft":
       return M.statusDraft
     case "rejected":

@@ -190,6 +190,12 @@ describe("mapQuestionEditError", () => {
     ).toBe(QUESTION_EDIT_ERROR_MESSAGES.invalidInput)
   })
 
+  it("122 yeniden inceleme durumu hatası özel mesaja çevrilir", () => {
+    expect(
+      mapQuestionEditError({ message: "Question is not in re-review state." })
+    ).toBe(QUESTION_EDIT_ERROR_MESSAGES.requalifyNotInReview)
+  })
+
   it("bilinmeyen hata genel mesaja düşer; ham DB metni sızmaz", () => {
     const raw = "internal error: pg_catalog secret xyz"
     const mapped = mapQuestionEditError({ message: raw })
@@ -323,5 +329,96 @@ describe("migration 040 yayın RPC sözleşmesi (kaynak düzeyi)", () => {
     )
     expect(deactivateFn).toContain("Deactivation reason is required.")
     expect(deactivateFn).toContain("INSERT INTO public.question_publication_events")
+  })
+})
+
+describe("migration 122 işleyen soruda değişiklik kapısı (kaynak düzeyi)", () => {
+  const repoRoot = fileURLToPath(new URL("../../../", import.meta.url))
+  const source122 = readFileSync(
+    `${repoRoot}supabase/migrations/122_admin_question_edit_content_change_gate.sql`,
+    "utf8"
+  )
+
+  it("admin_question_edit içerik değişikliğini null-safe (IS DISTINCT FROM) tespit eder", () => {
+    const privateFn = source122.slice(
+      source122.indexOf("CREATE OR REPLACE FUNCTION private.admin_question_edit"),
+      source122.indexOf("CREATE OR REPLACE FUNCTION public.admin_question_edit")
+    )
+    // Kapı yalnızca öğrenciye görünen içerik+tamamlayıcı alanları izler:
+    // metin, şıklar, doğru cevap ve görsel varlığı.
+    for (const field of [
+      "question_text",
+      "option_a",
+      "option_b",
+      "option_c",
+      "option_d",
+      "option_e",
+      "correct_answer",
+      "has_visual",
+    ]) {
+      expect(privateFn).toContain(`v_next_${field} IS DISTINCT FROM v_question.${field}`)
+    }
+  })
+
+  it("içerik değişirse onaylı soruyu needs_review + pasife alır ve audit korur", () => {
+    const privateFn = source122.slice(
+      source122.indexOf("CREATE OR REPLACE FUNCTION private.admin_question_edit"),
+      source122.indexOf("CREATE OR REPLACE FUNCTION public.admin_question_edit")
+    )
+    expect(privateFn).toContain("v_review_required := (")
+    expect(privateFn).toContain("v_question.approval_status = 'approved'")
+    expect(privateFn).toContain("'needs_review'")
+    expect(privateFn).toContain("is_active = v_next_is_active")
+    // Audit geçmişi korunur: mutation + audit AYNI fonksiyonda (atomik).
+    expect(privateFn).toContain("UPDATE public.questions")
+    expect(privateFn).toContain("INSERT INTO public.admin_audit_log")
+    const auditPos = privateFn.indexOf("INSERT INTO public.admin_audit_log")
+    const updatePos = privateFn.indexOf("UPDATE public.questions")
+    expect(auditPos).toBeGreaterThan(updatePos)
+  })
+
+  it("kapı tetiklendiğinde publication event deactivate yazar (izlenebilirlik)", () => {
+    const privateFn = source122.slice(
+      source122.indexOf("CREATE OR REPLACE FUNCTION private.admin_question_edit"),
+      source122.indexOf("CREATE OR REPLACE FUNCTION public.admin_question_edit")
+    )
+    expect(privateFn).toContain(
+      "INSERT INTO public.question_publication_events"
+    )
+    expect(privateFn).toContain("'deactivate'")
+    expect(privateFn).toContain("'automatic_content_change_gate'")
+  })
+
+  it("admin_question_requalify yalnız needs_review->approved yapar, aktifliğe dokunmaz", () => {
+    const privateRequalify = source122.slice(
+      source122.indexOf(
+        "CREATE OR REPLACE FUNCTION private.admin_question_requalify"
+      ),
+      source122.indexOf(
+        "CREATE OR REPLACE FUNCTION public.admin_question_requalify"
+      )
+    )
+    expect(privateRequalify).toContain(
+      "private.current_user_has_admin_permission('questions.approve')"
+    )
+    expect(privateRequalify).toContain("approval_status = 'approved'")
+    // is_active asla true yapılmaz; öğrenciye otomatik açılış yoktur.
+    expect(privateRequalify).not.toContain("is_active = true")
+    // Atomik audit.
+    expect(privateRequalify).toContain("INSERT INTO public.admin_audit_log")
+    expect(privateRequalify).toContain("'question.requalify'")
+    expect(privateRequalify).toContain("'already_approved'")
+    expect(privateRequalify).toContain("'Question is not in re-review state.'")
+  })
+
+  it("requalify için public INVOKER sarmalayıcı ve execute grant'ları tanımlıdır", () => {
+    expect(source122).toContain(
+      "CREATE OR REPLACE FUNCTION public.admin_question_requalify"
+    )
+    expect(source122).toContain("SECURITY INVOKER")
+    expect(source122).toContain(
+      "GRANT EXECUTE\nON FUNCTION private.admin_question_requalify(uuid)"
+    )
+    expect(source122).toContain("TO authenticated")
   })
 })

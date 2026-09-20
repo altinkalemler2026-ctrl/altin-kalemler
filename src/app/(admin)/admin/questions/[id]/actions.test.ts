@@ -50,6 +50,7 @@ import {
   activateQuestionAction,
   deactivateQuestionAction,
   editQuestionAction,
+  requalifyQuestionAction,
 } from "./actions"
 import {
   QUESTION_EDIT_ERROR_MESSAGES,
@@ -262,6 +263,50 @@ describe("editQuestionAction", () => {
       QUESTION_EDIT_ERROR_MESSAGES.generic
     )
     expect(lastFlashUrl()).not.toContain("sys_catalog")
+  })
+
+  it("içerik değişiklik kapısı tetiklendiyse özel flash gösterilir (122)", async () => {
+    rpcMock.mockResolvedValue({
+      data: {
+        status: "updated",
+        question_id: UUID,
+        audit_id: "cccccccc-0000-4000-8000-00000000000a",
+        review_required: true,
+        approval_status: "needs_review",
+        is_active: false,
+      },
+      error: null,
+    })
+
+    await expect(editQuestionAction(editForm())).rejects.toThrow(
+      "NEXT_REDIRECT"
+    )
+
+    const params = lastFlashParams()
+    expect(params.get("ok")).toBe(
+      QUESTION_EDIT_SUCCESS_MESSAGES.editReviewRequired
+    )
+    expect(params.has("error")).toBe(false)
+  })
+
+  it("içerik değişiklik kapısı tetiklenmediyse normal edit flash'ı gösterilir (122)", async () => {
+    rpcMock.mockResolvedValue({
+      data: {
+        status: "updated",
+        question_id: UUID,
+        audit_id: "cccccccc-0000-4000-8000-00000000000a",
+        review_required: false,
+      },
+      error: null,
+    })
+
+    await expect(editQuestionAction(editForm())).rejects.toThrow(
+      "NEXT_REDIRECT"
+    )
+
+    const params = lastFlashParams()
+    expect(params.get("ok")).toBe(QUESTION_EDIT_SUCCESS_MESSAGES.edit)
+    expect(params.has("error")).toBe(false)
   })
 })
 
@@ -490,5 +535,109 @@ describe("deactivateQuestionAction", () => {
     expect(lastFlashParams().get("error")).toBe(
       QUESTION_EDIT_ERROR_MESSAGES.publishForbidden
     )
+  })
+})
+
+describe("requalifyQuestionAction (migration 122)", () => {
+  it("questions.approve izniyle RPC doğru argümanlarla çağrılır; onay flash'ı gösterilir", async () => {
+    rpcMock.mockResolvedValue({
+      data: { status: "requalified", question_id: UUID, audit_id: "x" },
+      error: null,
+    })
+
+    await expect(
+      requalifyQuestionAction(makeFormData({ questionId: UUID }))
+    ).rejects.toThrow("NEXT_REDIRECT")
+
+    expect(rpcMock).toHaveBeenCalledWith("admin_question_requalify", {
+      p_question_id: UUID,
+    })
+    expect(revalidateMock).toHaveBeenCalledWith(`/admin/questions/${UUID}`)
+    const params = lastFlashParams()
+    expect(params.get("ok")).toBe(QUESTION_EDIT_SUCCESS_MESSAGES.requalify)
+    expect(params.has("error")).toBe(false)
+  })
+
+  it("zaten onaylıysa no-op bilgi flash'ı gösterilir; hata sayılmaz", async () => {
+    rpcMock.mockResolvedValue({
+      data: { status: "already_approved", question_id: UUID },
+      error: null,
+    })
+
+    await expect(
+      requalifyQuestionAction(makeFormData({ questionId: UUID }))
+    ).rejects.toThrow("NEXT_REDIRECT")
+
+    const params = lastFlashParams()
+    expect(params.get("ok")).toBe(
+      QUESTION_EDIT_SUCCESS_MESSAGES.requalifyAlreadyApproved
+    )
+    expect(params.has("error")).toBe(false)
+  })
+
+  it("geçersiz soru kimliği listeye yönlendirilir; RPC çağrılmaz", async () => {
+    await expect(
+      requalifyQuestionAction(makeFormData({ questionId: "garbage" }))
+    ).rejects.toThrow("NEXT_REDIRECT")
+
+    expect(rpcMock).not.toHaveBeenCalled()
+    expect(lastFlashUrl()).toContain("/admin/questions?")
+    expect(lastFlashParams().get("error")).toBe(
+      QUESTION_EDIT_INPUT_MESSAGES.questionIdInvalid
+    )
+  })
+
+  it("questions.approve izni yoksa fail-closed: RPC çağrılmaz", async () => {
+    hasPermissionMock.mockResolvedValue(false)
+
+    await expect(
+      requalifyQuestionAction(makeFormData({ questionId: UUID }))
+    ).rejects.toThrow("NEXT_REDIRECT")
+
+    expect(rpcMock).not.toHaveBeenCalled()
+    expect(lastFlashParams().get("error")).toBe(
+      QUESTION_EDIT_ERROR_MESSAGES.publishForbidden
+    )
+  })
+
+  it("RPC izin hatası Türkçeye çevrilir; ham mesaj sızmaz", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { message: "Question approval permission required." },
+    })
+
+    await expect(
+      requalifyQuestionAction(makeFormData({ questionId: UUID }))
+    ).rejects.toThrow("NEXT_REDIRECT")
+
+    expect(lastFlashParams().get("error")).toBe(
+      QUESTION_EDIT_ERROR_MESSAGES.publishForbidden
+    )
+    expect(lastFlashUrl()).not.toContain("approval permission required.")
+  })
+
+  it("yeniden inceleme durumunda olmayan soru için özel hata gösterilir", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { message: "Question is not in re-review state." },
+    })
+
+    await expect(
+      requalifyQuestionAction(makeFormData({ questionId: UUID }))
+    ).rejects.toThrow("NEXT_REDIRECT")
+
+    expect(lastFlashParams().get("error")).toBe(
+      QUESTION_EDIT_ERROR_MESSAGES.requalifyNotInReview
+    )
+    expect(lastFlashUrl()).not.toContain("re-review state")
+  })
+
+  it("oturum yoksa RPC çağrılmaz ve /login'e yönlendirilir", async () => {
+    getUserMock.mockResolvedValue({ data: { user: null } })
+
+    await expect(
+      requalifyQuestionAction(makeFormData({ questionId: UUID }))
+    ).rejects.toThrow("NEXT_REDIRECT:/login")
+    expect(rpcMock).not.toHaveBeenCalled()
   })
 })

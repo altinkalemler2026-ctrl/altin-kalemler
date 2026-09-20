@@ -18,6 +18,7 @@ import {
   activateQuestionAction,
   deactivateQuestionAction,
   editQuestionAction,
+  requalifyQuestionAction,
 } from "./actions"
 
 type PermissionRpc = (
@@ -59,6 +60,8 @@ function approvalStatusLabel(value: string | null): string {
       return M.statusApproved
     case "pending":
       return M.statusPending
+    case "needs_review":
+      return M.statusNeedsReview
     case "draft":
       return M.statusDraft
     case "rejected":
@@ -99,6 +102,11 @@ export default async function AdminQuestionDetailPage({
   if (!canPublish) {
     canPublish = await hasAdminPermission("ai.manage")
   }
+  // Güvenli yeniden onay (admin_question_requalify) yalnızca questions.approve
+  // yetkisiyle çalışır; ai.manage kapsamında değildir.
+  const canReapprove = canPublish
+    ? await hasAdminPermission("questions.approve")
+    : false
 
   const { id } = await params
   const flashParams = await searchParams
@@ -431,6 +439,35 @@ export default async function AdminQuestionDetailPage({
             <p className="mt-2 text-xs text-gray-400">
               Yayın/geri çekme işlemleri için onay yetkisi gerekir.
             </p>
+          </section>
+        )}
+
+        {canReapprove && question.approval_status === "needs_review" && (
+          <section
+            aria-label="Yeniden onay"
+            className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-6 shadow-sm"
+          >
+            <h2 className="text-lg font-semibold text-amber-900">
+              Yeniden Denetim Gerekli
+            </h2>
+            <p className="mt-1 text-sm text-amber-800">
+              Bu sorunun içeriği değiştiği için pasife alındı ve yeniden
+              denetim durumuna geçti. Soruyu yeniden onayladıktan sonra
+              yayına almak için ayrıca &quot;Öğrencilere Yayınla&quot;
+              adımını kullanmanız gerekir.
+            </p>
+            <form
+              action={requalifyQuestionAction}
+              className="mt-4 flex flex-wrap items-center gap-3"
+            >
+              <input type="hidden" name="questionId" value={question.id} />
+              <button
+                type="submit"
+                className="rounded-xl bg-amber-700 px-5 py-2.5 font-semibold text-white hover:bg-amber-800"
+              >
+                Yeniden Onayla
+              </button>
+            </form>
           </section>
         )}
 

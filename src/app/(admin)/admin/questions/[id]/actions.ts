@@ -62,6 +62,14 @@ type PublishRpc = (
   error: { message: string } | null
 }>
 
+type RequalifyRpc = (
+  functionName: "admin_question_requalify",
+  args: { p_question_id: string },
+) => Promise<{
+  data: Record<string, unknown> | null
+  error: { message: string } | null
+}>
+
 function flash(
   questionId: string,
   kind: "ok" | "error",
@@ -124,7 +132,7 @@ export async function editQuestionAction(formData: FormData): Promise<void> {
   }
 
   const rpc = supabase.rpc.bind(supabase) as unknown as EditRpc
-  const { error } = await rpc("admin_question_edit", {
+  const { data, error } = await rpc("admin_question_edit", {
     p_question_id: validated.value.questionId,
     p_question_text: validated.value.questionText,
     p_option_a: validated.value.optionA,
@@ -141,7 +149,18 @@ export async function editQuestionAction(formData: FormData): Promise<void> {
 
   revalidatePath(`/admin/questions/${questionId}`)
   revalidatePath("/admin/questions")
-  flash(questionId, "ok", QUESTION_EDIT_SUCCESS_MESSAGES.edit)
+
+  // İçerik değişiklik kapısı (migration 122): yayında/onaylı sorunun
+  // içeriği değiştiyse RPC, soruyu otomatik pasife alır ve yeniden
+  // denetim ister; kullanıcıya bu durum ayrıca bildirilir.
+  const reviewRequired = data?.review_required === true
+  flash(
+    questionId,
+    "ok",
+    reviewRequired
+      ? QUESTION_EDIT_SUCCESS_MESSAGES.editReviewRequired
+      : QUESTION_EDIT_SUCCESS_MESSAGES.edit
+  )
 }
 
 /** Soruyu öğrencilere yayınla (040 activate_question_for_students). */
@@ -260,4 +279,51 @@ export async function deactivateQuestionAction(
   revalidatePath(`/admin/questions/${questionId}`)
   revalidatePath("/admin/questions")
   flash(questionId, "ok", QUESTION_EDIT_SUCCESS_MESSAGES.deactivate)
+}
+
+/**
+ * İçerik değişiklik kapısı sonrası güvenli yeniden onay
+ * (migration 122 admin_question_requalify).
+ *
+ * - Only 'needs_review' -> 'approved'. Soru is_active=false KALIR;
+ *   öğrenciye yeniden yayına alınması için ayrıca 040 activate gerekir.
+ * - İzin questions.approve; otoriter guard RPC içindedir (42501).
+ * - Zaten onaylıysa RPC 'already_approved' döner; no-op olarak bilgi
+ *   verilir, hata olarak işlenmez.
+ */
+export async function requalifyQuestionAction(
+  formData: FormData
+): Promise<void> {
+  const questionId = parseId(formData)
+  if (!isValidQuestionId(questionId)) {
+    flashToList(QUESTION_EDIT_INPUT_MESSAGES.questionIdInvalid)
+  }
+
+  const supabase = await requireSession()
+
+  // Fail-closed UI ön kontrolü; otoriter guard RPC içindedir (122:42501).
+  if (!(await hasAdminPermission("questions.approve"))) {
+    flash(questionId, "error", QUESTION_EDIT_ERROR_MESSAGES.publishForbidden)
+  }
+
+  const rpc = supabase.rpc.bind(supabase) as unknown as RequalifyRpc
+  const { data, error } = await rpc("admin_question_requalify", {
+    p_question_id: questionId,
+  })
+
+  if (error) {
+    flash(questionId, "error", mapQuestionEditError(error))
+  }
+
+  if (data?.status === "already_approved") {
+    flash(
+      questionId,
+      "ok",
+      QUESTION_EDIT_SUCCESS_MESSAGES.requalifyAlreadyApproved
+    )
+  }
+
+  revalidatePath(`/admin/questions/${questionId}`)
+  revalidatePath("/admin/questions")
+  flash(questionId, "ok", QUESTION_EDIT_SUCCESS_MESSAGES.requalify)
 }

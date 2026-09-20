@@ -29,10 +29,17 @@ export const QUESTION_EDIT_ERROR_MESSAGES = {
     "Girdiler geçersiz. Soru metni, seçenekler ve doğru cevabı kontrol edin.",
   generic:
     "Soru işlemi tamamlanamadı. Girdileri kontrol edip tekrar deneyin; sorun sürerse destek ekibine bildirin.",
+  requalifyNotInReview:
+    "Bu soru şu anda yeniden inceleme durumunda değil; yeniden onaylanamaz.",
 } as const
 
 export const QUESTION_EDIT_SUCCESS_MESSAGES = {
   edit: "Soru güncellendi.",
+  editReviewRequired:
+    "Soru güncellendi. İçerik değiştiği için soru pasife alındı ve yeniden denetim gerekiyor.",
+  requalify: "Soru yeniden onaylandı.",
+  requalifyAlreadyApproved:
+    "Soru zaten onaylı olduğundan işlem yapılmadı.",
   activate: "Soru öğrencilere yayınlandı.",
   deactivate: "Soru öğrencilerden geri çekildi.",
 } as const
@@ -110,6 +117,7 @@ const SESSION_PATTERN = /(Human )?[Aa]uthentication required/i
 const NOT_FOUND_PATTERN = /Question not found/i
 const INVALID_INPUT_PATTERN =
   /Invalid (difficulty|cognitive type|quality level|correct answer)|Solve time must be positive|Deactivation reason is required/i
+const REQUALIFY_NOT_IN_REVIEW_PATTERN = /Question is not in re-review state/i
 
 function errorText(error: unknown): string {
   if (error instanceof Error) return `${error.message}`
@@ -135,6 +143,8 @@ export function mapQuestionEditError(error: unknown): string {
   if (NOT_FOUND_PATTERN.test(text)) return QUESTION_EDIT_ERROR_MESSAGES.notFound
   if (INVALID_INPUT_PATTERN.test(text))
     return QUESTION_EDIT_ERROR_MESSAGES.invalidInput
+  if (REQUALIFY_NOT_IN_REVIEW_PATTERN.test(text))
+    return QUESTION_EDIT_ERROR_MESSAGES.requalifyNotInReview
 
   return QUESTION_EDIT_ERROR_MESSAGES.generic
 }
