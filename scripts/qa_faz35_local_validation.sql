@@ -14,9 +14,9 @@
 --   T-15     : gelecek + referanssiz hafta silme OK
 --   T-16     : gecersiz girdi (hafta 99) RED
 --   T-17      : takvim gercegi -> donem cozumleyici zinciri; resolved donem
---               artik 111 resmi takviminden gelir (2026-2027 K1-K41); QA-CAL
---               fixture yili gercek takvimle cakisamaz (074) — bu nedenle
---               resolved = 2026-2027 / K1 olarak dogrulanir
+--               artik 111 resmi takviminden gelir (2026-2027 K1-K41); beklenen
+--               deger DOGRUDAN kanonik academic_weeks verisinden turetilir
+--               (resolver cagrilmaz) ve guncel haftayla birebir kiyaslanir
 --   T-18a/b   : fail-closed mimarisi; 111 takvimi bugunu hep kapsar (resolved
 --               asla bos donmez) ve takvim gercegi resolver'a geri baglanir
 --   T-19     : 074 DB backstop - RPC'yi bypass eden dogrudan INSERT
@@ -388,19 +388,35 @@ select public._qa35_expect('T-19',
 -- bundan cozulur ve QA-CAL fixture yili gercek takvimle cakisamaz (074).
 -- Bu testler zincir GERCEK takvime baglandigini dogrular.
 
--- T-17: bugunu kapsayan tekil hafta (2026-2027 K1) resolved olarak doner.
+-- T-17: bugunu kapsayan tekil hafta, kanonik takvimden bagimsiz beklenen
+-- degerle birebir resolved olarak doner (111 resmi takvim, guncel hafta).
 do $blk$
 declare
   v_year text;
   v_w    integer;
+  e_year text;
+  e_w    integer;
+  e_cnt  integer;
 begin
   select academic_year, week into v_year, v_w
     from public._faz2_require_period();
 
+  -- Beklenen deger resolver cagirilmadan kanonik academic_weeks verisinden
+  -- turetilir: bugunu kapsayan aktif hafta (067/074 no-overlap -> tekil).
+  select count(*), min(academic_year), min(week)
+    into e_cnt, e_year, e_w
+    from public.academic_weeks
+   where (current_timestamp at time zone 'utc')::date >= starts_at
+     and (current_timestamp at time zone 'utc')::date < ends_at;
+
   perform public._qa35_true('T-17',
-    'takvim gercegi -> donem cozumleyici zinciri OK',
-    v_year = '2026-2027' and v_w = 1,
-    format('year=%s week=%s', v_year, v_w));
+    'takvim gercegi -> donem cozumleyici zinciri OK (kanonik beklenen)',
+    e_cnt = 1
+      and e_year is not null and e_w is not null
+      and v_year = e_year and v_w = e_w,
+    format('year=%s week=%s kanonik=%s/K%s aktif=%s',
+           v_year, v_w,
+           coalesce(e_year, '-'), coalesce(e_w::text, '-'), e_cnt));
 end;
 $blk$;
 
@@ -408,20 +424,29 @@ $blk$;
 -- final ROLLBACK zaten her seyi geri alir).
 delete from public.academic_weeks where academic_year like 'QA-CAL-%';
 
--- T-18a: 111 sözlesmesi - resolved donem bos KALAMAZ; 2026-2027 K1
--- bugunu kapsar ve resolver onu dondurur (gercek takvim baglantisi).
+-- T-18a: 111 sözlesmesi - resolved donem bos KALAMAZ; kanonik takvimden
+-- bagimsiz turetilen aktif haftayi birebir dondurur (gercek takvim baglantisi).
 select public._qa35_true('T-18a',
-  'takvim gercegi bos kalamaz: resolved donem dolu ve bugunu kapsar',
-  exists (
-    select 1
-      from public.resolve_current_academic_period() r
-      join public.academic_weeks w
-        on w.academic_year = r.academic_year
-       and w.week = r.week
-     where w.academic_year = '2026-2027'
-       and w.week = 1
-       and (current_timestamp at time zone 'utc')::date >= w.starts_at
-       and (current_timestamp at time zone 'utc')::date < w.ends_at
+  'takvim gercegi bos kalamaz: resolved donem dolu, kanonik haftayla ayni ve bugunu kapsar',
+  (
+    with canonical_period as (
+      -- Beklenen deger DOGRUDAN kanonik tablodan (resolver cagrilmaz):
+      -- bugunu kapsayan aktif haftalar.
+      select academic_year, week
+        from public.academic_weeks
+       where (current_timestamp at time zone 'utc')::date >= starts_at
+         and (current_timestamp at time zone 'utc')::date < ends_at
+    ),
+    resolved_period as (
+      select academic_year, week
+        from public.resolve_current_academic_period()
+    )
+    select (select count(*) from canonical_period) = 1
+       and (select count(*) from resolved_period) = 1
+       and (select count(*) from resolved_period r
+              join canonical_period c
+                on r.academic_year = c.academic_year
+               and r.week = c.week) = 1
   ),
   null);
 

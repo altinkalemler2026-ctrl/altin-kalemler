@@ -1303,6 +1303,9 @@ do $blk$
 declare
   v_y text;
   v_w integer;
+  e_y text;
+  e_w integer;
+  e_cnt integer;
 begin
   -- 070 sonrasi: postgres rolu + JWT claim'leri (bkz. T-06 notu).
   perform set_config('request.jwt.claims',
@@ -1311,10 +1314,24 @@ begin
   select academic_year, week into v_y, v_w
     from public._faz2_require_period();
 
+  -- Beklenen deger resolver cagirilmadan DOGRUDAN kanonik academic_weeks
+  -- verisinden turetilir: bugunu kapsayan aktif hafta. 067 no-overlap
+  -- EXCLUDE + 074 cross-year backstop nedeniyle bugunu kapsayan TEK hafta
+  -- vardir (111 resmi takvim KALICI; sabit hafta degil, guncel hafta).
+  select count(*), min(academic_year), min(week)
+    into e_cnt, e_y, e_w
+    from public.academic_weeks
+   where (current_timestamp at time zone 'utc')::date >= starts_at
+     and (current_timestamp at time zone 'utc')::date < ends_at;
+
   perform public._qa_true('T-11a',
-    'resolved donem dolu ve 111 gercek takvimidir',
-    v_y = '2026-2027' and v_w = 1,
-    'resolved=' || v_y || '/K' || v_w);
+    'resolved donem kanonik takvimden turetilen aktif haftayla birebirdir',
+    e_cnt = 1
+      and e_y is not null and e_w is not null
+      and v_y = e_y and v_w = e_w,
+    'resolved=' || v_y || '/K' || v_w
+    || ' kanonik=' || coalesce(e_y, '-') || '/K' || coalesce(e_w::text, '-')
+    || ' aktif_hafta=' || e_cnt);
 
   perform public._qa_true('T-11b',
     'resolver tekil donetir (111 sözlesmesi; takvim asla bos kalmaz)',
