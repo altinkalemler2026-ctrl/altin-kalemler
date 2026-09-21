@@ -29,6 +29,22 @@ export interface CandidateBatchCounts {
   duplicateItems: number | null
 }
 
+/**
+ * Faz 22 — v1.1 markdown paketi preflight özeti (yalnız izinli alanlar).
+ * validation_summary.preflight nesnesinin allowlist'e dayalı okumasıdır;
+ * ham JSON asla taşınmaz.
+ */
+export interface CandidateBatchPreflightSummary {
+  adapter: string | null
+  schemaVersion: string | null
+  rootValid: boolean | null
+  outOfPackageCount: number | null
+  outOfPackageKinds: string[]
+  reviewRequired: boolean | null
+  publicationAllowed: boolean | null
+  isActive: boolean | null
+}
+
 /** Liste/detay ortak paket künyesi (yalnız izinli alanlar). */
 export interface CandidateBatchListItem {
   batchId: string
@@ -40,6 +56,7 @@ export interface CandidateBatchListItem {
   status: string | null
   counts: CandidateBatchCounts
   validationSummary: string | null
+  preflightSummary: CandidateBatchPreflightSummary | null
   createdAt: string | null
   updatedAt: string | null
 }
@@ -251,6 +268,49 @@ function asStringArray(value: unknown): string[] {
   return value.filter((v): v is string => typeof v === "string")
 }
 
+function asOptionalBoolean(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null
+}
+
+/**
+ * validation_summary.preflight → izinli özet. validation_summary RPC
+ * tarafında jsonb (object) veya text (string) dönebilir; ikisi de kabul
+ * edilir. preflight anahtarı yoksa null (paket v1.0 olabilir).
+ */
+export function mapCandidateBatchPreflightSummary(
+  raw: unknown
+): CandidateBatchPreflightSummary | null {
+  let value = raw
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value) as unknown
+    } catch {
+      return null
+    }
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null
+  const obj = value as Record<string, unknown>
+  const preflightRaw = obj.preflight
+  if (
+    !preflightRaw ||
+    typeof preflightRaw !== "object" ||
+    Array.isArray(preflightRaw)
+  ) {
+    return null
+  }
+  const p = preflightRaw as Record<string, unknown>
+  return {
+    adapter: asString(p.adapter),
+    schemaVersion: asString(p.schema_version),
+    rootValid: asOptionalBoolean(p.root_valid),
+    outOfPackageCount: asNumber(p.out_of_package_count),
+    outOfPackageKinds: asStringArray(p.out_of_package_kinds),
+    reviewRequired: asOptionalBoolean(p.review_required),
+    publicationAllowed: asOptionalBoolean(p.publication_allowed),
+    isActive: asOptionalBoolean(p.is_active),
+  }
+}
+
 /** Paket künyesi → izinli DTO (keyfi alan okunmaz). */
 export function mapCandidateBatchListItem(
   row: Record<string, unknown>
@@ -275,6 +335,7 @@ export function mapCandidateBatchListItem(
       duplicateItems: asNumber(countsRaw.duplicate_items),
     },
     validationSummary: asString(row.validation_summary),
+    preflightSummary: mapCandidateBatchPreflightSummary(row.validation_summary),
     createdAt: asString(row.created_at),
     updatedAt: asString(row.updated_at),
   }

@@ -7,6 +7,7 @@ import {
   type CandidateBatchDetail,
   type CandidateRecord,
   type CandidatePreview,
+  type CandidateBatchPreflightSummary,
   type GateField,
   type CandidateGates,
 } from "@/lib/admin/candidate-batches"
@@ -103,6 +104,61 @@ function GateRunBlock({
         ))}
       </dl>
     </div>
+  )
+}
+
+function PreflightBlock({
+  preflight,
+}: {
+  preflight: CandidateBatchPreflightSummary | null
+}) {
+  if (!preflight) {
+    return <p className="text-sm text-gray-500">{M.preflightNotAvailable}</p>
+  }
+
+  const yesNo = (value: boolean | null): string => {
+    if (value === null) return "—"
+    return value ? "Evet" : "Hayır"
+  }
+
+  return (
+    <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
+      <Field label={M.preflightAdapterLabel} value={preflight.adapter ?? ""} />
+      <Field
+        label={M.preflightSchemaVersionLabel}
+        value={preflight.schemaVersion ?? ""}
+      />
+      <Field label={M.preflightRootValidLabel} value={yesNo(preflight.rootValid)} />
+      <Field
+        label={M.preflightOutOfPackageCountLabel}
+        value={
+          preflight.outOfPackageCount !== null &&
+          preflight.outOfPackageCount !== undefined
+            ? formatCount(preflight.outOfPackageCount)
+            : ""
+        }
+      />
+      <Field
+        label={M.preflightOutOfPackageKindsLabel}
+        value={
+          preflight.outOfPackageKinds.length > 0
+            ? preflight.outOfPackageKinds.join(", ")
+            : ""
+        }
+      />
+      <Field
+        label={M.preflightReviewRequiredLabel}
+        value={yesNo(preflight.reviewRequired)}
+      />
+      <Field
+        label={M.preflightPublicationAllowedLabel}
+        value={yesNo(preflight.publicationAllowed)}
+      />
+      <Field
+        label={M.preflightIsActiveLabel}
+        value={yesNo(preflight.isActive)}
+      />
+    </dl>
   )
 }
 
@@ -445,6 +501,10 @@ function DetailBody({ detail }: { detail: CandidateBatchDetail }) {
             value={formatCount(detail.batch.counts.duplicateItems)}
           />
         </dl>
+      </DetailSection>
+
+      <DetailSection title={M.preflightTitle}>
+        <PreflightBlock preflight={detail.batch.preflightSummary} />
       </DetailSection>
 
       <DetailSection
