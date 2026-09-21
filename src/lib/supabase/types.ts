@@ -11547,6 +11547,10 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_question_requalify: {
+        Args: { p_question_id: string }
+        Returns: Json
+      }
       advance_competition_progress: {
         Args: { p_competition_id: string }
         Returns: Json
@@ -11689,6 +11693,14 @@ export type Database = {
       }
       get_attempt_feedback: { Args: { p_question_id: string }; Returns: Json }
       get_candidate_question_batch_contract: { Args: never; Returns: Json }
+      get_candidate_question_batch_detail: {
+        Args: { p_batch_id: string }
+        Returns: Json
+      }
+      get_candidate_question_batch_operation_status: {
+        Args: { p_batch_id: string }
+        Returns: Json
+      }
       get_competition_ai_factory_job_status: {
         Args: { p_dispatch_id: string }
         Returns: Json
@@ -11859,6 +11871,10 @@ export type Database = {
       is_current_user_super_admin: { Args: never; Returns: boolean }
       join_matchmaking_queue: { Args: { p_subject_id: string }; Returns: Json }
       leave_matchmaking_queue: { Args: never; Returns: Json }
+      list_candidate_question_batches: {
+        Args: { p_limit?: number; p_offset?: number }
+        Returns: Json
+      }
       list_curriculum_teaching_approvals: {
         Args: { p_academic_year: string; p_subject_id: string }
         Returns: Json
@@ -11916,6 +11932,7 @@ export type Database = {
         }
         Returns: string
       }
+      register_candidate_md_batch: { Args: { p_payload: Json }; Returns: Json }
       register_candidate_question_batch: {
         Args: { p_payload: Json }
         Returns: Json
