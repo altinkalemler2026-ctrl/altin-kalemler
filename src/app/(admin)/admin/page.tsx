@@ -15,6 +15,46 @@ type PermissionRpc = (
   args: { p_permission_code: string },
 ) => Promise<{ data: boolean | null; error: { message: string } | null }>
 
+type NavPermissionRequirement = {
+  mode: "all" | "any"
+  codes: readonly string[]
+}
+
+const ADMIN_NAV_PERMISSION_REQUIREMENTS: Readonly<
+  Record<string, NavPermissionRequirement>
+> = {
+  "/admin/questions": { mode: "all", codes: ["questions.view"] },
+  "/admin/candidate-batches": {
+    mode: "any",
+    codes: ["ai.manage", "questions.approve"],
+  },
+  "/admin/academic-calendar": {
+    mode: "all",
+    codes: ["calendar.manage"],
+  },
+  "/admin/users": { mode: "all", codes: ["users.manage"] },
+  "/admin/teacher-reviews": { mode: "all", codes: ["questions.view"] },
+  "/admin/curriculum-teaching": {
+    mode: "all",
+    codes: ["curriculum.manage"],
+  },
+  "/admin/audit": { mode: "all", codes: ["audit.view"] },
+}
+
+function canAccessNavItem(
+  href: string,
+  permissions: Readonly<Record<string, boolean>>,
+): boolean {
+  const requirement = ADMIN_NAV_PERMISSION_REQUIREMENTS[href]
+  if (!requirement || requirement.codes.length === 0) {
+    return false
+  }
+
+  return requirement.mode === "all"
+    ? requirement.codes.every((code) => permissions[code] === true)
+    : requirement.codes.some((code) => permissions[code] === true)
+}
+
 export default async function AdminDashboardPage() {
   const supabase = await createClient()
 
@@ -24,18 +64,37 @@ export default async function AdminDashboardPage() {
   }
 
   const rpc = supabase.rpc.bind(supabase) as unknown as PermissionRpc
-  const { data: canView, error: permissionError } = await rpc(
-    "teacher_review_admin_has_permission",
-    { p_permission_code: "questions.view" },
-  )
+  const permissionCodes = new Set<string>(["questions.view"])
+  for (const requirement of Object.values(ADMIN_NAV_PERMISSION_REQUIREMENTS)) {
+    for (const code of requirement.codes) {
+      permissionCodes.add(code)
+    }
+  }
 
-  if (permissionError || canView !== true) {
+  const permissionEntries = await Promise.all(
+    Array.from(permissionCodes).map(async (code) => {
+      const result = await rpc("teacher_review_admin_has_permission", {
+        p_permission_code: code,
+      })
+      return [code, result.error === null && result.data === true] as const
+    }),
+  )
+  const permissions: Record<string, boolean> = {}
+  for (const [code, allowed] of permissionEntries) {
+    permissions[code] = allowed
+  }
+
+  if (permissions["questions.view"] !== true) {
     redirect("/dashboard")
   }
 
+  const visibleNavItems = ADMIN_NAV_ITEMS.filter((item) =>
+    canAccessNavItem(item.href, permissions),
+  )
+  const canManageUsers = permissions["users.manage"] === true
   const [metrics, userCount] = await Promise.all([
     loadDashboardMetrics(),
-    countUsers(),
+    canManageUsers ? countUsers() : Promise.resolve(null),
   ])
 
   return (
@@ -69,23 +128,25 @@ export default async function AdminDashboardPage() {
             value={metrics.reviewQueue.value}
           />
 
-          <Link
-            href="/admin/users"
-            className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm hover:bg-gray-50"
-          >
-            <h2 className="text-sm font-semibold text-gray-500 uppercase">
-              {ADMIN_DASHBOARD_MESSAGES.usersCount}
-            </h2>
-            {userCount === null ? (
-              <p className="mt-2 text-sm text-amber-800">
-                {ADMIN_DASHBOARD_MESSAGES.metricUnavailable}
-              </p>
-            ) : (
-              <p className="mt-1 text-3xl font-bold text-gray-900">
-                {userCount.toLocaleString("tr-TR")}
-              </p>
-            )}
-          </Link>
+          {canManageUsers && (
+            <Link
+              href="/admin/users"
+              className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm hover:bg-gray-50"
+            >
+              <h2 className="text-sm font-semibold text-gray-500 uppercase">
+                {ADMIN_DASHBOARD_MESSAGES.usersCount}
+              </h2>
+              {userCount === null ? (
+                <p className="mt-2 text-sm text-amber-800">
+                  {ADMIN_DASHBOARD_MESSAGES.metricUnavailable}
+                </p>
+              ) : (
+                <p className="mt-1 text-3xl font-bold text-gray-900">
+                  {userCount.toLocaleString("tr-TR")}
+                </p>
+              )}
+            </Link>
+          )}
         </section>
 
         <section aria-label="Bölümler" className="rounded-2xl border border-gray-200 bg-white shadow-sm">
@@ -95,7 +156,7 @@ export default async function AdminDashboardPage() {
             </h2>
           </div>
           <ul className="divide-y divide-gray-200">
-            {ADMIN_NAV_ITEMS.map((item) => (
+            {visibleNavItems.map((item) => (
               <li key={item.href}>
                 <Link
                   href={item.href}

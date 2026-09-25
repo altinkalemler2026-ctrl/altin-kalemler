@@ -42,6 +42,13 @@ import type { CandidateBatchDetail } from "@/lib/admin/candidate-batches"
 
 const BATCH_UUID = "7ea1ff55-2d0d-4e65-b4d0-cade3724f1e3"
 
+function detailPageProps(candidate?: string) {
+  return {
+    params: Promise.resolve({ id: BATCH_UUID }),
+    searchParams: Promise.resolve(candidate === undefined ? {} : { candidate }),
+  }
+}
+
 function okDetail(overrides: Record<string, unknown> = {}) {
   return {
     batch: {
@@ -81,11 +88,20 @@ function okDetail(overrides: Record<string, unknown> = {}) {
           proposedSolveTimeSeconds: 30,
           gradeLevel: 5,
           subjectId: "math-1",
+          subjectName: "Matematik",
+          outcomeCode: "MAT.5.3.1",
+          lowConfidence: true,
           ownershipStatus: "ai_generated",
           licenseStatus: "pending",
           commercialUseAllowed: null,
           copyrightRiskLevel: "low",
-          solution: "4'tür; 2+2 toplamı 4 eder.",
+          solution: {
+            method: "Toplama",
+            steps: [{ title: "Adım 1", content: "2+2 toplamı 4 eder." }],
+            result: "4",
+            correctAnswerJustification: "İki artı iki dört eder.",
+            commonMistakes: ["Cevaba 3 demek"],
+          },
         },
         validationResults: [
           {
@@ -126,6 +142,36 @@ function okDetail(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function twoCandidateDetail() {
+  const detail = okDetail()
+  const firstCandidate = detail.candidates[0]!
+  return {
+    ...detail,
+    batch: {
+      ...detail.batch,
+      counts: {
+        ...detail.batch.counts,
+        totalItems: 2,
+        validItems: 2,
+      },
+    },
+    candidates: [
+      firstCandidate,
+      {
+        ...firstCandidate,
+        candidateIndex: 3,
+        clientQuestionId: "c-2",
+        stagingQuestionId: "staging-2",
+        preview: {
+          ...firstCandidate.preview!,
+          questionText: "3+3 kaçtır?",
+          options: { A: "5", B: "6", C: "7", D: null, E: null },
+        },
+      },
+    ],
+  }
+}
+
 beforeEach(() => {
   getUserMock.mockReset()
   createClientMock.mockReset()
@@ -154,7 +200,7 @@ describe("AdminCandidateBatchDetailPage — auth gates", () => {
   it("unauthenticated → /login redirect", async () => {
     mockUnauthenticated()
     await expect(
-      AdminCandidateBatchDetailPage({ params: Promise.resolve({ id: BATCH_UUID }) }),
+      AdminCandidateBatchDetailPage(detailPageProps()),
     ).rejects.toThrow("REDIRECT:/login")
     expect(getDetailMock).not.toHaveBeenCalled()
   })
@@ -163,7 +209,7 @@ describe("AdminCandidateBatchDetailPage — auth gates", () => {
     mockAuthenticated()
     hasPermissionMock.mockResolvedValue(false)
     await expect(
-      AdminCandidateBatchDetailPage({ params: Promise.resolve({ id: BATCH_UUID }) }),
+      AdminCandidateBatchDetailPage(detailPageProps()),
     ).rejects.toThrow("REDIRECT:/dashboard")
     expect(getDetailMock).not.toHaveBeenCalled()
   })
@@ -174,6 +220,7 @@ describe("AdminCandidateBatchDetailPage — geçersiz id / bulunamadı", () => {
     mockAuthenticated()
     const result = await AdminCandidateBatchDetailPage({
       params: Promise.resolve({ id: "not-a-uuid" }),
+      searchParams: Promise.resolve({}),
     })
     const { renderToString } = await import("react-dom/server")
     const html = renderToString(result)
@@ -184,9 +231,7 @@ describe("AdminCandidateBatchDetailPage — geçersiz id / bulunamadı", () => {
   it("ok+null (bulunamadı) paket bulunamadı sayfası gösterir", async () => {
     mockAuthenticated()
     getDetailMock.mockResolvedValue({ status: "ok", item: null })
-    const result = await AdminCandidateBatchDetailPage({
-      params: Promise.resolve({ id: BATCH_UUID }),
-    })
+    const result = await AdminCandidateBatchDetailPage(detailPageProps())
     const { renderToString } = await import("react-dom/server")
     const html = renderToString(result)
     expect(html).toContain("Paket Bulunamadı")
@@ -196,9 +241,7 @@ describe("AdminCandidateBatchDetailPage — geçersiz id / bulunamadı", () => {
   it("veri kaynağı hatasında ayrı hata mesajı gösterilir", async () => {
     mockAuthenticated()
     getDetailMock.mockResolvedValue({ status: "error", item: null })
-    const result = await AdminCandidateBatchDetailPage({
-      params: Promise.resolve({ id: BATCH_UUID }),
-    })
+    const result = await AdminCandidateBatchDetailPage(detailPageProps())
     const { renderToString } = await import("react-dom/server")
     const html = renderToString(result)
     expect(html).toContain("şu anda okunamadı")
@@ -212,17 +255,22 @@ describe("AdminCandidateBatchDetailPage — yetkili render", () => {
     mockAuthenticated()
     getDetailMock.mockResolvedValue({ status: "ok", item: okDetail() })
 
-    const result = await AdminCandidateBatchDetailPage({
-      params: Promise.resolve({ id: BATCH_UUID }),
-    })
+    const result = await AdminCandidateBatchDetailPage(detailPageProps())
     const { renderToString } = await import("react-dom/server")
     const html = renderToString(result)
 
     expect(html).toContain("AK-2026-0001")
-    expect(html).toContain("received")
+    expect(html).toContain("Alındı")
     expect(html).toContain("internal-ai")
     expect(html).toContain("2+2 kaçtır?")
-    expect(html).toContain("4&#x27;tür; 2+2 toplamı 4 eder.")
+    expect(html).toContain("Matematik")
+    expect(html).toContain("MAT.5.3.1")
+    expect(html).toContain("Öncelikli İnsan İncelemesi")
+    expect(html).toContain("Yöntem")
+    expect(html).toContain("Toplama")
+    expect(html).toContain("2+2 toplamı 4 eder.")
+    expect(html).toContain("İki artı iki dört eder.")
+    expect(html).toContain("Cevaba 3 demek")
     expect(html).toContain("Seçenekler")
     expect(html).toContain(">3<")
     expect(html).toContain(">4<")
@@ -231,6 +279,11 @@ describe("AdminCandidateBatchDetailPage — yetkili render", () => {
     expect(html).toContain("Cevap Doğrulama")
     expect(html).toContain("consensus")
     expect(html).toContain("Nihai İnceleme")
+    expect(html).toContain("İnceleme Kararı")
+    expect(html).toContain("İncelemeyi Onayla")
+    expect(html).toContain("Düzeltmeye Gönder")
+    expect(html).toContain("Reddet")
+    expect(html).toContain("İki Aşamalı Yayın İlkesi")
   })
 
   it("DTO dışı keyfi/raw alan render edilmez", async () => {
@@ -255,9 +308,7 @@ describe("AdminCandidateBatchDetailPage — yetkili render", () => {
       }),
     })
 
-    const result = await AdminCandidateBatchDetailPage({
-      params: Promise.resolve({ id: BATCH_UUID }),
-    })
+    const result = await AdminCandidateBatchDetailPage(detailPageProps())
     const { renderToString } = await import("react-dom/server")
     const html = renderToString(result)
     expect(html).not.toContain("GIZLI-PAYLOAD")
@@ -273,9 +324,7 @@ describe("AdminCandidateBatchDetailPage — yetkili render", () => {
         batch: { ...okDetail().batch, createdAt: "tarih-degil" },
       }),
     })
-    const result = await AdminCandidateBatchDetailPage({
-      params: Promise.resolve({ id: BATCH_UUID }),
-    })
+    const result = await AdminCandidateBatchDetailPage(detailPageProps())
     const { renderToString } = await import("react-dom/server")
     const html = renderToString(result)
     expect(html).not.toContain("Invalid Date")
@@ -287,13 +336,58 @@ describe("AdminCandidateBatchDetailPage — yetkili render", () => {
     detail.candidates[0]!.preview = null
     getDetailMock.mockResolvedValue({ status: "ok", item: detail })
 
-    const result = await AdminCandidateBatchDetailPage({
-      params: Promise.resolve({ id: BATCH_UUID }),
-    })
+    const result = await AdminCandidateBatchDetailPage(detailPageProps())
     const { renderToString } = await import("react-dom/server")
     const html = renderToString(result)
     expect(html).toContain("Staging durumu")
     expect(html).not.toContain("2+2 kaçtır?")
+  })
+
+  it("varsayılan olarak ilk adayı gösterir ve önceki kontrolü pasif tutar", async () => {
+    mockAuthenticated()
+    getDetailMock.mockResolvedValue({ status: "ok", item: twoCandidateDetail() })
+
+    const result = await AdminCandidateBatchDetailPage(detailPageProps())
+    const { renderToString } = await import("react-dom/server")
+    const html = renderToString(result)
+
+    expect(html).toContain("Aday 1 / 2")
+    expect(html).toContain("2+2 kaçtır?")
+    expect(html).not.toContain("3+3 kaçtır?")
+    expect(html).toContain('aria-label="Adaylar arasında gezin"')
+    expect(html).toContain('aria-label="Önceki aday"')
+    expect(html).toContain('aria-disabled="true"')
+    expect(html).toContain(`/admin/candidate-batches/${BATCH_UUID}?candidate=2`)
+  })
+
+  it("candidate sorgusuyla seçili adayı gösterir ve sonraki kontrolü pasif tutar", async () => {
+    mockAuthenticated()
+    getDetailMock.mockResolvedValue({ status: "ok", item: twoCandidateDetail() })
+
+    const result = await AdminCandidateBatchDetailPage(detailPageProps("2"))
+    const { renderToString } = await import("react-dom/server")
+    const html = renderToString(result)
+
+    expect(html).toContain("Aday 2 / 2")
+    expect(html).toContain("3+3 kaçtır?")
+    expect(html).not.toContain("2+2 kaçtır?")
+    expect(html).toContain(`/admin/candidate-batches/${BATCH_UUID}?candidate=1`)
+    expect(html).not.toContain("?candidate=3")
+    expect(html).toContain('aria-label="Sonraki aday"')
+    expect(html).toContain('aria-disabled="true"')
+  })
+
+  it("geçersiz candidate sorgusunda ilk adaya fail-closed döner", async () => {
+    mockAuthenticated()
+    getDetailMock.mockResolvedValue({ status: "ok", item: twoCandidateDetail() })
+
+    const result = await AdminCandidateBatchDetailPage(detailPageProps("999"))
+    const { renderToString } = await import("react-dom/server")
+    const html = renderToString(result)
+
+    expect(html).toContain("Aday 1 / 2")
+    expect(html).toContain("2+2 kaçtır?")
+    expect(html).not.toContain("3+3 kaçtır?")
   })
 })
 

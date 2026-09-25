@@ -133,7 +133,13 @@ describe("mapCandidatePreview — DTO allowlist", () => {
       },
       proposed_correct_answer: "B",
       proposed_solve_time_seconds: 30,
-      solution: "4'tür.",
+      solution: {
+        method: "bölme",
+        steps: [{ title: "Adım 1", content: "Topla" }],
+        result: "4",
+        correctAnswerJustification: "2+2=4",
+        commonMistakes: ["3 demek"],
+      },
       gizli: "SIZMAZ",
     })
     expect(preview.questionText).toBe("2+2 kaçtır?")
@@ -141,7 +147,12 @@ describe("mapCandidatePreview — DTO allowlist", () => {
     expect(preview.options.E).toBe("6")
     expect(preview.options.B).toBe("4")
     expect(preview.proposedSolveTimeSeconds).toBe(30)
-    expect(preview.solution).toBe("4'tür.")
+    expect(preview.solution?.method).toBe("bölme")
+    expect(preview.solution?.steps).toEqual([
+      { title: "Adım 1", content: "Topla" },
+    ])
+    expect(preview.solution?.result).toBe("4")
+    expect(preview.solution?.commonMistakes).toEqual(["3 demek"])
     expect(JSON.stringify(preview)).not.toContain("YEDİNCİ-SEÇENEK")
     expect(JSON.stringify(preview)).not.toContain("SIZMAZ")
     expect(Object.keys(preview.options)).toEqual(["A", "B", "C", "D", "E"])
@@ -150,6 +161,50 @@ describe("mapCandidatePreview — DTO allowlist", () => {
   it("sözel sayı alanı null'a düşer (tip güvenli)", () => {
     const preview = mapCandidatePreview({ proposed_solve_time_seconds: "30" })
     expect(preview.proposedSolveTimeSeconds).toBeNull()
+  })
+
+  it("subject/outcome/low_confidence alanlarını taşır", () => {
+    const preview = mapCandidatePreview({
+      subject_id: "sbj-1",
+      subject_name: "Fizik",
+      outcome_code: "FIZ.9.1.1",
+      low_confidence: true,
+    })
+    expect(preview.subjectId).toBe("sbj-1")
+    expect(preview.subjectName).toBe("Fizik")
+    expect(preview.outcomeCode).toBe("FIZ.9.1.1")
+    expect(preview.lowConfidence).toBe(true)
+  })
+
+  it("low_confidence eksik/strogiy/alakasız tiplerle null olur", () => {
+    expect(mapCandidatePreview({}).lowConfidence).toBeNull()
+    expect(mapCandidatePreview({ low_confidence: "false" }).lowConfidence).toBeNull()
+    expect(mapCandidatePreview({ low_confidence: "EVET" }).lowConfidence).toBeNull()
+    expect(mapCandidatePreview({ low_confidence: null }).lowConfidence).toBeNull()
+  })
+
+  it("string/varsa bile solution yalnız object olarak taşınır", () => {
+    const preview = mapCandidatePreview({ solution: "4'tür." })
+    expect(preview.solution).toBeNull()
+  })
+
+  it("çözüm object'inde yalnız allowlist anahtarlar taşınır", () => {
+    const preview = mapCandidatePreview({
+      solution: {
+        method: "Yöntem",
+        steps: ["SIZAN-ADIM", { title: "T", content: "C", gizli: "X" }],
+        result: "Sonuç",
+        correctAnswerJustification: "Gerekçe",
+        commonMistakes: ["H1", 42, "H2"],
+        extra: "SIZAN-KEY",
+      },
+    })
+    expect(preview.solution?.steps).toEqual([{ title: "T", content: "C" }])
+    expect(preview.solution?.commonMistakes).toEqual(["H1", "H2"])
+    const json = JSON.stringify(preview)
+    expect(json).not.toContain("SIZAN-KEY")
+    expect(json).not.toContain("SIZAN-ADIM")
+    expect(json).not.toContain('"X"')
   })
 })
 
@@ -212,7 +267,7 @@ describe("mapCandidate — DTO allowlist", () => {
       preview: {
         question_text: "Soru?",
         options: { A: "1", B: "2" },
-        solution: "cevap",
+        solution: { method: "deneme", steps: [], result: "cevap" },
       },
       validation_results: [
         {

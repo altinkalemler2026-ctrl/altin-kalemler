@@ -37,7 +37,7 @@ export const ADMIN_NAV_ITEMS = [
     href: "/admin/questions",
   },
   {
-    title: "Aday Yükleme Paketleri",
+    title: "Aday Soru Paketleri",
     description:
       "Yüklenen aday soru paketlerini listeleyin ve ayrıntılarını görüntüleyin (salt okunur).",
     href: "/admin/candidate-batches",
@@ -216,17 +216,17 @@ export const ADMIN_USERS_MESSAGES = {
 } as const
 
 export const ADMIN_CANDIDATE_BATCHES_MESSAGES = {
-  title: "Aday Yükleme Paketleri",
+  title: "Aday Soru Paketleri",
   subtitle:
-    "Yüklenen aday soru paketlerinin künye ve sayaç özeti. Salt-okunur görünüm; bu fazda yazma işlemi yoktur.",
+    "İçerik & Soru Havuzu — Notebook ve üretici aday paket inceleme kuyruğu. Gerçek RPC verisiyle salt-okunur görünüm; bu fazda yazma işlemi yoktur.",
   backToDashboard: "Panele dön",
-  empty: "Henüz aday yükleme paketi bulunamadı.",
+  empty: "Henüz aday soru paketi bulunamadı.",
   listError:
-    "Aday yükleme paketleri şu anda okunamadı. Lütfen daha sonra tekrar deneyin.",
-  notFound: "Aday yükleme paketi bulunamadı.",
+    "Aday soru paketleri şu anda okunamadı. Lütfen daha sonra tekrar deneyin.",
+  notFound: "Aday soru paketi bulunamadı.",
   detailError:
-    "Aday yükleme paketi bilgileri şu anda okunamadı. Lütfen daha sonra tekrar deneyin.",
-  backToList: "Aday yükleme paketleri listesine dön",
+    "Aday soru paketi bilgileri şu anda okunamadı. Lütfen daha sonra tekrar deneyin.",
+  backToList: "Aday soru paketleri listesine dön",
   batchKeyLabel: "Paket anahtarı",
   schemaVersionLabel: "Şema sürümü",
   originLabel: "Kaynak (origin)",
@@ -253,6 +253,30 @@ export const ADMIN_CANDIDATE_BATCHES_MESSAGES = {
   nextPage: "Sonraki",
   notFoundTitle: "Paket Bulunamadı",
   notFoundHint: "İletilen paket kimliğiyle eşleşen kayıt bulunamadı.",
+  sourceChip: "İçerik & Soru Havuzu",
+  modeChip: "Salt İnceleme",
+  shownChipTemplate: "{shown} paket görüntüleniyor",
+  totalPackagesMetric: "Toplam Paket",
+  shownPackagesMetric: "Bu Sayfada Görüntülenen",
+  packageUnit: "Paket",
+  packageUnitShort: "paket",
+  reviewRequired: "İnceleme Gerekli",
+  verificationBadge: "Doğrulandı",
+  reviewAction: "İncele",
+  securityTitle: "Güvenlik Protokolü",
+  securityBody:
+    "Salt İnceleme (Read-Only) modu aktiftir. Bu ekranda hiçbir işlem veri tabanına yazılmaz ve öğrenciye doğrudan yayınlama yetkisi bulunmaz.",
+  refreshLabel: "Yenile",
+  shownOfTotal: "{shown} / {total} paket görüntüleniyor",
+  statusLabels: {
+    received: "Alındı",
+    validating: "Doğrulanıyor",
+    validated: "Doğrulandı",
+    partially_valid: "Kısmen Doğrulandı",
+    rejected: "Reddedildi",
+    ingested: "İçe Aktarıldı",
+    failed: "Başarısız",
+  } as const,
 } as const
 
 export const ADMIN_CANDIDATE_BATCH_DETAIL_MESSAGES = {
@@ -278,7 +302,7 @@ export const ADMIN_CANDIDATE_BATCH_DETAIL_MESSAGES = {
   preflightNotAvailable:
     "Preflight özeti bulunmuyor (paket v1.0 şemasında olabilir).",
   preflightAdapterLabel: "Adaptör",
-  preflightSchemaVersionLabel: "Şema sürümü",
+  preflightSchemaVersionLabel: "İçerik şema sürümü (preflight)",
   preflightRootValidLabel: "Kök doğrulama",
   preflightOutOfPackageCountLabel: "Paket-dışı içerik sayısı",
   preflightOutOfPackageKindsLabel: "Paket-dışı içerik türleri",
@@ -307,6 +331,17 @@ export const ADMIN_CANDIDATE_BATCH_DETAIL_MESSAGES = {
   proposedSolveTimeUnit: "sn",
   gradeLevelLabel: "Sınıf seviyesi",
   subjectIdLabel: "Ders kimliği",
+  subjectNameLabel: "Ders",
+  outcomeCodeLabel: "Kazanım kodu",
+  lowConfidenceTitle: "Öncelikli İnsan İncelemesi",
+  lowConfidenceNotRecorded: "Bu eski batch için öncelik kaydı yok.",
+  schemaVersionBatchNote:
+    "Paket künye şeması. İçerik şeması preflight sürümüdür; ikisi farklı olabilir.",
+  solutionMethodLabel: "Yöntem",
+  solutionStepsTitle: "Adımlar",
+  solutionResultLabel: "Sonuç",
+  solutionJustificationLabel: "Doğru cevap gerekçesi",
+  solutionCommonMistakesTitle: "Yaygın hatalar",
   ownershipStatusLabel: "Sahiplik durumu",
   licenseStatusLabel: "Lisans durumu",
   commercialUseAllowedLabel: "Ticari kullanım",
@@ -337,6 +372,30 @@ export const ADMIN_CANDIDATE_BATCH_DETAIL_MESSAGES = {
     "Aday yükleme paketi bilgileri şu anda okunamadı. Lütfen daha sonra tekrar deneyin.",
   notFoundTitle: "Paket Bulunamadı",
   notFoundHint: "İletilen paket kimliğiyle eşleşen kayıt bulunamadı.",
+  candidateStatusRibbon: "Durum",
+  candidateOutcomeRibbon: "Kazanım",
+  candidateGradeRibbon: "Sınıf",
+  candidateSubjectRibbon: "Ders",
+  candidateDifficultyRibbon: "Zorluk",
+  candidateSolveTimeRibbon: "Önerilen Süre",
+  candidateCognitiveRibbon: "Bilişsel Düzey",
+  candidateMetadataLabel: "Aday künyesi",
+  candidateStepUnit: "sn",
+  candidateNavigationLabel: "Adaylar arasında gezin",
+  candidatePositionLabel: "Aday {current} / {total}",
+  previousCandidateLabel: "Önceki aday",
+  nextCandidateLabel: "Sonraki aday",
+  reviewDecisionTitle: "İncelemeyi Onayla",
+  reviewDecisionSendFix: "Düzeltmeye Gönder",
+  reviewDecisionReject: "Reddet",
+  reviewDecisionPending:
+    "Karar işlem akışı bir sonraki fazda bağlanacak; bu sürümde karar düğmeleri pasiftir ve hiçbir veri yazılmaz.",
+  reviewDecisionHeading: "İnceleme Kararı",
+  reviewDecisionSubtitle:
+    "Karar akışı bir sonraki fazda bağlanacak; bu sürümde karar düğmeleri görünür ancak pasiftir.",
+  publicationNoticeTitle: "İki Aşamalı Yayın İlkesi",
+  publicationNoticeBody:
+    "Bu ekranda verilen hiçbir karar öğrenciye doğrudan yayınlama veya canlıya alma sağlamaz. Onaylanan sorular bağımsız Yayın İncelemesi güvenlik kapılarından geçmelidir.",
 } as const
 
 export const ADMIN_CANDIDATE_BATCH_OPERATION_STATUS_MESSAGES = {

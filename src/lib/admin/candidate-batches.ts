@@ -61,6 +61,24 @@ export interface CandidateBatchListItem {
   updatedAt: string | null
 }
 
+/**
+ * Faz 24 — aday çözümü (metadata->solution jsonb object). Yalnız
+ * allowlist anahtarları okunur; ham JSON asla taşınmaz. Adımlar
+ * DTO'da düz dizidir (title/content allowlist).
+ */
+export interface CandidateSolutionStep {
+  title: string | null
+  content: string | null
+}
+
+export interface CandidateSolution {
+  method: string | null
+  steps: CandidateSolutionStep[]
+  result: string | null
+  correctAnswerJustification: string | null
+  commonMistakes: string[]
+}
+
 /** Soru önizlemesi — yalnız sayfa yetkisi açıkken gösterilir. */
 export interface CandidatePreview {
   stagingStatus: string | null
@@ -72,6 +90,9 @@ export interface CandidatePreview {
   proposedSolveTimeSeconds: number | null
   gradeLevel: number | null
   subjectId: string | null
+  subjectName: string | null
+  outcomeCode: string | null
+  lowConfidence: boolean | null
   proposedCurriculumVersionId: string | null
   proposedTopicId: string | null
   proposedSubtopicId: string | null
@@ -79,7 +100,7 @@ export interface CandidatePreview {
   licenseStatus: string | null
   commercialUseAllowed: string | null
   copyrightRiskLevel: string | null
-  solution: string | null
+  solution: CandidateSolution | null
 }
 
 export interface ValidationResultItem {
@@ -343,6 +364,33 @@ export function mapCandidateBatchListItem(
 
 const OPTION_LETTERS = ["A", "B", "C", "D", "E"] as const
 
+/**
+ * Faz 24 — çözüm jsonb object → izinli DTO. Yalnız bilinen anahtarlar
+ * okunur; steps/commonMistakes dizileri eleman-tipi filtrelenir.
+ */
+export function mapCandidateSolution(raw: unknown): CandidateSolution | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null
+  const obj = raw as Record<string, unknown>
+  const stepsRaw = Array.isArray(obj.steps) ? obj.steps : []
+  const mistakesRaw = Array.isArray(obj.commonMistakes) ? obj.commonMistakes : []
+  return {
+    method: asString(obj.method),
+    steps: stepsRaw
+      .filter((s): s is Record<string, unknown> =>
+        Boolean(s) && typeof s === "object" && !Array.isArray(s)
+      )
+      .map((s) => ({
+        title: asString(s.title),
+        content: asString(s.content),
+      })),
+    result: asString(obj.result),
+    correctAnswerJustification: asString(obj.correctAnswerJustification),
+    commonMistakes: mistakesRaw.filter(
+      (m): m is string => typeof m === "string"
+    ),
+  }
+}
+
 /** Önizleme → izinli DTO; seçenekler yalnız A–E okunur. */
 export function mapCandidatePreview(row: Record<string, unknown>): CandidatePreview {
   const optionsRaw =
@@ -363,6 +411,10 @@ export function mapCandidatePreview(row: Record<string, unknown>): CandidatePrev
     proposedSolveTimeSeconds: asNumber(row.proposed_solve_time_seconds),
     gradeLevel: asNumber(row.grade_level),
     subjectId: asString(row.subject_id),
+    subjectName: asString(row.subject_name),
+    outcomeCode: asString(row.outcome_code),
+    lowConfidence:
+      typeof row.low_confidence === "boolean" ? row.low_confidence : null,
     proposedCurriculumVersionId: asString(row.proposed_curriculum_version_id),
     proposedTopicId: asString(row.proposed_topic_id),
     proposedSubtopicId: asString(row.proposed_subtopic_id),
@@ -370,7 +422,7 @@ export function mapCandidatePreview(row: Record<string, unknown>): CandidatePrev
     licenseStatus: asString(row.license_status),
     commercialUseAllowed: asString(row.commercial_use_allowed),
     copyrightRiskLevel: asString(row.copyright_risk_level),
-    solution: asString(row.solution),
+    solution: mapCandidateSolution(row.solution),
   }
 }
 

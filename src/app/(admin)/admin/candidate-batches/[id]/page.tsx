@@ -14,8 +14,10 @@ import {
 import { parseBatchUuid } from "@/lib/admin/candidate-batches-errors"
 import { ADMIN_CANDIDATE_BATCH_DETAIL_MESSAGES as M } from "@/lib/admin/admin-panel-messages"
 import { ADMIN_CANDIDATE_BATCH_OPERATION_STATUS_MESSAGES as OM } from "@/lib/admin/admin-panel-messages"
+import { ADMIN_CANDIDATE_BATCHES_MESSAGES } from "@/lib/admin/admin-panel-messages"
 
 type Params = Promise<{ id: string }>
+type SearchParams = Promise<{ candidate?: string | string[] }>
 
 /** Deterministik tarih gösterimi (GG.AA.YYYY SS:DD); bozuk girdide "-". */
 function formatDateTime(value: string | null): string {
@@ -35,6 +37,112 @@ function formatCount(value: number | null): string {
   return value !== null && value !== undefined
     ? value.toLocaleString("tr-TR")
     : M.notAvailable
+}
+
+function candidateHref(batchId: string, position: number): string {
+  return `/admin/candidate-batches/${batchId}?candidate=${position + 1}`
+}
+
+function resolveCandidatePosition(
+  candidates: CandidateRecord[],
+  candidateParam: string | string[] | undefined,
+): number {
+  if (candidates.length === 0) {
+    return -1
+  }
+
+  const rawValue = Array.isArray(candidateParam)
+    ? candidateParam[0]
+    : candidateParam
+  const requestedCandidate = Number(rawValue)
+  if (
+    rawValue === undefined ||
+    !Number.isSafeInteger(requestedCandidate) ||
+    requestedCandidate < 1 ||
+    requestedCandidate > candidates.length
+  ) {
+    return 0
+  }
+
+  return requestedCandidate - 1
+}
+
+function CandidateNavigation({
+  batchId,
+  currentPosition,
+  total,
+}: {
+  batchId: string
+  currentPosition: number
+  total: number
+}) {
+  const controlClass =
+    "inline-flex min-h-[44px] items-center justify-center rounded-xl border px-4 py-2 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-700"
+  const positionLabel = M.candidatePositionLabel
+    .replace("{current}", String(currentPosition + 1))
+    .replace("{total}", String(total))
+
+  return (
+    <nav
+      aria-label={M.candidateNavigationLabel}
+      className="mb-5 flex flex-col gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <p role="status" aria-live="polite" className="font-semibold text-gray-800">
+        {positionLabel}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {currentPosition > 0 ? (
+          <Link
+            href={candidateHref(batchId, currentPosition - 1)}
+            aria-label={M.previousCandidateLabel}
+            className={`${controlClass} border-gray-300 bg-white text-gray-800 hover:bg-gray-100`}
+          >
+            Önceki
+          </Link>
+        ) : (
+          <button
+            type="button"
+            disabled
+            aria-disabled="true"
+            aria-label={M.previousCandidateLabel}
+            className={`${controlClass} cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400`}
+          >
+            Önceki
+          </button>
+        )}
+        {currentPosition < total - 1 ? (
+          <Link
+            href={candidateHref(batchId, currentPosition + 1)}
+            aria-label={M.nextCandidateLabel}
+            className={`${controlClass} border-gray-300 bg-white text-gray-800 hover:bg-gray-100`}
+          >
+            Sonraki
+          </Link>
+        ) : (
+          <button
+            type="button"
+            disabled
+            aria-disabled="true"
+            aria-label={M.nextCandidateLabel}
+            className={`${controlClass} cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400`}
+          >
+            Sonraki
+          </button>
+        )}
+      </div>
+    </nav>
+  )
+}
+
+/**
+ * Gerçek DB status kelime dağarcığı → Türkçe etiket. Bilinmeyen değer
+ * ham hâliyle gösterilir (sahte durum üretilmez); ham status title'da
+ * korunur. Liste sayfasıyla aynı eşleme sözleşmesine uyar.
+ */
+function statusLabel(status: string | null): string {
+  if (!status) return M.unknown
+  const labels: Record<string, string | undefined> = ADMIN_CANDIDATE_BATCHES_MESSAGES.statusLabels
+  return labels[status] ?? status
 }
 
 function Field({
@@ -185,12 +293,130 @@ function GatesSummary({ gates }: { gates: CandidateGates }) {
   )
 }
 
+function CandidateMetadataRibbon({ preview }: { preview: CandidatePreview | null }) {
+  if (!preview) return null
+
+  const chips: { label: string; value: string; tone: string }[] = []
+
+  if (preview.subjectName) {
+    chips.push({
+      label: M.candidateSubjectRibbon,
+      value: preview.subjectName,
+      tone: "border-indigo-200 bg-indigo-50 text-indigo-800",
+    })
+  }
+  if (preview.gradeLevel !== null && preview.gradeLevel !== undefined) {
+    chips.push({
+      label: M.candidateGradeRibbon,
+      value: `${preview.gradeLevel}. Sınıf`,
+      tone: "border-indigo-200 bg-indigo-50 text-indigo-800",
+    })
+  }
+  if (preview.outcomeCode) {
+    chips.push({
+      label: M.candidateOutcomeRibbon,
+      value: preview.outcomeCode,
+      tone: "border-slate-200 bg-slate-50 text-slate-700",
+    })
+  }
+  if (preview.proposedDifficulty) {
+    chips.push({
+      label: M.candidateDifficultyRibbon,
+      value: preview.proposedDifficulty,
+      tone: "border-slate-200 bg-slate-50 text-slate-700",
+    })
+  }
+  if (preview.proposedCognitiveType) {
+    chips.push({
+      label: M.candidateCognitiveRibbon,
+      value: preview.proposedCognitiveType,
+      tone: "border-slate-200 bg-slate-50 text-slate-700",
+    })
+  }
+  if (preview.proposedSolveTimeSeconds !== null && preview.proposedSolveTimeSeconds !== undefined) {
+    chips.push({
+      label: M.candidateSolveTimeRibbon,
+      value: `${preview.proposedSolveTimeSeconds} ${M.candidateStepUnit}`,
+      tone: "border-slate-200 bg-slate-50 text-slate-700",
+    })
+  }
+
+  if (chips.length === 0) return null
+
+  return (
+    <ul
+      aria-label={M.candidateMetadataLabel}
+      className="mb-4 flex flex-wrap items-center gap-2"
+    >
+      {chips.map((chip) => (
+        <li
+          key={chip.label}
+          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${chip.tone}`}
+        >
+          <span className="opacity-70">{chip.label}:</span>
+          {chip.value}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** Pasif karar paneli — bu sürümde veri yazımı yok (kullanıcı görür, işlem beklemededir). */
+function DecisionPanel() {
+  return (
+    <div
+      role="group"
+      aria-label={M.reviewDecisionHeading}
+      className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4"
+    >
+      <h4 className="text-sm font-semibold text-slate-900">
+        {M.reviewDecisionHeading}
+      </h4>
+      <p className="mt-1 text-xs text-slate-600">{M.reviewDecisionSubtitle}</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled
+          className="inline-flex min-h-[44px] items-center rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white opacity-60"
+        >
+          {M.reviewDecisionTitle}
+        </button>
+        <button
+          type="button"
+          disabled
+          className="inline-flex min-h-[44px] items-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 opacity-60"
+        >
+          {M.reviewDecisionSendFix}
+        </button>
+        <button
+          type="button"
+          disabled
+          className="inline-flex min-h-[44px] items-center rounded-xl border border-rose-200 bg-white px-4 py-2 text-sm font-semibold text-rose-700 opacity-60"
+        >
+          {M.reviewDecisionReject}
+        </button>
+      </div>
+      <p className="mt-2 text-xs text-slate-500">{M.reviewDecisionPending}</p>
+    </div>
+  )
+}
+
 function PreviewBlock({ preview }: { preview: CandidatePreview }) {
   return (
     <div>
       <p className="mb-2 text-sm text-gray-700">
         {M.stagingStatusLabel}: {preview.stagingStatus ?? M.notSet}
       </p>
+      {preview.lowConfidence === true ? (
+        <p
+          role="status"
+          className="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800"
+        >
+          {M.lowConfidenceTitle}
+        </p>
+      ) : preview.lowConfidence === null ? (
+        <p className="mb-3 text-sm text-gray-500">{M.lowConfidenceNotRecorded}</p>
+      ) : null}
       <div className="mb-3 rounded-xl border border-gray-200 bg-white p-4">
         <h4 className="text-sm font-semibold text-gray-700">
           {M.previewTitle}
@@ -249,7 +475,11 @@ function PreviewBlock({ preview }: { preview: CandidatePreview }) {
               : ""
           }
         />
-        <Field label={M.subjectIdLabel} value={preview.subjectId ?? ""} />
+        <Field
+          label={M.subjectNameLabel}
+          value={preview.subjectName ?? preview.subjectId ?? ""}
+        />
+        <Field label={M.outcomeCodeLabel} value={preview.outcomeCode ?? ""} />
         <Field
           label={M.ownershipStatusLabel}
           value={preview.ownershipStatus ?? ""}
@@ -267,9 +497,71 @@ function PreviewBlock({ preview }: { preview: CandidatePreview }) {
 
       <div className="rounded-xl border border-gray-200 bg-white p-4">
         <h4 className="text-sm font-semibold text-gray-700">{M.solutionTitle}</h4>
-        <p className="mt-1 whitespace-pre-wrap text-gray-900">
-          {preview.solution || M.solutionMissing}
-        </p>
+        {preview.solution ? (
+          <div className="mt-2 space-y-3 text-sm text-gray-900">
+            <dl className="grid grid-cols-1 gap-y-1">
+              <div>
+                <dt className="text-gray-500">{M.solutionMethodLabel}</dt>
+                <dd className="whitespace-pre-wrap font-medium">
+                  {preview.solution.method || M.notAvailable}
+                </dd>
+              </div>
+              {preview.solution.steps.length > 0 && (
+                <div>
+                  <dt className="text-gray-500">{M.solutionStepsTitle}</dt>
+                  <dd>
+                    <ol className="mt-1 list-decimal space-y-2 pl-5">
+                      {preview.solution.steps.map((step, index) => (
+                        <li key={index}>
+                          {step.title && (
+                            <span className="font-semibold">{step.title}: </span>
+                          )}
+                          {step.content && (
+                            <span className="whitespace-pre-wrap">{step.content}</span>
+                          )}
+                        </li>
+                      ))}
+                    </ol>
+                  </dd>
+                </div>
+              )}
+              <div>
+                <dt className="text-gray-500">{M.solutionResultLabel}</dt>
+                <dd className="whitespace-pre-wrap font-medium">
+                  {preview.solution.result || M.notAvailable}
+                </dd>
+              </div>
+              {preview.solution.correctAnswerJustification && (
+                <div>
+                  <dt className="text-gray-500">
+                    {M.solutionJustificationLabel}
+                  </dt>
+                  <dd className="whitespace-pre-wrap">
+                    {preview.solution.correctAnswerJustification}
+                  </dd>
+                </div>
+              )}
+              {preview.solution.commonMistakes.length > 0 && (
+                <div>
+                  <dt className="text-gray-500">
+                    {M.solutionCommonMistakesTitle}
+                  </dt>
+                  <dd>
+                    <ul className="mt-1 list-inside list-disc">
+                      {preview.solution.commonMistakes.map((mistake, index) => (
+                        <li key={index}>{mistake}</li>
+                      ))}
+                    </ul>
+                  </dd>
+                </div>
+              )}
+            </dl>
+          </div>
+        ) : (
+          <p className="mt-1 whitespace-pre-wrap text-gray-900">
+            {M.solutionMissing}
+          </p>
+        )}
       </div>
     </div>
   )
@@ -358,12 +650,18 @@ function ReviewQueueBlock({ candidate }: { candidate: CandidateRecord }) {
   )
 }
 
-function CandidateBlock({ candidate }: { candidate: CandidateRecord }) {
+function CandidateBlock({
+  candidate,
+  candidateNumber,
+}: {
+  candidate: CandidateRecord
+  candidateNumber: number
+}) {
   return (
     <div className="border-t border-gray-200 p-6">
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <h3 className="text-lg font-semibold text-gray-900">
-          {M.candidateLabel} #{candidate.candidateIndex + 1}
+          {M.candidateLabel} #{candidateNumber}
         </h3>
         <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">
           {M.validationStatusLabel}: {candidate.validationStatus ?? M.notSet}
@@ -380,6 +678,8 @@ function CandidateBlock({ candidate }: { candidate: CandidateRecord }) {
           value={candidate.preview?.stagingStatus ?? ""}
         />
       </dl>
+
+      <CandidateMetadataRibbon preview={candidate.preview} />
 
       {candidate.validationErrors.length > 0 ? (
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
@@ -410,7 +710,10 @@ function CandidateBlock({ candidate }: { candidate: CandidateRecord }) {
       )}
 
       {candidate.preview && (
-        <PreviewBlock preview={candidate.preview} />
+        <>
+          <DecisionPanel />
+          <PreviewBlock preview={candidate.preview} />
+        </>
       )}
 
       <DetailSection title={M.validationResultsTitle}>
@@ -428,20 +731,26 @@ function CandidateBlock({ candidate }: { candidate: CandidateRecord }) {
   )
 }
 
-function DetailBody({ detail }: { detail: CandidateBatchDetail }) {
+function DetailBody({
+  detail,
+  selectedCandidatePosition,
+}: {
+  detail: CandidateBatchDetail
+  selectedCandidatePosition: number
+}) {
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
       <div className="border-b border-gray-200 bg-gray-50 px-6 py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{M.title}</h1>
-            <p className="mt-1 font-semibold text-gray-700">
+          <div className="min-w-0 basis-full sm:flex-1">
+            <h1 className="break-words text-2xl font-bold text-gray-900">{M.title}</h1>
+            <p className="mt-1 break-all font-semibold text-gray-700">
               {detail.batch.batchKey}
             </p>
           </div>
           <Link
             href={`/admin/candidate-batches/${detail.batch.batchId}/islem-durumu`}
-            className="rounded-xl border border-gray-300 bg-white px-4 py-2 font-medium text-gray-700 hover:bg-gray-100"
+            className="shrink-0 rounded-xl border border-gray-300 bg-white px-4 py-2 font-medium text-gray-700 hover:bg-gray-100"
           >
             {OM.detailLinkLabel}
           </Link>
@@ -450,7 +759,7 @@ function DetailBody({ detail }: { detail: CandidateBatchDetail }) {
 
       <DetailSection title={M.batchInfoTitle}>
         <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
-          <Field label={M.statusLabel} value={detail.batch.status ?? ""} />
+          <Field label={M.statusLabel} value={statusLabel(detail.batch.status)} />
           <Field
             label={M.originLabel}
             value={detail.batch.origin ?? ""}
@@ -476,6 +785,7 @@ function DetailBody({ detail }: { detail: CandidateBatchDetail }) {
             value={formatDateTime(detail.batch.updatedAt)}
           />
         </dl>
+        <p className="mt-2 text-xs text-gray-500">{M.schemaVersionBatchNote}</p>
       </DetailSection>
 
       <DetailSection title={M.countsTitle}>
@@ -513,19 +823,48 @@ function DetailBody({ detail }: { detail: CandidateBatchDetail }) {
         {detail.candidates.length === 0 ? (
           <p className="text-sm text-gray-500">{M.noCandidates}</p>
         ) : (
-          detail.candidates.map((candidate) => (
-            <CandidateBlock key={candidate.candidateIndex} candidate={candidate} />
-          ))
+          <>
+            <CandidateNavigation
+              batchId={detail.batch.batchId}
+              currentPosition={selectedCandidatePosition}
+              total={detail.candidates.length}
+            />
+            <CandidateBlock
+              candidate={detail.candidates[selectedCandidatePosition]!}
+              candidateNumber={selectedCandidatePosition + 1}
+            />
+          </>
         )}
       </DetailSection>
+
+      <div className="border-t border-gray-200 px-6 py-4">
+        <div className="flex items-start gap-3 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+          <div
+            aria-hidden="true"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-xl"
+          >
+            🔒
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-indigo-900">
+              {M.publicationNoticeTitle}
+            </h3>
+            <p className="mt-1 text-sm leading-relaxed text-indigo-800">
+              {M.publicationNoticeBody}
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
 
 export default async function AdminCandidateBatchDetailPage({
   params,
+  searchParams,
 }: {
   params: Params
+  searchParams: SearchParams
 }) {
   const supabase = await createClient()
   const { data: userData } = await supabase.auth.getUser()
@@ -584,11 +923,20 @@ export default async function AdminCandidateBatchDetailPage({
     )
   }
 
+  const { candidate } = await searchParams
+  const selectedCandidatePosition = resolveCandidatePosition(
+    detail.candidates,
+    candidate,
+  )
+
   return (
     <main className="min-h-screen bg-gray-50 p-4 sm:p-8">
       <div className="mx-auto max-w-5xl">
         <BackLink />
-        <DetailBody detail={detail} />
+        <DetailBody
+          detail={detail}
+          selectedCandidatePosition={selectedCandidatePosition}
+        />
       </div>
     </main>
   )

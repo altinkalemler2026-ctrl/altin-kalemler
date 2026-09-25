@@ -75,11 +75,38 @@ function mockUnauthenticated() {
 }
 
 function mockAdminPermission() {
-  rpcMock.mockResolvedValue({ data: true, error: null })
+  mockPermissionSet({
+    "questions.view": true,
+    "ai.manage": true,
+    "questions.approve": true,
+    "calendar.manage": true,
+    "users.manage": true,
+    "curriculum.manage": true,
+    "audit.view": true,
+  })
+}
+
+function mockPermissionSet(
+  permissions: Record<string, boolean>,
+  errorCodes: string[] = [],
+) {
+  rpcMock.mockImplementation(
+    async (
+      _functionName: string,
+      args: { p_permission_code: string },
+    ) => ({
+      data: errorCodes.includes(args.p_permission_code)
+        ? null
+        : permissions[args.p_permission_code] === true,
+      error: errorCodes.includes(args.p_permission_code)
+        ? { message: "permission denied" }
+        : null,
+    }),
+  )
 }
 
 function mockNoPermission() {
-  rpcMock.mockResolvedValue({ data: false, error: null })
+  mockPermissionSet({})
 }
 
 function mockPermissionError() {
@@ -148,6 +175,54 @@ describe("AdminDashboardPage — authorized admin", () => {
     expect(html).toContain("4")
     expect(html).toContain("Soru Bankası")
     expect(html).toContain("Kullanıcılar")
+  })
+
+  it("question reviewer yalnız yetkili menüleri ve kullanıcı dışı kartları gösterir", async () => {
+    mockAuthenticated()
+    mockPermissionSet({
+      "questions.view": true,
+      "questions.approve": true,
+    })
+
+    const result = await AdminDashboardPage()
+    const { renderToString } = await import("react-dom/server")
+    const html = renderToString(result)
+
+    expect(html).toContain("Soru Bankası")
+    expect(html).toContain("Aday Soru Paketleri")
+    expect(html).toContain("Öğretmen İncelemeleri")
+    expect(html).not.toContain("Akademik Takvim")
+    expect(html).not.toContain("Kullanıcılar")
+    expect(html).not.toContain("Öğretmen Konu Onayı")
+    expect(html).not.toContain("Denetim Kaydı")
+    expect(html).not.toContain('href="/admin/users"')
+    expect(countUsersMock).not.toHaveBeenCalled()
+  })
+
+  it("bir rota izin hatasında o bağlantıyı fail-closed gizler", async () => {
+    mockAuthenticated()
+    mockPermissionSet(
+      {
+        "questions.view": true,
+        "ai.manage": true,
+        "questions.approve": true,
+        "calendar.manage": true,
+        "users.manage": true,
+        "curriculum.manage": true,
+        "audit.view": true,
+      },
+      ["users.manage"],
+    )
+
+    const result = await AdminDashboardPage()
+    const { renderToString } = await import("react-dom/server")
+    const html = renderToString(result)
+
+    expect(html).toContain("Soru Bankası")
+    expect(html).toContain("Denetim Kaydı")
+    expect(html).not.toContain("Kullanıcılar")
+    expect(html).not.toContain('href="/admin/users"')
+    expect(countUsersMock).not.toHaveBeenCalled()
   })
 })
 
