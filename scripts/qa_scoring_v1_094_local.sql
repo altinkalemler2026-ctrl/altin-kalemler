@@ -3,6 +3,18 @@
 -- Altin Kalemler - Migration 094 yerel QA suite
 -- (Yarisma puanlama sozlesmesi V1)
 --
+-- !!! ZINCIR: Bu suite 001-128 TERMINAL ZINCIRINDE kosturulur. !!!
+--     094'un kendi migration'i tek basina degil, 127 (V2) ve
+--     128 (V3) migration'lari UYGULANMIS haliyle kosturulur.
+--     Bu nedenle A-01 ve A-02 varsayimlari terminale hizalanmistir:
+--       * V1 katalogda KALIR ama 127 ve 128 onu bilincli olarak
+--         pasiflastirir; 144 puan satiri korunur ve AKTIF kalir.
+--       * TEK AKTIF kural seti competition_scoring_v3_fixed'tir
+--         (version 3, 252 puan satiri).
+--     094 sozlesmesinin OZUNU (V1 puanlari, idempotency, yetki
+--     matrisi, negatif puan, lig rating +24/-12) A-03..E-50
+--     bloklari AYNEN dogrulamaya devam eder.
+--
 -- Kapsam:
 --   A-01..A-10 : seed/katalog (tek set, idempotency, kapsam,
 --                negatif yok, ust sinir)
@@ -236,37 +248,96 @@ select
 -- A. SEED VE KATALOG
 -- ############################################################
 
--- A-01: V1 kural seti tam olarak bir kez, aktif ve versiyonlu.
+-- A-01: V1 kural seti tam olarak bir kez, version 1.
+--
+-- 001-128 TERMINAL UYUMMLUGU: migration 127 ve 128, V1'i BILINCLI
+-- olarak PASIFESTIRIR. Katalog satiri SILINMEZ (gecmis FK'lar ve
+-- A-03..A-10/B bloklari onu okur) ve 144 puan satiri KORUNUR +
+-- AKTIF kalir. Yalniz "aktif varsayilan" rolu once v2'ye (127),
+-- sonra v3'e (128) devredilmistir.
+--
+-- ONEMLI: Bu bir beklenti GUNCELLEMESIDIR, varsayim GEVSETMESI
+-- degildir. Test hala tam olarak su varsayimlari denetler:
+--   - katalogda tam 1 kayit (idempotency dahil)
+--   - version = '1'
+--   - 144 puan satiri varligi VE aktifligi
+-- Boylece 094'un V1 sozlesmesi (12 sinif x 3 zorluk x 4 sonuc)
+-- pasiflastirilmis olsa da BOZULMAZ.
 do $blk$
 declare
   v_cnt integer; v_active boolean; v_ver text;
+  v_rows integer; v_rows_active integer;
 begin
   select count(*), bool_or(is_active), max(version)
     into v_cnt, v_active, v_ver
     from public.scoring_rule_sets
    where rule_set_code = 'competition_scoring_v1';
 
+  select count(*), count(*) filter (where spr.is_active)
+    into v_rows, v_rows_active
+    from public.scoring_point_rules spr
+    join public.scoring_rule_sets srs on srs.id = spr.rule_set_id
+   where srs.rule_set_code = 'competition_scoring_v1';
+
   perform public._qa_s94_true('A-01',
-    'V1 rule set tam bir kez, aktif, version=1',
-    v_cnt = 1 and v_active and v_ver = '1',
-    'count=' || v_cnt || ' active=' || v_active || ' ver=' || v_ver);
+    'V1 rule set tam bir kez, version=1; 128 terminalinde is_active=false, 144 satir AKTIF korunur',
+    v_cnt = 1 and v_ver = '1' and coalesce(v_active, true) = false
+      and v_rows = 144 and v_rows_active = 144,
+    'count=' || v_cnt || ' active=' || coalesce(v_active::text, '?') ||
+    ' ver=' || coalesce(v_ver, '?') ||
+    ' rows=' || v_rows || ' rows_active=' || v_rows_active);
 end;
 $blk$;
 
--- A-02: tek aktif kural seti (faz5_default pasif).
+-- A-02: tam olarak bir aktif kural seti.
+--
+-- 001-128 TERMINAL UYUMMLUGU: aktif varsayilan artik
+-- competition_scoring_v3_fixed'tur (version 3, 252 puan satiri =
+-- 12 sinif x 3 zorluk x 7 satir). 127 v2'yi aktif yapti; 128 ise
+-- v1 ve v2'yi bilincli olarak pasif birakip v3'u tek aktif set
+-- yapti.
+--
+-- ONEMLI: Bu bir beklenti GUNCELLEMESIDIR, varsayim GEVSETMESI
+-- degildir. Varsayim aynen korunur ve hatta SERILESTRILIR:
+--   - tam olarak bir aktif set OLMALI
+--   - o set su kod OLMALI: competition_scoring_v3_fixed
+--   - o set version=3 OLMALI ve 252 satir butunlugu KORUNMALI
+-- 127 oncesi beklenen kod v1, 127 sonrasi v2, 128 sonrasi v3'tur.
+-- V1'in PUNANLARI A-03..A-10 ve B bloklari tarafindan hala
+-- 100/150/200 ve 0 olarak dogrulanir; yalniz "aktif varsayilan"
+-- rolu v3'e devredilmistir. V2'nin 144 satiri da 127'de oldugu
+-- gibi korunur ve pasiftir.
 do $blk$
 declare
   v_active_sets text[];
+  v_v3_cnt integer; v_v3_ver text;
+  v_v3_rows integer; v_v3_rows_active integer;
 begin
   select coalesce(array_agg(rule_set_code), '{}')
     into v_active_sets
     from public.scoring_rule_sets
    where is_active = true;
 
+  select count(*), max(version)
+    into v_v3_cnt, v_v3_ver
+    from public.scoring_rule_sets
+   where rule_set_code = 'competition_scoring_v3_fixed';
+
+  select count(*), count(*) filter (where spr.is_active)
+    into v_v3_rows, v_v3_rows_active
+    from public.scoring_point_rules spr
+    join public.scoring_rule_sets srs on srs.id = spr.rule_set_id
+   where srs.rule_set_code = 'competition_scoring_v3_fixed';
+
   perform public._qa_s94_true('A-02',
-    'tek aktif kural seti: competition_scoring_v1',
-    v_active_sets = array['competition_scoring_v1'],
-    'sets=' || array_to_string(v_active_sets, ','));
+    'tek aktif kural seti: competition_scoring_v3_fixed (128 terminali;'
+      || ' 127 sonrasi v2, 127 oncesi v1) + version=3 + 252 satir korunur',
+    v_active_sets = array['competition_scoring_v3_fixed']
+      and v_v3_cnt = 1 and v_v3_ver = '3'
+      and v_v3_rows = 252 and v_v3_rows_active = 252,
+    'sets=' || array_to_string(v_active_sets, ',') ||
+    ' v3_count=' || v_v3_cnt || ' v3_ver=' || coalesce(v_v3_ver, '?') ||
+    ' v3_rows=' || v_v3_rows || ' v3_rows_active=' || v_v3_rows_active);
 end;
 $blk$;
 

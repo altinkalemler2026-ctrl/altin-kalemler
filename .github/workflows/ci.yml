@@ -261,7 +261,8 @@ jobs:
 
       # ----------------------------------------------------------
       # SQL QA suretleri: Faz 1 / Faz 2 / Faz 3 / Faz 3.5 / Faz 4 /
-      # Faz 5 / Faz 6 / Faz 10 / Faz 10B / Faz 11 + sabitlere.
+      # Faz 5 / Faz 6 / Faz 10 / Faz 10B / Faz 11 / Faz 30G-127-128
+      # + sabitler.
       # - Faz 3 kendi icinde FAIL durumunda exception firlatir
       #   (psql ON_ERROR_STOP ile exit != 0) ve "TAMAM: kalan=0"
       #   satiri basar.
@@ -349,6 +350,12 @@ jobs:
           run_suite faz10 scripts/qa_faz10_avatar_rpc_local.sql parsed
           run_suite faz10b scripts/qa_faz10b_public_privilege_hardening_local.sql parsed
           run_suite faz11 scripts/qa_faz11_progress_feedback_local.sql parsed
+          # Faz 30G: 127 (V2 negatif yanlis/zaman asimi) ve 128 (V3 sabit
+          # puan / rakip bonusu / ustalik golgesi). 128, V2'yi bilincli
+          # olarak pasif birakir ve pas = 0 + rakip bonusunu terminal
+          # kural yapar; bu iki suite o terminali zorunlu kilar.
+          run_suite scoring127 scripts/qa_scoring_v2_127_local.sql parsed
+          run_suite faz30d1 scripts/qa_faz30d1_v3_local.sql parsed
 
       # ----------------------------------------------------------
       # Faz 2 paralel sayaç probe'u: iki AYRI docker exec sureci ile

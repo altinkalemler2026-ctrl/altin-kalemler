@@ -3945,6 +3945,7 @@ export type Database = {
           id: string
           joined_at: string
           metadata: Json
+          opponent_bonus_points: number
           pass_count: number
           player_slot: number
           ready_at: string | null
@@ -3961,6 +3962,7 @@ export type Database = {
           id?: string
           joined_at?: string
           metadata?: Json
+          opponent_bonus_points?: number
           pass_count?: number
           player_slot: number
           ready_at?: string | null
@@ -3977,6 +3979,7 @@ export type Database = {
           id?: string
           joined_at?: string
           metadata?: Json
+          opponent_bonus_points?: number
           pass_count?: number
           player_slot?: number
           ready_at?: string | null
@@ -5435,6 +5438,351 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      faz30d_answer_shadow: {
+        Row: {
+          answer_result: string
+          band_code: string | null
+          base_points: number
+          competition_answer_id: string
+          competition_id: string
+          competition_question_id: string
+          created_at: string
+          difficulty: string | null
+          elapsed_ms: number
+          elapsed_ratio: number | null
+          expert_time_seconds: number | null
+          grade_level: number | null
+          is_grace_window: boolean
+          provenance: Json
+          reason_code: string
+          subject_id: string | null
+          user_id: string
+        }
+        Insert: {
+          answer_result: string
+          band_code?: string | null
+          base_points: number
+          competition_answer_id: string
+          competition_id: string
+          competition_question_id: string
+          created_at?: string
+          difficulty?: string | null
+          elapsed_ms: number
+          elapsed_ratio?: number | null
+          expert_time_seconds?: number | null
+          grade_level?: number | null
+          is_grace_window?: boolean
+          provenance?: Json
+          reason_code: string
+          subject_id?: string | null
+          user_id: string
+        }
+        Update: {
+          answer_result?: string
+          band_code?: string | null
+          base_points?: number
+          competition_answer_id?: string
+          competition_id?: string
+          competition_question_id?: string
+          created_at?: string
+          difficulty?: string | null
+          elapsed_ms?: number
+          elapsed_ratio?: number | null
+          expert_time_seconds?: number | null
+          grade_level?: number | null
+          is_grace_window?: boolean
+          provenance?: Json
+          reason_code?: string
+          subject_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      faz30d_global_points_events: {
+        Row: {
+          competition_answer_id: string | null
+          competition_id: string
+          created_at: string
+          event_key: string
+          event_kind: string
+          id: number
+          points: number
+          provenance: Json
+          reason_code: string
+          subject_id: string | null
+          user_id: string
+        }
+        Insert: {
+          competition_answer_id?: string | null
+          competition_id: string
+          created_at?: string
+          event_key: string
+          event_kind: string
+          id?: number
+          points: number
+          provenance?: Json
+          reason_code: string
+          subject_id?: string | null
+          user_id: string
+        }
+        Update: {
+          competition_answer_id?: string | null
+          competition_id?: string
+          created_at?: string
+          event_key?: string
+          event_kind?: string
+          id?: number
+          points?: number
+          provenance?: Json
+          reason_code?: string
+          subject_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      faz30d_global_points_totals: {
+        Row: {
+          total_points: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          total_points?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          total_points?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      faz30d_opponent_bonus_ledger: {
+        Row: {
+          band_rank_gap: number | null
+          bonus_points: number
+          competition_answer_id: string
+          competition_id: string
+          competition_question_id: string
+          created_at: string
+          id: number
+          opponent_answer_result: string | null
+          opponent_band_code: string | null
+          opponent_user_id: string | null
+          own_answer_result: string
+          own_band_code: string | null
+          provenance: Json
+          reason_code: string
+          user_id: string
+        }
+        Insert: {
+          band_rank_gap?: number | null
+          bonus_points?: number
+          competition_answer_id: string
+          competition_id: string
+          competition_question_id: string
+          created_at?: string
+          id?: number
+          opponent_answer_result?: string | null
+          opponent_band_code?: string | null
+          opponent_user_id?: string | null
+          own_answer_result: string
+          own_band_code?: string | null
+          provenance?: Json
+          reason_code: string
+          user_id: string
+        }
+        Update: {
+          band_rank_gap?: number | null
+          bonus_points?: number
+          competition_answer_id?: string
+          competition_id?: string
+          competition_question_id?: string
+          created_at?: string
+          id?: number
+          opponent_answer_result?: string | null
+          opponent_band_code?: string | null
+          opponent_user_id?: string | null
+          own_answer_result?: string
+          own_band_code?: string | null
+          provenance?: Json
+          reason_code?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      faz30d_subject_mastery_current: {
+        Row: {
+          created_at: string
+          current_level: number
+          highest_level: number
+          subject_id: string
+          total_points: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_level?: number
+          highest_level?: number
+          subject_id: string
+          total_points?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_level?: number
+          highest_level?: number
+          subject_id?: string
+          total_points?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      faz30d_subject_mastery_events: {
+        Row: {
+          answer_result: string
+          band_code: string | null
+          competition_answer_id: string
+          competition_id: string
+          created_at: string
+          delta_points: number
+          difficulty: string
+          event_key: string
+          id: number
+          level_after: number
+          reason_code: string
+          subject_id: string
+          total_points_after: number
+          user_id: string
+        }
+        Insert: {
+          answer_result: string
+          band_code?: string | null
+          competition_answer_id: string
+          competition_id: string
+          created_at?: string
+          delta_points: number
+          difficulty: string
+          event_key: string
+          id?: number
+          level_after: number
+          reason_code: string
+          subject_id: string
+          total_points_after: number
+          user_id: string
+        }
+        Update: {
+          answer_result?: string
+          band_code?: string | null
+          competition_answer_id?: string
+          competition_id?: string
+          created_at?: string
+          delta_points?: number
+          difficulty?: string
+          event_key?: string
+          id?: number
+          level_after?: number
+          reason_code?: string
+          subject_id?: string
+          total_points_after?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      faz30d_v3_bands: {
+        Row: {
+          band_code: string
+          is_grace_window: boolean
+          is_proposed_timeout: boolean
+          is_scored_band: boolean
+          label_key: string
+          max_ratio: number | null
+          min_ratio: number | null
+          sort_order: number
+        }
+        Insert: {
+          band_code: string
+          is_grace_window?: boolean
+          is_proposed_timeout?: boolean
+          is_scored_band?: boolean
+          label_key: string
+          max_ratio?: number | null
+          min_ratio?: number | null
+          sort_order: number
+        }
+        Update: {
+          band_code?: string
+          is_grace_window?: boolean
+          is_proposed_timeout?: boolean
+          is_scored_band?: boolean
+          label_key?: string
+          max_ratio?: number | null
+          min_ratio?: number | null
+          sort_order?: number
+        }
+        Relationships: []
+      }
+      faz30d_v3_level_thresholds: {
+        Row: {
+          level_name: string
+          level_no: number
+          min_points: number
+        }
+        Insert: {
+          level_name: string
+          level_no: number
+          min_points: number
+        }
+        Update: {
+          level_name?: string
+          level_no?: number
+          min_points?: number
+        }
+        Relationships: []
+      }
+      faz30d_v3_mastery_rules: {
+        Row: {
+          correct_gain: number
+          difficulty: string
+          fault_penalty: number
+          perfect_gain: number
+        }
+        Insert: {
+          correct_gain: number
+          difficulty: string
+          fault_penalty: number
+          perfect_gain: number
+        }
+        Update: {
+          correct_gain?: number
+          difficulty?: string
+          fault_penalty?: number
+          perfect_gain?: number
+        }
+        Relationships: []
+      }
+      faz30d_v3_opponent_bonus_rules: {
+        Row: {
+          description: string
+          rule_key: string
+          rule_value: number
+        }
+        Insert: {
+          description: string
+          rule_key: string
+          rule_value: number
+        }
+        Update: {
+          description?: string
+          rule_key?: string
+          rule_value?: number
+        }
+        Relationships: []
       }
       import_batches: {
         Row: {
@@ -8376,6 +8724,7 @@ export type Database = {
           difficulty: string | null
           estimated_solve_time_seconds: number | null
           exam_track: string | null
+          expert_solution_time_seconds: number | null
           grade_level: number
           has_visual: boolean
           id: string
@@ -8407,6 +8756,7 @@ export type Database = {
           difficulty?: string | null
           estimated_solve_time_seconds?: number | null
           exam_track?: string | null
+          expert_solution_time_seconds?: number | null
           grade_level: number
           has_visual?: boolean
           id?: string
@@ -8438,6 +8788,7 @@ export type Database = {
           difficulty?: string | null
           estimated_solve_time_seconds?: number | null
           exam_track?: string | null
+          expert_solution_time_seconds?: number | null
           grade_level?: number
           has_visual?: boolean
           id?: string
