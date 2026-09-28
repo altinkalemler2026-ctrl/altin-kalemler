@@ -151,10 +151,17 @@ grant execute
 --   matematik: 430903f3-527e-4e12-b7e8-ac0afdb784aa (045 seed)
 -- ============================================================
 
--- auth.users kolon adi disposable image'da confirmed_at (email_confirmed_at
--- degil) — bkz. docs/reports/faz20-nihai-rapor.md QA kurulum notlari.
+-- auth.users.confirmed_at bu imajda GENERATED STORED kolondur
+-- (LEAST(email_confirmed_at, phone_confirmed_at)); dogrudan deger
+-- yazilamaz. Bu yuzden INSERT kolon listesinden cikarildi ve yerine
+-- kaynak kolon email_confirmed_at dolduruldu; confirmed_at degeri
+-- platform tarafindan uretilir. Fixture'in gozlenen durumu
+-- (confirmed_at = now()) degismez.
+-- auth.identities.email de GENERATED STORED
+-- (lower(identity_data ->> 'email')); bu suite auth.identities'e
+-- yazmadigi icin dokunulmadi.
 insert into auth.users
-  (id, aud, role, email, encrypted_password, confirmed_at,
+  (id, aud, role, email, encrypted_password, email_confirmed_at,
    raw_user_meta_data, created_at, updated_at)
 values
   ('99770000-0000-0000-0000-000000000991', 'authenticated', 'authenticated',
@@ -603,5 +610,14 @@ $blk$;
 select label, title, result, detail
   from public._qa_q122_results
  order by label;
+
+-- CI run_suite 'summary' turu icin son satir ozeti:
+--   OZET: <PASS> PASS / <FAIL> FAIL
+-- Bu satir kapilari gevsetmez; tersine basarisizligi sayisal olarak
+-- gorunur kilar ve psql ciktisinin tek satirlik sozlesmeye uymasini
+-- saglar.
+select 'OZET: ' || count(*) filter (where result = 'PASS') || ' PASS / '
+            || count(*) filter (where result <> 'PASS') || ' FAIL'
+  from public._qa_q122_results;
 
 rollback;

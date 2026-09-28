@@ -356,6 +356,16 @@ jobs:
           # kural yapar; bu iki suite o terminali zorunlu kilar.
           run_suite scoring127 scripts/qa_scoring_v2_127_local.sql parsed
           run_suite faz30d1 scripts/qa_faz30d1_v3_local.sql parsed
+          # Faz 31C: 122 admin soru icerik kapisi QA (T-01 ... T-12 /
+          # 19 assertion). Bu, 129 repair migration'inin KANIT
+          # zincirinin sonuc tarafi: legacy'de 122 davranisi geri
+          # geldiginde de bu kapilar yesil kalmalidir. Suite TEK
+          # transaction icinde calisir ve sonunda ROLLBACK yapar,
+          # hicbir test artefakti/kalici kayit birakmaz.
+          # 'summary' turu: ciktida '|FAIL|' satiri olmamali ve son
+          # satir 'OZET: <n> PASS / <m> FAIL' biciminde olmali;
+          # FAIL>0 veya PASS=0 ise CI hata verir.
+          run_suite qgate122 scripts/qa_question_edit_gate_122_local.sql summary
 
       # ----------------------------------------------------------
       # Faz 2 paralel sayaç probe'u: iki AYRI docker exec sureci ile
