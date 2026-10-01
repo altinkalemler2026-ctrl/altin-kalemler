@@ -366,6 +366,20 @@ jobs:
           # satir 'OZET: <n> PASS / <m> FAIL' biciminde olmali;
           # FAIL>0 veya PASS=0 ise CI hata verir.
           run_suite qgate122 scripts/qa_question_edit_gate_122_local.sql summary
+          # Faz 35B: 130 review-and-promote karar kapilari QA.
+          # M1 bloklayicilar (eksik zorunlu dogrulama / herhangi bir
+          # validator fail / high|blocked telif), M2 ayni
+          # request_changes tekrarinda idempotent_replay, M3 approve/
+          # reject/request_changes icin tam olarak 1 audit (aktor +
+          # varlik + before/after) ve atomiklik, M4 ise tekil
+          # readiness/validation kaydi ve karar sonrasi DEGISMEYEN
+          # intake sayaçlari. Suite TEK transaction icinde calisir ve
+          # sonunda ROLLBACK yapar; hicbir kalici kayit birakmaz.
+          # Not: admin_audit_log / ai_question_final_reviews /
+          # questions tablolarinda RLS ETKILDIR; dogrulama SELECT'leri
+          # bu yuzden suite icinde superuser turunden (reset role)
+          # yapilir. Bu, beklenen guvenlik davranisidir.
+          run_suite faz35b scripts/qa_faz35_review_actions_130_local.sql summary
 
       # ----------------------------------------------------------
       # Faz 2 paralel sayaç probe'u: iki AYRI docker exec sureci ile
