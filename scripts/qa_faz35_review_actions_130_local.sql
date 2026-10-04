@@ -144,6 +144,11 @@ begin
 end;
 $qa$;
 
+-- Kimlik kurulumu: CI imajindaki auth.uid() ve auth.role() TEKIL (eski)
+-- claim okur; bu yuzden qgate122 deseniyle COĞUL + TEKIL claim'ler birlikte
+-- kurulur. Tekil claim'ler eklenmedigi zaman auth.uid() NULL doner ve
+-- migration 130'un 'Human authentication required.' kapisi tetiklenir
+-- (bkz. docs/reports/faz35e-ci-faz35b-sql-hatasi-kok-neden-teshisi.md).
 create function public._qa35b_as(p_uid uuid)
 returns void
 language plpgsql
@@ -153,11 +158,32 @@ begin
   execute 'set local role authenticated';
   perform set_config('request.jwt.claims',
     json_build_object('sub', p_uid, 'role', 'authenticated')::text, true);
+  perform set_config('request.jwt.claim.sub', p_uid::text, true);
+  perform set_config('request.jwt.claim.role', 'authenticated', true);
+end;
+$qa$;
+
+-- Kimlik temizleme: TEK noktada, uc claim birden. Suite'teki HER temizleme
+-- noktasi bu yardimciyi cagirir; boylece kimlik T-31 (set local role anon)
+-- dahil hicbir senaryoya sizamaz ve temizleme unutulamaz.
+create function public._qa35b_clear_claims()
+returns void
+language plpgsql
+security invoker
+as $qa$
+begin
+  perform set_config('request.jwt.claims', '', true);
+  perform set_config('request.jwt.claim.sub', '', true);
+  perform set_config('request.jwt.claim.role', '', true);
 end;
 $qa$;
 
 grant execute
   on function public._qa35b_expect(text, text, text, text)
+  to anon, authenticated, service_role;
+
+grant execute
+  on function public._qa35b_clear_claims()
   to anon, authenticated, service_role;
 
 grant execute
@@ -543,7 +569,7 @@ select public._qa35b_expect_msg('T-09',
   'P0001', '%blocking promotion gates failed%');
 
 reset role;
-select set_config('request.jwt.claims', '', true);
+select public._qa35b_clear_claims();
 
 -- Bloke edilen iki aday için HİÇBİR yan etki olmamalı
 select public._qa35b_true('T-08b',
@@ -609,7 +635,7 @@ end;
 $t$;
 
 reset role;
-select set_config('request.jwt.claims', '', true);
+select public._qa35b_clear_claims();
 
 -- ---- Aşağıdaki T-13/T-14/T-18b/T-19a doğrulamaları SUPERUSER olarak
 -- ---- yapılır: admin_audit_log / ai_question_final_reviews /
@@ -734,7 +760,7 @@ end;
 $t$;
 
 reset role;
-select set_config('request.jwt.claims', '', true);
+select public._qa35b_clear_claims();
 
 -- ---- T-10b/T-11b/T-12b/T-16: SUPERUSER doğrulaması (RLS nedeniyle
 -- ---- authenticated rolü bu tabloları GÖREMEZ).
@@ -826,7 +852,7 @@ select public._qa35b_expect_msg('T-15b',
   'P0001', '%Rejected staging question cannot be promoted%');
 
 reset role;
-select set_config('request.jwt.claims', '', true);
+select public._qa35b_clear_claims();
 
 -- ---- T-15c: SUPERUSER doğrulaması (RLS)
 do $t$
@@ -890,6 +916,25 @@ begin
     v_err := sqlerrm;
   end;
 
+  perform set_config('qa35b.t17_forced_error', coalesce(v_err, ''), true);
+
+end;
+$t$;
+
+reset role;
+select public._qa35b_clear_claims();
+
+-- ---- T-17: SUPERUSER doğrulaması (RLS)
+-- Zorlanan hata authenticated bağlamında üretilir. Ancak
+-- ai_question_final_reviews / admin_audit_log / ai_validation_results /
+-- questions tablolarına authenticated SELECT verilmemesi bilinçli bir
+-- güvenlik kararıdır. Bu nedenle geri alınma doğrulaması, T-15c ile aynı
+-- kalıpta, reset role sonrası suite sahibi bağlamında yapılır.
+do $t$
+declare
+  v_sid  uuid := (public._qa35b_consts() ->> 'sid_atomic')::uuid;
+  v_err  text := nullif(current_setting('qa35b.t17_forced_error', true), '');
+begin
   perform public._qa35b_true('T-17',
     'M3: zorlanan hata sonrasi review+audit+validation+questions HEPSI geri alindi',
     v_err = 'ZORLA_SONRAKI_HATA'
@@ -911,9 +956,6 @@ begin
 
 end;
 $t$;
-
-reset role;
-select set_config('request.jwt.claims', '', true);
 
 
 -- ============================================================
@@ -966,7 +1008,7 @@ end;
 $t$;
 
 reset role;
-select set_config('request.jwt.claims', '', true);
+select public._qa35b_clear_claims();
 
 -- T-22: promote tekrarı deterministic satırı çoğaltmaz
 -- (approve, readiness'yi bir kez daha çağırır)
@@ -1123,7 +1165,7 @@ $t$;
 
 -- T-31: anon çağrı -> EXECUTE-denied
 set local role anon;
-select set_config('request.jwt.claims', '', true);
+select public._qa35b_clear_claims();
 
 select public._qa35b_expect('T-31',
   'Yetki: anon private.review_and_promote EXECUTE-denied',
@@ -1132,7 +1174,7 @@ select public._qa35b_expect('T-31',
           'b3500000-0000-0000-0000-0000000000a1', 'approve', 'anon denemesi')$sql$);
 
 reset role;
-select set_config('request.jwt.claims', '', true);
+select public._qa35b_clear_claims();
 
 -- T-32: öğrenci reddi
 select public._qa35b_as((public._qa35b_consts() ->> 'student_uid')::uuid);
@@ -1144,7 +1186,7 @@ select public._qa35b_expect_msg('T-32',
   'P0001', '%Question approval permission required%');
 
 reset role;
-select set_config('request.jwt.claims', '', true);
+select public._qa35b_clear_claims();
 
 -- T-33: questions.approve yetkisi olmayan admin (copyright_reviewer)
 select public._qa35b_as((public._qa35b_consts() ->> 'wrong_uid')::uuid);
@@ -1156,7 +1198,7 @@ select public._qa35b_expect_msg('T-33',
   'P0001', '%Question approval permission required%');
 
 reset role;
-select set_config('request.jwt.claims', '', true);
+select public._qa35b_clear_claims();
 
 -- T-34: geçersiz karar
 select public._qa35b_as((public._qa35b_consts() ->> 'admin_uid')::uuid);
@@ -1168,7 +1210,7 @@ select public._qa35b_expect_msg('T-34',
   'P0001', '%Invalid final review decision%');
 
 reset role;
-select set_config('request.jwt.claims', '', true);
+select public._qa35b_clear_claims();
 
 
 -- ============================================================
