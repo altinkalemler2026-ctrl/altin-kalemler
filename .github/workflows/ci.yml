@@ -545,7 +545,7 @@ jobs:
       - name: Vitest full (integration dahil)
         run: |
           npx vitest run --exclude "**/*.local.test.ts"
-          npx vitest run src/lib/training/integration.local.test.ts src/lib/analytics/integration.local.test.ts --no-file-parallelism
+          npx vitest run src/lib/training/integration.local.test.ts src/lib/analytics/integration.local.test.ts src/lib/admin/review-actions.integration.local.test.ts --no-file-parallelism
 
       - name: Summary
         if: always()
