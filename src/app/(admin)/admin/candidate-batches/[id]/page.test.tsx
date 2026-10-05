@@ -49,6 +49,16 @@ function detailPageProps(candidate?: string) {
   }
 }
 
+/** Flash (ok/error) sorgu parametreleriyle sayfa props'u. */
+function detailPagePropsWith(
+  extra: { ok?: string; error?: string; candidate?: string },
+) {
+  return {
+    params: Promise.resolve({ id: BATCH_UUID }),
+    searchParams: Promise.resolve(extra),
+  }
+}
+
 function okDetail(overrides: Record<string, unknown> = {}) {
   return {
     batch: {
@@ -139,6 +149,34 @@ function okDetail(overrides: Record<string, unknown> = {}) {
       },
     ],
     ...overrides,
+  }
+}
+
+/**
+ * Gerçek veri durumunu taklit eder: staging `validating`, readiness
+ * `human_review_required`, skor 0 — yani üç karar da kapalı olmalı.
+ */
+function validatingDetail() {
+  const detail = okDetail()
+  const base = detail.candidates[0]!
+  return {
+    ...detail,
+    candidates: [
+      {
+        ...base,
+        stagingQuestionId: "11111111-2222-4333-8444-555555555555",
+        preview: { ...base.preview!, stagingStatus: "validating" },
+        gates: {
+          ...base.gates,
+          readiness: {
+            fields: [
+              { key: "readiness_status", value: "human_review_required" },
+              { key: "readiness_score", value: 0 },
+            ],
+          },
+        },
+      },
+    ],
   }
 }
 
@@ -280,8 +318,9 @@ describe("AdminCandidateBatchDetailPage — yetkili render", () => {
     expect(html).toContain("consensus")
     expect(html).toContain("Nihai İnceleme")
     expect(html).toContain("İnceleme Kararı")
+    // Faz 35 / UI-P2A: üç gerçek karar etiketi migration 130 sözleşmesinden gelir.
     expect(html).toContain("İncelemeyi Onayla")
-    expect(html).toContain("Düzeltmeye Gönder")
+    expect(html).toContain("Düzeltme İste")
     expect(html).toContain("Reddet")
     expect(html).toContain("İki Aşamalı Yayın İlkesi")
   })
@@ -391,10 +430,111 @@ describe("AdminCandidateBatchDetailPage — yetkili render", () => {
   })
 })
 
-describe("AdminCandidateBatchDetailPage — no mutation capability", () => {
-  it("sayfa mutation fonksiyonu import etmez", async () => {
+/**
+ * FAZ 34G / G4 regresyonu: mobilde `grid-cols-1` olan `dl` içinde çıplak
+ * `col-span-2`, CSS Grid'i örtük ikinci sütun yaratıyor ve genişliği
+ * etiketlerden çalıyordu (375px'te 3 etiket taşması). Masaüstündeki
+ * sütun kaplaması korunmalı, mobilde uygulanmamalı.
+ */
+describe("AdminCandidateBatchDetailPage — mobil ızgara sözleşmesi (G4)", () => {
+  it("çıplak col-span-2 yok; masaüstü kaplaması sm:col-span-2 ile korunuyor", async () => {
+    mockAuthenticated()
+    getDetailMock.mockResolvedValue({ status: "ok", item: okDetail() })
+
+    const result = await AdminCandidateBatchDetailPage(detailPageProps())
+    const { renderToString } = await import("react-dom/server")
+    const html = renderToString(result)
+
+    const classTokens = [...html.matchAll(/class="([^"]*)"/g)].flatMap((match) =>
+      (match[1] ?? "").split(/\s+/).filter(Boolean)
+    )
+
+    // Mobilde uygulanan çıplak span, örtük sütun ve taşma demektir.
+    expect(classTokens.filter((token) => token === "col-span-2")).toEqual([])
+    // Masaüstü kaplaması yanlışlıkla silinmemeli.
+    expect(classTokens.filter((token) => token === "sm:col-span-2")).not.toEqual([])
+  })
+})
+
+describe("AdminCandidateBatchDetailPage — karar yazma yeteneği sözleşmesi (UI-P2A)", () => {
+  it("sayfa modülü yalnızca default export sunar", async () => {
     const pageModule = await import("./page")
     const source = Object.keys(pageModule)
     expect(source).toEqual(["default"])
+  })
+
+  it("seçim adımında sunucu aksiyonlu form YOKTUR (ilk tıklama yazmaz)", async () => {
+    mockAuthenticated()
+    getDetailMock.mockResolvedValue({ status: "ok", item: okDetail() })
+
+    const result = await AdminCandidateBatchDetailPage(detailPageProps())
+    const { renderToString } = await import("react-dom/server")
+    const html = renderToString(result)
+
+    // Onay adımı seçilmediği sürece hiçbir <form> render edilmemeli.
+    // Bu, "karar kaydı için iki ayrı tıklama" kuralının temelidir.
+    expect(html).not.toContain("<form")
+    expect(html).not.toContain("action=")
+    // Seçim düğmesi bir sunucu formu değil, düz bir type=button olmalı.
+    expect(html).toContain('type="button"')
+    expect(html).toContain("Kararı Seç ve Onaya Git")
+  })
+
+  it("kapı kapalı adayda üç karar da devre dışı ve nedeni görünür", async () => {
+    mockAuthenticated()
+    getDetailMock.mockResolvedValue({
+      status: "ok",
+      item: validatingDetail(),
+    })
+
+    const result = await AdminCandidateBatchDetailPage(detailPageProps())
+    const { renderToString } = await import("react-dom/server")
+    const html = renderToString(result)
+
+    // Üç karar seçeneği de disabled olmalı ve neden metin olarak verilmeli.
+    const radioCount = (html.match(/type="radio"/g) ?? []).length
+    expect(radioCount).toBe(3)
+    expect(html.match(/type="radio" disabled/g)?.length ?? 0).toBe(3)
+    expect(html).toContain("Karar Kapıları Kapalı")
+    expect(html).toContain(
+      "Doğrulama ve hazırlık değerlendirmesi tamamlanmadan insan kararı verilemez."
+    )
+  })
+
+  it("panelde yayınlama/activate çağrısı YOK; yayın uyarısı görünür", async () => {
+    mockAuthenticated()
+    getDetailMock.mockResolvedValue({ status: "ok", item: okDetail() })
+
+    const result = await AdminCandidateBatchDetailPage(detailPageProps())
+    const { renderToString } = await import("react-dom/server")
+    const html = renderToString(result)
+
+    expect(html).not.toContain("activate_question_for_students")
+    expect(html).toContain("İki Aşamalı Yayın İlkesi")
+    expect(html).toContain(
+      "Bu ekranda verilen hiçbir karar öğrenciye doğrudan yayınlama veya canlıya alma sağlamaz."
+    )
+  })
+
+  it("karar sonucu flash'ı role=status / role=alert olarak erişilebilir", async () => {
+    mockAuthenticated()
+    getDetailMock.mockResolvedValue({ status: "ok", item: okDetail() })
+
+    const okResult = await AdminCandidateBatchDetailPage(
+      detailPagePropsWith({ ok: "Karar kaydedildi: aday reddedildi." }),
+    )
+    const { renderToString } = await import("react-dom/server")
+    const okHtml = renderToString(okResult)
+
+    expect(okHtml).toContain('role="status"')
+    expect(okHtml).toContain("Karar kaydedildi: aday reddedildi.")
+
+    const errResult = await AdminCandidateBatchDetailPage(
+      detailPagePropsWith({ error: "Bu karar için aday uygun değil." }),
+    )
+    const errHtml = renderToString(errResult)
+
+    expect(errHtml).toContain('role="alert"')
+    expect(errHtml).toContain("Bu karar için aday uygun değil.")
   })
 })

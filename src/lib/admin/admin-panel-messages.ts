@@ -268,6 +268,8 @@ export const ADMIN_CANDIDATE_BATCHES_MESSAGES = {
     "Salt İnceleme (Read-Only) modu aktiftir. Bu ekranda hiçbir işlem veri tabanına yazılmaz ve öğrenciye doğrudan yayınlama yetkisi bulunmaz.",
   refreshLabel: "Yenile",
   shownOfTotal: "{shown} / {total} paket görüntüleniyor",
+  metricsRegionLabel: "Paket özet sayacları",
+  listRegionLabel: "Paket listesi",
   statusLabels: {
     received: "Alındı",
     validating: "Doğrulanıyor",
@@ -385,21 +387,62 @@ export const ADMIN_CANDIDATE_BATCH_DETAIL_MESSAGES = {
   candidatePositionLabel: "Aday {current} / {total}",
   previousCandidateLabel: "Önceki aday",
   nextCandidateLabel: "Sonraki aday",
-  reviewDecisionTitle: "İncelemeyi Onayla",
-  reviewDecisionSendFix: "Düzeltmeye Gönder",
-  reviewDecisionReject: "Reddet",
-  reviewDecisionPending:
-    "Karar işlem akışı bir sonraki fazda bağlanacak; bu sürümde karar düğmeleri pasiftir ve hiçbir veri yazılmaz.",
   reviewDecisionHeading: "İnceleme Kararı",
   reviewDecisionSubtitle:
-    "Karar akışı bir sonraki fazda bağlanacak; bu sürümde karar düğmeleri görünür ancak pasiftir.",
+    "Doğrulama ve hazırlık kapıları tamamlanmadan karar verilemez. Karar seçtiğinizde ayrı bir onay adımı açılır.",
   publicationNoticeTitle: "İki Aşamalı Yayın İlkesi",
   publicationNoticeBody:
     "Bu ekranda verilen hiçbir karar öğrenciye doğrudan yayınlama veya canlıya alma sağlamaz. Onaylanan sorular bağımsız Yayın İncelemesi güvenlik kapılarından geçmelidir.",
+
+  // --- Faz 35 / UI-P2A: gerçek karar paneli ---
+  decisionPanelHeading: "İnceleme Kararı",
+  decisionPanelIntro:
+    "Bu panel migration 130 karar sözleşmesine bağlıdır. Karar yazmadan önce uygunluğu sunucuda yeniden doğrulanır.",
+  decisionSelectStepHeading: "1. Kararı Seç",
+  decisionSelectStepHint:
+    "Bir karar seçin ve gerekçe yazın. Bu adım hiçbir veri yazmaz; yalnızca onay adımını açar.",
+  decisionConfirmStepHeading: "2. Kararı Onayla",
+  decisionConfirmStepHint:
+    "Bu adım kararı veritabanına kaydeder. Onaylamazsanız hiçbir veri yazılmaz.",
+  decisionRationaleLabel: "Gerekçe",
+  decisionRationaleHintOptional: "İsteğe bağlı (en fazla 2000 karakter).",
+  decisionRationaleHintRequired: "Zorunlu (en fazla 2000 karakter).",
+  decisionRationalePlaceholder: "Karar gerekçenizi yazın.",
+  decisionProceedLabel: "Kararı Onayla",
+  decisionCancelLabel: "Vazgeç",
+  decisionSubmitLabel: "Kararı Seç ve Onaya Git",
+  decisionAllDisabledHeading: "Karar Kapıları Kapalı",
+  decisionAllDisabledHint:
+    "Bu aday için henüz karar verilemiyor. Aşağıdaki nedenler her karar düğmesinin neden devre dışı olduğunu gösterir.",
+  decisionEnabledSummary:
+    "Uygun kararlar: {decisions}. Onaylamak için düğmeyi seçip gerekçe yazın.",
+  decisionReadinessHeading: "Hazırlık Değerlendirmesi",
+  decisionReadinessStatusLabel: "Hazırlık durumu",
+  decisionReadinessScoreLabel: "Hazırlık puanı",
+  decisionReadinessBlockersLabel: "Hazırlık engelleri",
+  decisionReadinessClearanceLabel: "Ticari kullanım izni",
+  decisionReadinessNone: "Hazırlık değerlendirmesi henüz bulunmuyor.",
+  decisionReadinessNoBlockers: "Hazırlık değeliendirmesinde engel görünmüyor.",
+  decisionHistoryHeading: "Son Karar Kaydı",
+  decisionHistoryNone: "Bu aday için henüz karar kaydı yok.",
+  decisionHistoryDecisionLabel: "Karar",
+  decisionHistoryNotesLabel: "Gerekçe",
+  decisionHistoryReviewerLabel: "İnceleyen",
+  decisionHistoryAtLabel: "Zaman",
+  decisionConfirmSummaryLabel: "Seçilen karar",
+  decisionSelectLegendLabel: "Karar seçeneklerinden birini seçin",
+  decisionBlockersListLabel: "Kapı gerekçeleri",
+} as const
+
+/** Onay adımındaki karar satırları için kısa etiketler. */
+export const ADMIN_CANDIDATE_DECISION_STEP_LABELS = {
+  select: "Karar seçimi",
+  confirm: "Karar onayı",
 } as const
 
 export const ADMIN_CANDIDATE_BATCH_OPERATION_STATUS_MESSAGES = {
   backToDetail: "Paket detayına dön",
+  backToList: "Aday soru paketleri listesine dön",
   detailLinkLabel: "İşlem durumunu gör",
   title: "Üretim / Denetim İşlem Durumu",
   subtitle:

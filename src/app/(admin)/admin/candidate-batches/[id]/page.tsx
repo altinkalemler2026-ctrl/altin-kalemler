@@ -15,9 +15,14 @@ import { parseBatchUuid } from "@/lib/admin/candidate-batches-errors"
 import { ADMIN_CANDIDATE_BATCH_DETAIL_MESSAGES as M } from "@/lib/admin/admin-panel-messages"
 import { ADMIN_CANDIDATE_BATCH_OPERATION_STATUS_MESSAGES as OM } from "@/lib/admin/admin-panel-messages"
 import { ADMIN_CANDIDATE_BATCHES_MESSAGES } from "@/lib/admin/admin-panel-messages"
+import CandidateDecisionPanel from "./DecisionPanel"
 
 type Params = Promise<{ id: string }>
-type SearchParams = Promise<{ candidate?: string | string[] }>
+type SearchParams = Promise<{
+  candidate?: string | string[]
+  ok?: string | string[]
+  error?: string | string[]
+}>
 
 /** Deterministik tarih gösterimi (GG.AA.YYYY SS:DD); bozuk girdide "-". */
 function formatDateTime(value: string | null): string {
@@ -195,7 +200,7 @@ function GateRunBlock({
   return (
     <div className="mb-4 last:mb-0">
       <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
-      <dl className="mt-1 grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-3">
+      <dl className="mt-1 grid grid-cols-1 gap-y-1 text-sm sm:grid-cols-3 sm:gap-x-6">
         {gate.fields.map((field) => (
           <div key={field.key}>
             <dt className="text-gray-500">{field.key}</dt>
@@ -230,7 +235,7 @@ function PreflightBlock({
   }
 
   return (
-    <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
+    <dl className="grid grid-cols-1 gap-y-2 text-sm sm:grid-cols-3 sm:gap-x-6">
       <Field label={M.preflightAdapterLabel} value={preflight.adapter ?? ""} />
       <Field
         label={M.preflightSchemaVersionLabel}
@@ -362,45 +367,6 @@ function CandidateMetadataRibbon({ preview }: { preview: CandidatePreview | null
 }
 
 /** Pasif karar paneli — bu sürümde veri yazımı yok (kullanıcı görür, işlem beklemededir). */
-function DecisionPanel() {
-  return (
-    <div
-      role="group"
-      aria-label={M.reviewDecisionHeading}
-      className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4"
-    >
-      <h4 className="text-sm font-semibold text-slate-900">
-        {M.reviewDecisionHeading}
-      </h4>
-      <p className="mt-1 text-xs text-slate-600">{M.reviewDecisionSubtitle}</p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button
-          type="button"
-          disabled
-          className="inline-flex min-h-[44px] items-center rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white opacity-60"
-        >
-          {M.reviewDecisionTitle}
-        </button>
-        <button
-          type="button"
-          disabled
-          className="inline-flex min-h-[44px] items-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 opacity-60"
-        >
-          {M.reviewDecisionSendFix}
-        </button>
-        <button
-          type="button"
-          disabled
-          className="inline-flex min-h-[44px] items-center rounded-xl border border-rose-200 bg-white px-4 py-2 text-sm font-semibold text-rose-700 opacity-60"
-        >
-          {M.reviewDecisionReject}
-        </button>
-      </div>
-      <p className="mt-2 text-xs text-slate-500">{M.reviewDecisionPending}</p>
-    </div>
-  )
-}
-
 function PreviewBlock({ preview }: { preview: CandidatePreview }) {
   return (
     <div>
@@ -445,7 +411,7 @@ function PreviewBlock({ preview }: { preview: CandidatePreview }) {
         </div>
       )}
 
-      <dl className="mb-3 grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-3">
+      <dl className="mb-3 grid grid-cols-1 gap-y-1 text-sm sm:grid-cols-3 sm:gap-x-6">
         <Field
           label={M.proposedCorrectAnswerLabel}
           value={preview.proposedCorrectAnswer ?? ""}
@@ -582,7 +548,7 @@ function ValidationResultsBlock({
           key={`${item.validatorType}-${item.createdAt}-${index}`}
           className="rounded-xl border border-gray-200 bg-white p-4"
         >
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-3">
+          <dl className="grid grid-cols-1 gap-y-1 text-sm sm:grid-cols-3 sm:gap-x-6">
             <Field
               label={M.validatorTypeLabel}
               value={item.validatorType ?? ""}
@@ -602,7 +568,7 @@ function ValidationResultsBlock({
               value={formatDateTime(item.createdAt)}
             />
             {item.summary && (
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <dt className="text-gray-500">{M.summaryLabel}</dt>
                 <dd className="whitespace-pre-wrap font-medium text-gray-900">
                   {item.summary}
@@ -627,7 +593,7 @@ function ReviewQueueBlock({ candidate }: { candidate: CandidateRecord }) {
           key={`${entry.reasonCode}-${entry.createdAt}-${index}`}
           className="rounded-xl border border-gray-200 bg-white p-4"
         >
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-3">
+          <dl className="grid grid-cols-1 gap-y-1 text-sm sm:grid-cols-3 sm:gap-x-6">
             <Field label={M.reasonCodeLabel} value={entry.reasonCode ?? ""} />
             <Field label={M.priorityLabel} value={entry.priority ?? ""} />
             <Field label={M.statusLabel} value={entry.status ?? ""} />
@@ -636,7 +602,7 @@ function ReviewQueueBlock({ candidate }: { candidate: CandidateRecord }) {
               value={formatDateTime(entry.createdAt)}
             />
             {entry.reasonDetails && (
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <dt className="text-gray-500">{M.reasonDetailsLabel}</dt>
                 <dd className="whitespace-pre-wrap font-medium text-gray-900">
                   {entry.reasonDetails}
@@ -651,9 +617,11 @@ function ReviewQueueBlock({ candidate }: { candidate: CandidateRecord }) {
 }
 
 function CandidateBlock({
+  batchId,
   candidate,
   candidateNumber,
 }: {
+  batchId: string
   candidate: CandidateRecord
   candidateNumber: number
 }) {
@@ -668,7 +636,7 @@ function CandidateBlock({
         </span>
       </div>
 
-      <dl className="mb-4 grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-3">
+      <dl className="mb-4 grid grid-cols-1 gap-y-1 text-sm sm:grid-cols-3 sm:gap-x-6">
         <Field
           label={M.clientQuestionIdLabel}
           value={candidate.clientQuestionId ?? ""}
@@ -709,12 +677,15 @@ function CandidateBlock({
         </div>
       )}
 
-      {candidate.preview && (
-        <>
-          <DecisionPanel />
-          <PreviewBlock preview={candidate.preview} />
-        </>
-      )}
+      {candidate.preview && <PreviewBlock preview={candidate.preview} />}
+
+      <div className="mt-6">
+        <CandidateDecisionPanel
+          batchId={batchId}
+          candidate={candidate}
+          candidatePosition={candidateNumber}
+        />
+      </div>
 
       <DetailSection title={M.validationResultsTitle}>
         <ValidationResultsBlock candidate={candidate} />
@@ -750,7 +721,7 @@ function DetailBody({
           </div>
           <Link
             href={`/admin/candidate-batches/${detail.batch.batchId}/islem-durumu`}
-            className="shrink-0 rounded-xl border border-gray-300 bg-white px-4 py-2 font-medium text-gray-700 hover:bg-gray-100"
+            className="inline-flex min-h-[44px] shrink-0 items-center rounded-xl border border-gray-300 bg-white px-4 py-2 font-medium text-gray-700 hover:bg-gray-100"
           >
             {OM.detailLinkLabel}
           </Link>
@@ -758,7 +729,7 @@ function DetailBody({
       </div>
 
       <DetailSection title={M.batchInfoTitle}>
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
+        <dl className="grid grid-cols-1 gap-y-2 text-sm sm:grid-cols-3 sm:gap-x-6">
           <Field label={M.statusLabel} value={statusLabel(detail.batch.status)} />
           <Field
             label={M.originLabel}
@@ -789,7 +760,7 @@ function DetailBody({
       </DetailSection>
 
       <DetailSection title={M.countsTitle}>
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
+        <dl className="grid grid-cols-1 gap-y-2 text-sm sm:grid-cols-3 sm:gap-x-6">
           <Field
             label={M.totalItemsLabel}
             value={formatCount(detail.batch.counts.totalItems)}
@@ -830,6 +801,7 @@ function DetailBody({
               total={detail.candidates.length}
             />
             <CandidateBlock
+              batchId={detail.batch.batchId}
               candidate={detail.candidates[selectedCandidatePosition]!}
               candidateNumber={selectedCandidatePosition + 1}
             />
@@ -923,16 +895,38 @@ export default async function AdminCandidateBatchDetailPage({
     )
   }
 
-  const { candidate } = await searchParams
+  const queryParams = await searchParams
+  const { candidate, ok, error } = queryParams
   const selectedCandidatePosition = resolveCandidatePosition(
     detail.candidates,
     candidate,
   )
 
+  // Flash mesajları yalnızca tek bir değer alır ve kısa tutulur; sunucu
+  // aksiyonunun ürettiği Türkçe metni olduğu gibi gösteririz.
+  const flashOk = firstParam(ok)
+  const flashError = firstParam(error)
+
   return (
     <main className="min-h-screen bg-gray-50 p-4 sm:p-8">
       <div className="mx-auto max-w-5xl">
         <BackLink />
+        {flashOk && (
+          <p
+            role="status"
+            className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-6 py-4 text-emerald-900"
+          >
+            {flashOk}
+          </p>
+        )}
+        {flashError && (
+          <p
+            role="alert"
+            className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-6 py-4 text-amber-900"
+          >
+            {flashError}
+          </p>
+        )}
         <DetailBody
           detail={detail}
           selectedCandidatePosition={selectedCandidatePosition}
@@ -942,11 +936,21 @@ export default async function AdminCandidateBatchDetailPage({
   )
 }
 
+/** Sorgu parametresinden ilk ve tek string değeri (yoksa undefined). */
+function firstParam(value: string | string[] | undefined): string | undefined {
+  if (typeof value === "string") return value.length > 0 ? value : undefined
+  if (Array.isArray(value)) {
+    const first = value[0]
+    return typeof first === "string" && first.length > 0 ? first : undefined
+  }
+  return undefined
+}
+
 function BackLink() {
   return (
     <Link
       href="/admin/candidate-batches"
-      className="mb-4 inline-block rounded-xl border border-gray-300 bg-white px-4 py-2 font-medium text-gray-700 hover:bg-gray-100"
+      className="mb-4 inline-flex min-h-[44px] items-center rounded-xl border border-gray-300 bg-white px-4 py-2 font-medium text-gray-700 hover:bg-gray-100"
     >
       {M.backToList}
     </Link>
