@@ -925,11 +925,30 @@ reset role;
 select public._qa35b_clear_claims();
 
 -- ---- T-17: SUPERUSER doğrulaması (RLS)
--- Zorlanan hata authenticated bağlamında üretilir. Ancak
--- ai_question_final_reviews / admin_audit_log / ai_validation_results /
--- questions tablolarına authenticated SELECT verilmemesi bilinçli bir
--- güvenlik kararıdır. Bu nedenle geri alınma doğrulaması, T-15c ile aynı
--- kalıpta, reset role sonrası suite sahibi bağlamında yapılır.
+-- Zorlanan hata authenticated bağlamında üretilir ve alt blokta geri
+-- alınır. Geri alınma doğrulaması reset role sonrasında, suite sahibi
+-- (superuser) bağlamında yapılır.
+--
+-- CI-ÖZDEŞ ÖLÇÜM (P1G: resmî CLI 2.115.0, temiz 001–130): bu tablolarda
+-- authenticated yalnızca MAINTAIN (m) ayrıcalığına sahiptir; SELECT,
+-- INSERT, UPDATE ve DELETE KAPALI, TRUNCATE/REFERENCES/TRIGGER da yok.
+-- Yani "authenticated SELECT verilmemesi" bilinçli bir güvenlik
+-- kararıdır ve aşağıdaki superuser doğrulaması zorunludur.
+--
+-- Buna rağmen rol geçişine VARSAYIM YAPILMAZ: aşağıdaki guard,
+-- assertion anında superuser bağlamında olunmadığını görürse suite'i
+-- fail-closed durdurur ve gerçek rol adlarını hata metnine yazar.
+do $t$
+begin
+  if current_user <> session_user
+     or current_user::text in ('anon', 'authenticated') then
+    raise exception
+      'QA35B_ROLE_GUARD_FAIL: T-17 geri alinma dogrulamasi superuser baglaminda degil (current_user=%, current_role=%, session_user=%)',
+      current_user, current_role, session_user;
+  end if;
+end;
+$t$;
+
 do $t$
 declare
   v_sid  uuid := (public._qa35b_consts() ->> 'sid_atomic')::uuid;
@@ -952,7 +971,9 @@ begin
                                     where id = v_sid))
       and (select staging_status from public.ai_question_staging
             where id = v_sid) <> 'promoted',
-    'zorlanan hata=' || coalesce(v_err, '-'));
+    'zorlanan hata=' || coalesce(v_err, '-')
+      || ' | rol=' || current_user || '/' || current_role
+      || '/' || session_user);
 
 end;
 $t$;
@@ -964,6 +985,42 @@ $t$;
 
 select public._qa35b_as((public._qa35b_consts() ->> 'admin_uid')::uuid);
 
+-- ---- M4a: authenticated YAZMA akışı
+-- readiness_runs ve validation sonuçları yalnız superuser okuyabildiği
+-- için (authenticated = m, SELECT kapalı) üç evaluate çağrısı
+-- authenticated bağlamında yapılır; doğrulama SELECT'leri aşağıdaki
+-- superuser bloğunda çalışır. CI hatası (0a2f557 satır 1008) bu bloğun
+-- reset role'dan ÖNCE SELECT çalıştırmasından kaynaklanıyordu.
+do $t$
+declare
+  v_sid      uuid := (public._qa35b_consts() ->> 'sid_idem')::uuid;
+begin
+  -- İlk çağrı: readiness run + deterministic/overall INSERT
+  perform private.evaluate_ai_question_readiness(v_sid);
+
+  -- İkinci ve üçüncü çağrı: UPDATE olmalı, INSERT DEĞİL
+  perform private.evaluate_ai_question_readiness(v_sid);
+  perform private.evaluate_ai_question_readiness(v_sid);
+end;
+$t$;
+
+reset role;
+select public._qa35b_clear_claims();
+
+-- Rol geçişine VARSAYIM YAPILMAZ: superuser doğrulaması başlamadan
+-- önce rolün gerçekten döndüğü ölçülür; beklenmiyorsa fail-closed.
+do $t$
+begin
+  if current_user <> session_user
+     or current_user::text in ('anon', 'authenticated') then
+    raise exception
+      'QA35B_ROLE_GUARD_FAIL: M4a dogrulamasi superuser baglaminda degil (current_user=%, current_role=%, session_user=%)',
+      current_user, current_role, session_user;
+  end if;
+end;
+$t$;
+
+-- ---- M4a: SUPERUSER doğrulaması (readiness tekilliği)
 do $t$
 declare
   v_sid      uuid := (public._qa35b_consts() ->> 'sid_idem')::uuid;
@@ -972,19 +1029,12 @@ declare
   v_det_a    integer;
   v_runs_a   integer;
 begin
-  -- İlk çağrı: readiness run + deterministic/overall INSERT
-  perform private.evaluate_ai_question_readiness(v_sid);
-
   select count(*) into v_runs_b from public.ai_question_readiness_runs
    where staging_question_id = v_sid;
   select count(*) into v_det_b from public.ai_validation_results
    where staging_question_id = v_sid
      and validator_type = 'deterministic'
      and validation_type = 'overall';
-
-  -- İkinci ve üçüncü çağrı: UPDATE olmalı, INSERT DEĞİL
-  perform private.evaluate_ai_question_readiness(v_sid);
-  perform private.evaluate_ai_question_readiness(v_sid);
 
   select count(*) into v_runs_a from public.ai_question_readiness_runs
    where staging_question_id = v_sid;
@@ -996,19 +1046,20 @@ begin
   perform public._qa35b_true('T-20',
     'M4a: evaluate 3 kez -> readiness_runs TEKIL kalir',
     v_runs_b = 1 and v_runs_a = 1,
-    format('runs=%s->%s', v_runs_b, v_runs_a));
+    format('runs=%s->%s | rol=%s/%s/%s',
+           v_runs_b, v_runs_a,
+           current_user, current_role, session_user));
 
   perform public._qa35b_true('T-21',
     'M4a: evaluate 3 kez -> (deterministic,overall) validation TEKIL kalir'
       || ' [038 korumasiz INSERT idi; 039 her kararda cagriyordu]',
     v_det_b = 1 and v_det_a = 1,
-    format('deterministic_overall=%s->%s', v_det_b, v_det_a));
+    format('deterministic_overall=%s->%s | rol=%s/%s/%s',
+           v_det_b, v_det_a,
+           current_user, current_role, session_user));
 
 end;
 $t$;
-
-reset role;
-select public._qa35b_clear_claims();
 
 -- T-22: promote tekrarı deterministic satırı çoğaltmaz
 -- (approve, readiness'yi bir kez daha çağırır)
