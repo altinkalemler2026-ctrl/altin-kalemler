@@ -378,23 +378,25 @@ async function deriveFromRealDetail(): Promise<Record<string, { enabled: boolean
 }
 
 // Skip guard'ı TOPLAMA anında işlevsel olmalıdır: it.skipIf değeri modül
-// yüklemesinde okunur; bu yüzden config okuma üst düzeyde yapılır (Docker
-// yoksa/stack yoksa tüm suite tasarım gereği atlanır — training
-// integration kalıbının amaçlanan davranışı).
+// yüklemesinde okunur; bu yüzden config okuma VE API erişilebilirlik probe'u
+// üst düzey await ile koşar. Docker yoksa/stack yoksa/hedef port
+// erişilemezse tüm suite tasarım gereği atlanır (training integration
+// kalıbının amaçlanan davranışı); skip durumunda fixture yazımına girilmez.
 readLocalConfig()
-
-beforeAll(async () => {
-  if (shouldSkip) return
+if (!shouldSkip) {
   try {
     const probe = await fetch(`${apiUrl}/rest/v1/`, {
       method: "HEAD",
       signal: AbortSignal.timeout(5_000),
     })
-    if (!probe.ok) throw new Error(`probe ${probe.status}`)
+    shouldSkip = !probe.ok
   } catch {
     shouldSkip = true
-    return
   }
+}
+
+beforeAll(async () => {
+  if (shouldSkip) return
   cleanupFixtures()
   await adminCreateUser(ADMIN_UID, "p2c-admin@test.local", "P2c-Admin-1234!")
   await adminCreateUser(WRONG_UID, "p2c-wrong@test.local", "P2c-Wrong-1234!")
