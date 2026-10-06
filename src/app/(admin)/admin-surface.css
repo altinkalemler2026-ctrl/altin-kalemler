@@ -1,0 +1,17 @@
+/*
+ * Admin içerik yüzeyi (F4 — UI-P3A.1).
+ *
+ * Admin kabuğu içindeki içerik bağlantılarına yalnızca klavye odağında
+ * görünen (:focus-visible), tutarlı ve yeterli kontrastlı bir odak halkası
+ * verir; fare ile tıklamada halka görünmez. Kural bilinçli olarak
+ * `.admin-surface` ile sınırlıdır: AdminNav'ın kendi odak stillerini ve
+ * öğrenci ekranlarını etkilemez.
+ *
+ * Halka rengi tasarım sisteminin teal-700 (#0e6e66) değeridir; açık
+ * admin zemininde (beyaz/gri-50) yaklaşık 5.5:1 kontrast sağlar ve
+ * 3:1'lik UI kontrast eşiğinin üstündedir.
+ */
+.admin-surface a:focus-visible {
+  outline: 2px solid var(--color-teal-700);
+  outline-offset: 2px;
+}
