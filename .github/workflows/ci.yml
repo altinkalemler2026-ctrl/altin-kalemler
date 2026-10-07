@@ -380,6 +380,12 @@ jobs:
           # bu yuzden suite icinde superuser turunden (reset role)
           # yapilir. Bu, beklenen guvenlik davranisidir.
           run_suite faz35b scripts/qa_faz35_review_actions_130_local.sql summary
+          # UI-P4B: 131 güvenli admin rol mutasyon RPC sözleşmesi QA.
+          # Saldırı odaklı 11 senaryo; ham DML kapama, self-scope,
+          # kategorik super_admin yasağı, audit tekilliği + idempotency.
+          # Suite TEK transaction icinde calisir ve sonunda ROLLBACK
+          # yapar; hicbir kalici kayit birakmaz.
+          run_suite role_mgmt scripts/qa_uip4b_admin_role_management_131_local.sql summary
 
       # ----------------------------------------------------------
       # Faz 2 paralel sayaç probe'u: iki AYRI docker exec sureci ile

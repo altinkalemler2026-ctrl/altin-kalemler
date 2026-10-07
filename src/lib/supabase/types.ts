@@ -11918,6 +11918,10 @@ export type Database = {
         Args: { p_approved_by: string; p_request_id: string }
         Returns: Json
       }
+      assign_admin_role: {
+        Args: { p_role_code: string; p_target_user_id: string }
+        Returns: Json
+      }
       build_competition_ai_factory_job: {
         Args: { p_dispatch_id: string }
         Returns: Json
@@ -12370,6 +12374,10 @@ export type Database = {
           p_total_seconds?: number
           p_verification_run_id: string
         }
+        Returns: Json
+      }
+      revoke_admin_role: {
+        Args: { p_role_code: string; p_target_user_id: string }
         Returns: Json
       }
       run_competition_pool_analysis: {
