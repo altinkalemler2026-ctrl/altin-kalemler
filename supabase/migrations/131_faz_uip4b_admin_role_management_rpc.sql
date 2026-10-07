@@ -93,6 +93,21 @@ REVOKE INSERT, UPDATE, DELETE
 ON public.admin_permissions
 FROM anon, authenticated;
 
+-- SELECT sözleşmesi: yeni CLI "no-auto-expose" bootstrap'inde 013'te
+-- oluşturulan admin tabloları anon/authenticated'e otomatik GRANT
+-- almaz (aynı boşluk 108'in 3. maddesinde student_loadouts ve
+-- characters için kapatılmıştı; legacy ana DB'de bu tablolar
+-- auto-expose era'sında `arwdm` ile doğmuştu). Own-roles sözleşmesi
+-- için authenticated'e SELECT açıkça verilir; RLS politikaları satır
+-- görünümünü sınırlamaya devam eder. anon'a SELECT verilmez.
+GRANT SELECT
+ON public.admin_user_roles
+TO authenticated;
+
+GRANT SELECT
+ON public.admin_roles
+TO authenticated;
+
 
 -- ============================================================
 -- 2. PRIVATE SECURITY DEFINER: ROL ATAMA
