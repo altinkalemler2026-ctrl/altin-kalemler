@@ -179,10 +179,49 @@ try {
     Test-RequiredString -Container $state -Name 'task_id'         -Label 'task_id'
     Test-RequiredString -Container $state -Name 'canonical_report' -Label 'canonical_report'
 
-    $canonicalReportExpected = 'docs/reports/latest-faz5-security-validation.md'
+    # --- canonical_report: fazdan bagimsiz, fail-closed kapilar ---
+    # Eski sabit ('canonical_report tam olarak docs/reports/latest-faz5-security-validation.md
+    # olmali') kaldirildi; Faz5 raporu tarihsel kayittir, zorunlu kanon degildir.
+    # Kapilar: (1) bos olamaz [Test-RequiredString], (2) goreli proje yolu: '..',
+    # mutlak yol ve URI reddedilir, (3) hedef docs/reports/ altinda .md olmali,
+    # (4) proje koku disina cikilmamali, (5) hedef dosya mevcut olmali.
     $canonicalReport = Get-PropValue -Object $state -Name 'canonical_report'
-    if (($null -ne $canonicalReport) -and ($canonicalReport -is [string]) -and ($canonicalReport -ne $canonicalReportExpected)) {
-        Add-TaskStateError "canonical_report tam olarak '$canonicalReportExpected' olmali (mevcut: '$canonicalReport')"
+    if (($null -ne $canonicalReport) -and ($canonicalReport -is [string]) -and (-not [string]::IsNullOrWhiteSpace($canonicalReport))) {
+        $cr = $canonicalReport.Trim()
+
+        if ($cr -match '^([A-Za-z]:|\\\\|\/|\\)') {
+            Add-TaskStateError "canonical_report goreli proje yolu olmali, mutlak yol reddedilir (mevcut: '$cr')"
+        }
+        elseif ($cr -match '^[A-Za-z][A-Za-z0-9+.\-]+:') {
+            Add-TaskStateError "canonical_report URI olamaz (mevcut: '$cr')"
+        }
+        elseif (@($cr -split '[\\/]') -contains '..') {
+            Add-TaskStateError "canonical_report '..' icermez (mevcut: '$cr')"
+        }
+        else {
+            $crNorm = $cr -replace '\\', '/'
+            if ($crNorm -notmatch '^docs/reports/.+\.md$') {
+                Add-TaskStateError "canonical_report docs/reports/ altinda bir .md dosyasi olmali (mevcut: '$cr')"
+            }
+            else {
+                $crFull = $null
+                try {
+                    $crFull = [System.IO.Path]::GetFullPath((Join-Path $projectRoot $crNorm))
+                }
+                catch {
+                    Add-TaskStateError "canonical_report yol cozumlenemedi (mevcut: '$cr')"
+                }
+                if ($null -ne $crFull) {
+                    $crRootPrefix = $projectRoot.TrimEnd([char[]]@('\', '/')) + [System.IO.Path]::DirectorySeparatorChar
+                    if (-not $crFull.StartsWith($crRootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+                        Add-TaskStateError "canonical_report proje koku disina cikamaz (mevcut: '$cr')"
+                    }
+                    elseif (-not (Test-Path -LiteralPath $crFull -PathType Leaf)) {
+                        Add-TaskStateError "canonical_report hedef dosya mevcut degil (mevcut: '$cr')"
+                    }
+                }
+            }
+        }
     }
 
     $taskMode = Get-PropValue -Object $state -Name 'task_mode'
