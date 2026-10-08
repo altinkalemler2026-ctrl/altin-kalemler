@@ -105,6 +105,12 @@ describe("hasAuditViewPermission", () => {
 describe("parseAuditActionCode / parseAuditEntityId", () => {
   it("allowlist dışı action_code reddedilir", () => {
     expect(parseAuditActionCode("question.edit")).toBe("question.edit")
+    expect(parseAuditActionCode("admin_user_role.assign")).toBe(
+      "admin_user_role.assign",
+    )
+    expect(parseAuditActionCode("admin_user_role.revoke")).toBe(
+      "admin_user_role.revoke",
+    )
     expect(parseAuditActionCode("DROP TABLE")).toBeUndefined()
     expect(parseAuditActionCode(undefined)).toBeUndefined()
   })

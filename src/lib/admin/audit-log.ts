@@ -15,8 +15,13 @@ import { parsePage, parseUuid } from "@/lib/admin/question-bank"
 
 export const AUDIT_PAGE_SIZE = 25
 
-/** 089+119 itibarıyla bilinen action_code'lar; yenileri katalogla genişler. */
-export const AUDIT_ACTION_CODES = ["question.edit", "curriculum.teaching_approval"] as const
+/** 089+119+131 itibarıyla bilinen action_code'lar; yenileri katalogla genişler. */
+export const AUDIT_ACTION_CODES = [
+  "question.edit",
+  "curriculum.teaching_approval",
+  "admin_user_role.assign",
+  "admin_user_role.revoke",
+] as const
 
 export type AuditActionCode = (typeof AUDIT_ACTION_CODES)[number]
 

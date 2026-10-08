@@ -25,6 +25,7 @@ export const ADMIN_NAV_PERMISSION_REQUIREMENTS: Readonly<
     codes: ["calendar.manage"],
   },
   "/admin/users": { mode: "all", codes: ["users.manage"] },
+  "/admin/roles": { mode: "all", codes: ["users.manage"] },
   "/admin/teacher-reviews": { mode: "all", codes: ["questions.view"] },
   "/admin/curriculum-teaching": {
     mode: "all",

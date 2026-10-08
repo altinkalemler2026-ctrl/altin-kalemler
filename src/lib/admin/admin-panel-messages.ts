@@ -53,6 +53,12 @@ export const ADMIN_NAV_ITEMS = [
     href: "/admin/users",
   },
   {
+    title: "Rol Yönetimi",
+    description:
+      "Yönetici rollerini görüntüle; atama ve kaldırma yalnız süper yöneticiye açıktır.",
+    href: "/admin/roles",
+  },
+  {
     title: "Öğretmen İncelemeleri",
     description: "Öğretmen inceleme akışına erişin.",
     href: "/admin/teacher-reviews",
@@ -213,6 +219,69 @@ export const ADMIN_USERS_MESSAGES = {
   paginationLabel: "Sayfalama",
   prevPage: "Önceki",
   nextPage: "Sonraki",
+} as const
+
+export const ADMIN_ROLES_MESSAGES = {
+  title: "Rol Yönetimi",
+  subtitle:
+    "Yönetici rollerinin listesi ve süper yöneticiye açık atama/kaldırma. Liste salt-okunurdur; mutasyon ayrı bir onay adımıyla yazılır.",
+  backToDashboard: "Panele dön",
+  rosterTitle: "Yönetici Rolleri",
+  rosterEmpty: "Henüz yönetici rolü atanmamış.",
+  rosterListError:
+    "Rol listesi şu anda okunamadı. Lütfen daha sonra tekrar deneyin.",
+  nicknameLoadError:
+    "Kullanıcı takma adları şu anda okunamadı; kısa kimlikler gösteriliyor.",
+  rolesLabel: "Roller",
+  noRoles: "Rol atanmamış",
+  selfLabel: "Siz",
+  profileMissing: "profil kaydı yok",
+  superAdminChipHint:
+    "Süper yönetici rolü bu ekrandan yönetilemez; değişiklik yalnız veritabanı yöneticisince yapılır.",
+  readOnlyNotice:
+    "Bu liste salt-okunurdur. Rol atama ve kaldırmayı yalnız süper yönetici yapabilir.",
+  mutationClosedHeading: "Rol Atama ve Kaldırma Kapalı",
+  mutationClosedBody:
+    "Rol atama ve kaldırmayı yalnız süper yönetici yapabilir. Şu anda süper yönetici ataması bulunmadığı için bu ekranda işlem yapılamaz.",
+  mutationOpenHeading: "Rol Atama ve Kaldırma",
+  mutationOpenIntro:
+    "Bir hedef kullanıcı ve rol seçin, ardından ayrı onay adımını tamamlayın. Her işlem sunucuda yeniden doğrulanır ve denetim kaydına yazılır.",
+  searchLabel: "Hedef kullanıcı ara (takma ad)",
+  searchAction: "Ara",
+  searchSummary: "{count} öğrenci eşleşti (bu sayfada).",
+  searchEmpty: "Bu aramayla eşleşen öğrenci bulunamadı.",
+  searchError:
+    "Hedef kullanıcı araması şu anda yapılamadı. Yalnız mevcut yöneticiler hedef olarak listeleniyor.",
+  catalogError:
+    "Rol kataloğu şu anda okunamadı. Rol işlemleri için daha sonra tekrar deneyin.",
+  targetLegend: "Hedef kullanıcı seçin",
+  operationLegend: "İşlemi seçin",
+  roleLegend: "Rolü seçin",
+  targetHint: "Devam etmek için önce bir hedef kullanıcı seçin.",
+  noTargets: "Hedef kullanıcı bulunamadı.",
+  noAssignableRolesHint: "Bu kullanıcıya atanabilecek başka rol kalmadı.",
+  noRevokableRolesHint: "Bu kullanıcıdan kaldırılabilecek rol yok.",
+  stepSelectHeading: "1. İşlemi Seç",
+  stepSelectHint:
+    "Bu adım hiçbir veri yazmaz; yalnızca onay adımını açar.",
+  stepConfirmHeading: "2. İşlemi Onayla",
+  stepConfirmHint:
+    "Bu adım seçimi veritabanına yazar. Onaylamazsanız hiçbir veri yazılmaz.",
+  proceedLabel: "Onaya Git",
+  confirmLabel: "İşlemi Onayla",
+  cancelLabel: "Vazgeç",
+  confirmTargetLabel: "Hedef",
+  confirmOperationLabel: "İşlem",
+  confirmRoleLabel: "Rol",
+  confirmNotice:
+    "Onayladığınızda rol değişikliği veritabanına yazılır ve denetim kaydına eklenir. Süper yönetici rolü hiçbir koşulda bu ekrandan değiştirilemez.",
+  pendingLabel: "İşleniyor...",
+  selectTargetHint: "Hedef olarak kendinizi seçemezsiniz; listenizde bulunmaz.",
+  auditLinkLabel: "Denetim kaydını görüntüle",
+  auditLinkHint:
+    "Bu işlemin denetim kaydı oluşturuldu. Daha fazla ayrıntı için Denetim Kaydı sayfasını açabilirsiniz.",
+  rosterRegionLabel: "Yönetici rolleri listesi",
+  mutationRegionLabel: "Rol atama ve kaldırma alanı",
 } as const
 
 export const ADMIN_CANDIDATE_BATCHES_MESSAGES = {

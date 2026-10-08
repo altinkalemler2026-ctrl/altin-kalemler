@@ -188,6 +188,7 @@ describe("AdminLayout — yetkili yönetici menü kabuğu", () => {
       "/admin/candidate-batches",
       "/admin/academic-calendar",
       "/admin/users",
+      "/admin/roles",
       "/admin/teacher-reviews",
       "/admin/curriculum-teaching",
       "/admin/audit",
@@ -232,6 +233,8 @@ describe("AdminLayout — yetkili yönetici menü kabuğu", () => {
     const hrefs = itemHrefs()
     expect(hrefs).toContain("/admin/audit")
     expect(hrefs).not.toContain("/admin/users")
+    // /admin/roles de users.manage'a bağlıdır; aynı hatada gizlenir.
+    expect(hrefs).not.toContain("/admin/roles")
   })
 
   it("menü izin RPC'leri tüm nav izin kodlarını kapsar", async () => {

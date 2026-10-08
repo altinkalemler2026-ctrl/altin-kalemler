@@ -30,11 +30,21 @@ vi.mock("@/lib/supabase/server", () => ({
 }))
 
 vi.mock("@/lib/admin/audit-log", () => ({
-  AUDIT_ACTION_CODES: ["question.edit"],
+  AUDIT_ACTION_CODES: [
+    "question.edit",
+    "curriculum.teaching_approval",
+    "admin_user_role.assign",
+    "admin_user_role.revoke",
+  ],
   hasAuditViewPermission: hasAuditViewPermissionMock,
   listAuditLog: listAuditLogMock,
   parseAuditActionCode: (v?: string) =>
-    v === "question.edit" ? v : undefined,
+    v === "question.edit" ||
+    v === "curriculum.teaching_approval" ||
+    v === "admin_user_role.assign" ||
+    v === "admin_user_role.revoke"
+      ? v
+      : undefined,
   parseAuditEntityId: (v?: string) =>
     v && /^[0-9a-f-]{36}$/i.test(v) ? v : undefined,
 }))
@@ -145,6 +155,20 @@ describe("AdminAuditPage — authorized admin", () => {
     expect(html).toContain("question.edit")
     expect(html).toContain("2026-09-03 10:00:00")
     expect(html).toContain("99999999-8888-4000-8000-000000000901")
+  })
+
+  it("filtre seçenekleri rol yönetimi aksiyon kodlarını içerir ve filtre olarak iletilir", async () => {
+    const html = await renderHtml({ action: "admin_user_role.assign" })
+
+    expect(html).toContain('value="admin_user_role.assign"')
+    expect(html).toContain('value="admin_user_role.revoke"')
+    expect(listAuditLogMock).toHaveBeenCalledWith(
+      {
+        actionCode: "admin_user_role.assign",
+        entityId: undefined,
+      },
+      1
+    )
   })
 
   it("geçersiz filtre parametreleri temizlenir (keyfi metin DB'ye gitmez)", async () => {
