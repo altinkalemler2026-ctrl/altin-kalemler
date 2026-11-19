@@ -170,6 +170,10 @@ jobs:
               psql -d "$DB" -v ON_ERROR_STOP=1 -f "$H/hook_after156_write_matrix_baseline.sql" > "$D/hook_pre157.txt" 2>&1 || { echo HOOK_PRE157_FAIL; tail -5 "$D/hook_pre157.txt"; exit 1; }
               grep -oE "PRE157_BASELINE_OK[^\"]*" "$D/hook_pre157.txt" | head -1
             fi
+            if [ "$ver" = "165" ]; then
+              psql -d "$DB" -v ON_ERROR_STOP=1 -f "$H/hook_after165_service_role_baseline.sql" > "$D/hook_pre166.txt" 2>&1 || { echo HOOK_PRE166_FAIL; tail -5 "$D/hook_pre166.txt"; exit 1; }
+              grep -oE "PRE166_BASELINE_OK[^\"]*" "$D/hook_pre166.txt" | head -1
+            fi
             APPLIED=$((APPLIED+1))
           done
           psql -d "$DB" -Atc "select 'uygulanan=$APPLIED hist='||count(*)||' max='||max(version::int)||' dup='||(count(*)-count(distinct version)) from supabase_migrations.schema_migrations"

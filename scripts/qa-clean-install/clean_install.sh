@@ -7,6 +7,7 @@
 # idempotent on-kosul adimi zincire KANCALI asistanir:
 #   155 sonrasi -> hook_after155_service_role_baseline.sql
 #   156 sonrasi -> hook_after156_write_matrix_baseline.sql
+#   165 sonrasi -> hook_after165_service_role_baseline.sql (AK-GIT-CHECKPOINT-08)
 # Kalip kaynagi: drafts/ak-db-consistency-01/cc_build.sh (Ayni C1-C3 adimlari,
 # canli supabase postgres container ici; benzersiz DB adi disposable.)
 #
@@ -67,6 +68,11 @@ for f in $(ls "$M"/*.sql | sort); do
     echo "== ON-KOSUL #2 (kancli, 156->157 arasi): hook_after156_write_matrix_baseline.sql =="
     psql -d $QA -v ON_ERROR_STOP=1 -f "$H/hook_after156_write_matrix_baseline.sql" > "$D/hook_pre157.txt" 2>&1 || { echo "HOOK_PRE157_FAIL"; tail -5 "$D/hook_pre157.txt"; exit 1; }
     grep -E "PRE157_BASELINE_OK|PRE157_BASELINE_OK policy" "$D/hook_pre157.txt"
+  fi
+  if [ "$ver" = "165" ]; then
+    echo "== ON-KOSUL #3 (kancli, 165->166 arasi): hook_after165_service_role_baseline.sql =="
+    psql -d $QA -v ON_ERROR_STOP=1 -f "$H/hook_after165_service_role_baseline.sql" > "$D/hook_pre166.txt" 2>&1 || { echo "HOOK_PRE166_FAIL"; tail -5 "$D/hook_pre166.txt"; exit 1; }
+    grep -E "PRE166_BASELINE_OK" "$D/hook_pre166.txt"
   fi
   APPLIED=$((APPLIED+1))
 done
