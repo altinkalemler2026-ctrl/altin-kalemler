@@ -155,6 +155,52 @@ jobs:
           ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON SEQUENCES FROM anon, authenticated;
           ADP_EOF
           echo ADP_PARITY_OK
+          # AK-GIT-CHECKPOINT-10 — migration-history BOOTSTRAP (CI #83/#84 kok nedeni:
+          # migrations shelved durumda `supabase start` supabase_migrations.schema_-
+          # migrations tablosunu OLUSTURMAZ (CLI bu tabloyu yalniz kendi migration
+          # uygulama yollarinda yaratir) -> zincirin ilk history INSERT'i (001)
+          # "relation does not exist" ile duser. Kanonik sozlesme canli + clean_install
+          # C2 olcumu: version text PK, statements text[], name text.
+          # Fail-closed: bu blok zincir betiginin ICINDE, ayni unix-socket + DB
+          # hedefiyle kosar (DB env yoksa betik zaten HEDEF_DB_ERISILEMIYOR/OPTION
+          # kontrolunde durur); yalniz disposable CI veritabanina baglanilir.
+          # Kayit SILINMEZ/DEGISTIRILMEZ: yalniz IF NOT EXISTS kurulumu + sozlesme
+          # dogrulamasi. Tablooncesi mevcutsa ve bicimi farkliysa HIST_CONTRACT_FAIL.
+          psql -d "$DB" -v ON_ERROR_STOP=1 -q <<'HIST_BOOT_EOF' 2>"$D/hist_bootstrap.txt" || { echo HIST_BOOTSTRAP_FAIL; tail -5 "$D/hist_bootstrap.txt"; exit 1; }
+          CREATE SCHEMA IF NOT EXISTS supabase_migrations;
+          CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
+            version text NOT NULL PRIMARY KEY,
+            statements text[],
+            name text
+          );
+          HIST_BOOT_EOF
+          psql -d "$DB" -v ON_ERROR_STOP=1 -q <<'HIST_CON_EOF' 2>"$D/hist_contract.txt" || { echo HIST_CONTRACT_FAIL; tail -5 "$D/hist_contract.txt"; exit 1; }
+          DO $hc$
+          DECLARE v_pk text; v_vt text; v_st text;
+          BEGIN
+            SELECT string_agg(a.attname, ',' ORDER BY a.attnum) INTO v_pk
+              FROM pg_index i
+              JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY (i.indkey)
+             WHERE i.indrelid = 'supabase_migrations.schema_migrations'::regclass
+               AND i.indisprimary;
+            IF v_pk IS DISTINCT FROM 'version' THEN
+              RAISE EXCEPTION 'HIST_CONTRACT_FAIL: PK beklenmesi version, bulundu: %', v_pk;
+            END IF;
+            SELECT udt_name INTO v_vt FROM information_schema.columns
+             WHERE table_schema='supabase_migrations' AND table_name='schema_migrations'
+               AND column_name='version';
+            SELECT udt_name INTO v_st FROM information_schema.columns
+             WHERE table_schema='supabase_migrations' AND table_name='schema_migrations'
+               AND column_name='statements';
+            IF v_vt IS DISTINCT FROM 'text' THEN
+              RAISE EXCEPTION 'HIST_CONTRACT_FAIL: version tipi % (text olmali)', v_vt;
+            END IF;
+            IF v_st IS DISTINCT FROM '_text' THEN
+              RAISE EXCEPTION 'HIST_CONTRACT_FAIL: statements tipi % (text[] olmali)', v_st;
+            END IF;
+          END $hc$;
+          HIST_CON_EOF
+          echo HIST_BOOTSTRAP_OK
           APPLIED=0
           for f in $(ls "$M"/*.sql | sort); do
             base=$(basename "$f" .sql); ver=${base%%_*}
