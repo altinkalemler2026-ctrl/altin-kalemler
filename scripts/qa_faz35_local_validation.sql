@@ -183,13 +183,18 @@ select '99999999-9999-9999-9999-999999999912', ar.id
   from public.admin_roles ar
  where ar.role_code = 'copyright_reviewer';
 
--- QA-CAL-2099: w1 GECMIS (starts_at <= bugun; baslamis/gecmis kapanisi icin)
--- w20/w21 GEOLEGEK — tum araliklar 111 gercek takviminin (2026-2027 K1..K41)
--- disindadir; QA-CAL yili 074 global EXCLUDE ile gercek takvime cakisamaz.
+-- AK-GIT-CHECKPOINT-03 (BULGU B-2 duzeltmesi): fixture tarihleri SABITTIR.
+-- Eski kurgu current_date-60 / current_date+300 kullaniyordu; 111 gercek
+-- takvimi (2026-2027 K1..K42: 2026-09-14..2027-07-03) ilerledikce
+-- current_date-60 gercek takvimin USTUNE dustu ve 074 global EXCLUDE ile
+-- cakisti -> suite tarih bagimli kirdi (CI dahil). Semantik aynen korunur,
+-- deterministik sabitlere tasindi: w1 HER KOSULDA gecmis (2020-01), w20/w21
+-- HER KOSULDA gelecek (2099-01); hicbir aralik gercek takvim bandina degmez.
+-- Gercek akademik hafta/takvim kurallari ve 074 EXCLUDE DEGISMEDI.
 insert into public.academic_weeks (academic_year, week, starts_at, ends_at) values
-  ('QA-CAL-2099', 1,  current_date - 60, current_date - 53),
-  ('QA-CAL-2099', 20, current_date + 300, current_date + 307),
-  ('QA-CAL-2099', 21, current_date + 307, current_date + 314);
+  ('QA-CAL-2099', 1,  date '2020-01-06', date '2020-01-13'),
+  ('QA-CAL-2099', 20, date '2099-01-05', date '2099-01-12'),
+  ('QA-CAL-2099', 21, date '2099-01-12', date '2099-01-19');
 
 insert into public.questions
   (id, question_code, grade_level, subject_id, approval_status, is_active)
@@ -287,33 +292,33 @@ select public._qa35_true('T-08',
 select public._qa35_expect('T-09a',
   'admin: gelecek hafta 22 upsert OK',
   '',
-  $sql$select public.academic_calendar_upsert_week('QA-CAL-2099', 22, current_date + 314, current_date + 321)$sql$);
+  $sql$select public.academic_calendar_upsert_week('QA-CAL-2099', 22, date '2099-01-19', date '2099-01-26')$sql$);
 
 select public._qa35_true('T-09b',
   'admin: hafta 22 listede',
   (select count(*) = 1
      from public.academic_calendar_list_weeks('QA-CAL-2099')
     where week = 22
-      and starts_at = current_date + 314),
+      and starts_at = date '2099-01-19'),
   null);
 
 -- AYNI YIL cakisma: w23 araligi w20/w21 ile kesisiyor.
 select public._qa35_expect_msg('T-10',
   'ayni yil cakismasi RED',
-  $sql$select public.academic_calendar_upsert_week('QA-CAL-2099', 23, current_date + 303, current_date + 311)$sql$,
+  $sql$select public.academic_calendar_upsert_week('QA-CAL-2099', 23, date '2099-01-08', date '2099-01-16')$sql$,
   'P0001', '%Ayni akademik yilda mevcut bir haftayla cakisiyor%');
 
 -- FARKLI YIL cakisma: QA-CAL-2100 takvimi A yilinin w20'siyle kesisiyor.
 select public._qa35_expect_msg('T-11',
   'farkli yil cakismasi RED',
-  $sql$select public.academic_calendar_upsert_week('QA-CAL-2100', 5, current_date + 301, current_date + 308)$sql$,
+  $sql$select public.academic_calendar_upsert_week('QA-CAL-2100', 5, date '2099-01-08', date '2099-01-15')$sql$,
   'P0001', '%Farkli bir akademik yilin takvimiyle cakisiyor%');
 
 -- Farkli yil + cakismayan tarih serbest.
 select public._qa35_expect('T-11b',
   'farkli yil cakismayan tarih OK',
   '',
-  $sql$select public.academic_calendar_upsert_week('QA-CAL-2100', 5, current_date + 400, current_date + 407)$sql$);
+  $sql$select public.academic_calendar_upsert_week('QA-CAL-2100', 5, date '2099-06-01', date '2099-06-08')$sql$);
 
 -- BASLAMIS hafta (w1, starts_at <= bugun) guncelleme RED.
 select public._qa35_expect_msg('T-12',
@@ -342,7 +347,7 @@ select public._qa35_expect('T-15a',
 -- Gecersiz girdi: hafta 99.
 select public._qa35_expect_msg('T-16',
   'hafta numarasi 99 RED',
-  $sql$select public.academic_calendar_upsert_week('QA-CAL-2099', 99, current_date + 300, current_date + 307)$sql$,
+  $sql$select public.academic_calendar_upsert_week('QA-CAL-2099', 99, date '2099-09-01', date '2099-09-08')$sql$,
   'P0001', '%arasinda olmali%');
 
 reset role;
@@ -380,7 +385,7 @@ select public._qa35_expect('T-19',
   '23P01',
   $sql$insert into public.academic_weeks
     (academic_year, week, starts_at, ends_at)
-   values ('QA-CAL-2100', 6, current_date + 303, current_date + 310)$sql$);
+   values ('QA-CAL-2100', 6, date '2099-01-08', date '2099-01-15')$sql$);
 
 
 -- ---- TAKVIM -> RESOLVED DONEM ZINCIRI ------------------------

@@ -79,6 +79,16 @@ jobs:
           fi
           supabase --version
 
+      - name: Shelve migrations before start (156/157 fail-closed hook on-kosulu)
+        run: |
+          set -euo pipefail
+          # Kanit: docs/reports/ak-git-checkpoint-02 — hooksuz zincir 156/157
+          # guard'larinda cokuyor. start'in ilk-init migrasyon adimi bu guard'lara
+          # hic dokunmasin; zincir "Apply migration chain" adiminda hook'la kurulur.
+          mkdir -p /tmp/ci_migrations
+          mv supabase/migrations/*.sql /tmp/ci_migrations/
+          echo "start-on-migrationsiz: $(ls /tmp/ci_migrations/*.sql | wc -l) dosya askiya alindi"
+
       - name: Start local Supabase
         id: sbstart
         run: supabase start
@@ -112,8 +122,67 @@ jobs:
           echo "===== db container logs (son 100) ====="
           docker logs "$CONTAINER" --tail 100 2>&1 || true
 
-      - name: Reset database (temiz migration zinciri, dinamik)
-        run: supabase db reset
+      - name: Apply migration chain with versioned hooks (db reset yerine)
+        run: |
+          set -euo pipefail
+          # supabase db reset hooksuz calisir -> 156_sec1b "SEC1B fail-closed" ve
+          # 157_sec2 "yazilabilir tablo != yazma politikali tablo" guard'lari
+          # modulerada manuel yetkileri on-kosul sayar (clean-install hook'lari
+          # bunlarin dosyali, idempotent karsiligidir — consistency-02 §3).
+          # Zincir burada sira + history-registry + 2 version-kancali hook ile
+          # aynen db reset semantiginde kurulur. Fail-closed: yalniz docker-ici
+          # socket, tek hedef DB=postgres; URL/token/hosted baglanti yoktur.
+          expected_count=$(ls /tmp/ci_migrations/*.sql | wc -l | tr -d ' ')
+          cat > /tmp/ci_apply_chain.sh <<'CHAIN_EOF'
+          #!/bin/bash
+          set -uo pipefail
+          export PGHOST=/var/run/postgresql
+          DB=${DB:?}; M=${MIGRATIONS:?}; H=${HOOKS:?}
+          D=/tmp/ci_chain_logs; EXPECT=${1:?}
+          N=$(ls "$M"/*.sql 2>/dev/null | wc -l)
+          echo "dosya_sayisi=$N beklenen=$EXPECT hedef_db=$DB"
+          [ "$N" = "$EXPECT" ] || { echo DOSYA_SAYISI_UYUSMUYOR; exit 1; }
+          psql -d "$DB" -Atc "SELECT 1" >/dev/null 2>&1 || { echo HEDEF_DB_ERISILEMIYOR; exit 1; }
+          mkdir -p "$D"
+          # CI<->canli yetki paritesi: start stok gomigi public ADP'yi anon/authenticated'a
+          # ALL verir; canlida ADP yoktur (157 G drift kanali kapandi). Zincir canliyle
+          # ayni "gelecek nesne = varsayilan-hak yok" kozmosunda kosulur. service_role
+          # ADP'sine dokunulmaz (faz10b T-10/T-11c servis bakim yolu). Fail-closed:
+          # yalniz postgres rolunun public ADP'si, yalniz anon/authenticated.
+          psql -d "$DB" -v ON_ERROR_STOP=1 -q <<'ADP_EOF' 2>"$D/adp_parity.txt" || { echo ADP_PARITY_FAIL; cat "$D/adp_parity.txt"; exit 1; }
+          ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON TABLES FROM anon, authenticated;
+          ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM anon, authenticated;
+          ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON SEQUENCES FROM anon, authenticated;
+          ADP_EOF
+          echo ADP_PARITY_OK
+          APPLIED=0
+          for f in $(ls "$M"/*.sql | sort); do
+            base=$(basename "$f" .sql); ver=${base%%_*}
+            psql -d "$DB" -v ON_ERROR_STOP=1 -f "$f" > "$D/log_$base.txt" 2>&1 || {
+              echo "CHAIN_FAIL: $base"; tail -8 "$D/log_$base.txt"; exit 1; }
+            grep -E "FINAL_[0-9]+ OK" "$D/log_$base.txt" | head -1
+            psql -d "$DB" -v ON_ERROR_STOP=1 -Atc "insert into supabase_migrations.schema_migrations (version, name, statements) select '$ver','$base',NULL where not exists (select 1 from supabase_migrations.schema_migrations where version='$ver');" >> "$D/history_inserts.log" 2>&1 || { echo "HIST_FAIL: $base"; exit 1; }
+            if [ "$ver" = "155" ]; then
+              psql -d "$DB" -v ON_ERROR_STOP=1 -f "$H/hook_after155_service_role_baseline.sql" > "$D/hook_pre156.txt" 2>&1 || { echo HOOK_PRE156_FAIL; tail -5 "$D/hook_pre156.txt"; exit 1; }
+              grep -o "PRE156_BASELINE_OK" "$D/hook_pre156.txt" | head -1
+            fi
+            if [ "$ver" = "156" ]; then
+              psql -d "$DB" -v ON_ERROR_STOP=1 -f "$H/hook_after156_write_matrix_baseline.sql" > "$D/hook_pre157.txt" 2>&1 || { echo HOOK_PRE157_FAIL; tail -5 "$D/hook_pre157.txt"; exit 1; }
+              grep -oE "PRE157_BASELINE_OK[^\"]*" "$D/hook_pre157.txt" | head -1
+            fi
+            APPLIED=$((APPLIED+1))
+          done
+          psql -d "$DB" -Atc "select 'uygulanan=$APPLIED hist='||count(*)||' max='||max(version::int)||' dup='||(count(*)-count(distinct version)) from supabase_migrations.schema_migrations"
+          echo CI_CHAIN_DONE
+          CHAIN_EOF
+          docker cp /tmp/ci_migrations "$CONTAINER":/tmp/ci_migrations
+          docker cp scripts/qa-clean-install "$CONTAINER":/tmp/ci_hooks
+          docker cp /tmp/ci_apply_chain.sh "$CONTAINER":/tmp/ci_apply_chain.sh
+          docker exec -u postgres -e DB=postgres -e MIGRATIONS=/tmp/ci_migrations -e HOOKS=/tmp/ci_hooks \
+            "$CONTAINER" bash /tmp/ci_apply_chain.sh "$expected_count" | tail -20
+          # chain assert adimi repodaki dosya listesini dinamik okur: geri koy
+          mv /tmp/ci_migrations/*.sql supabase/migrations/
+          echo "migration dosyalari geri konuldu: $(ls supabase/migrations/*.sql | wc -l)"
 
       - name: Assert migration chain and subjects grant
         run: |

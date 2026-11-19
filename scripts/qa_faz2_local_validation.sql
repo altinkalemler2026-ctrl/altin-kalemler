@@ -165,10 +165,14 @@ insert into public.curriculum_outcomes
    '430903f3-527e-4e12-b7e8-ac0afdb784aa',
    'QA2 kazanım metni');
 
--- Schedule items (resolved hafta = 1; 2026-2027 K1):
---   T_ALLOWED: start 1 (islenmis), end_week 3 >= guncel hafta 1 ->
---              antrenman ERISIMI acik kalmali (end_week kapataz).
---   T_FUTURE : start 6 -> henuz sorulamaz.
+-- Schedule items (resolved hafta gercek 111 takviminden gelir; K1'de yazilmisti):
+--   T_ALLOWED: start 1 -> her resolved hafta icin "islenmis" (secim motoru
+--              yalniz start_week <= resolved kontrol eder; end_week kapataz).
+--   T_FUTURE : AK-GIT-CHECKPOINT-03 tarih-bombasi duzeltmesi — start_week
+--              sabit 6 degil, resolved haftanin 5 buyugudur. Eski sabit 6,
+--              takvim K6'ya ulasincа konuyu "islenmis" yapti ve Q6 secim
+--              havuzuna sizdi (new_count=9). Duz goreli kurgu ile T_FUTURE
+--              resolved hafta NE OLURSA OLSUN gelecekte kalir (deterministik).
 insert into public.curriculum_schedule_items
   (schedule_profile_id, grade_level, subject_id, topic_id, start_week, end_week) values
   ('77777777-7777-7777-7777-777777777701', 12,
@@ -176,7 +180,8 @@ insert into public.curriculum_schedule_items
    '66666666-6666-6666-6666-000000000001', 1, 3),
   ('77777777-7777-7777-7777-777777777701', 12,
    '430903f3-527e-4e12-b7e8-ac0afdb784aa',
-   '66666666-6666-6666-6666-000000000002', 6, null);
+   '66666666-6666-6666-6666-000000000002',
+   (select per_week + 5 from _qa2_period), null);
 
 -- Outcome item: start 1 (resolved hafta 1'de erisilebilir; eski "hafta 5"
 -- kurgusunda 2 idi, resolved 1'e gore acik kalmasi icin uyumlandi).
@@ -1372,10 +1377,34 @@ delete from public.competition_questions
 delete from public.competition_players
  where competition_id::text like '11111111-1111-1111-1111-%';
 
-delete from public.competitions
- where id::text like '11111111-1111-1111-1111-%';
+-- AK-GIT-CHECKPOINT-03 (BULGU B-1): 165 sonrasi kota OLAYI bulunan yarisma
+-- silinemez — events FK'si ON DELETE SET NULL, 165 append-only tetigi bu
+-- FK-UPDATE'i (ve DELETE'i) bloklar. Bu bir URUN sozlesmesidir (denetim kaydi
+-- korunur); suite kusatmasi degil. Kota olayi olan fixture yarismasi oldugu
+-- gibi birakilir (final ROLLBACK zaten her seyi geri alir); asagidaki dogrulama
+-- SELECT'i comps_kalan ile gercek durumu raporlar. 165 oncesi zincirlerde tablo
+-- yoktur -> to_regclass guard'i eski semantigi aynen surdurur.
+do $qa2cl$
+begin
+  if to_regclass('public.student_week_subject_quota_events') is null then
+    delete from public.competitions
+     where id::text like '11111111-1111-1111-1111-%';
+  else
+    delete from public.competitions c
+     where c.id::text like '11111111-1111-1111-1111-%'
+       and not exists (select 1
+                         from public.student_week_subject_quota_events e
+                        where e.competition_id = c.id);
+  end if;
+end $qa2cl$;
 
-delete from public.scoring_rule_sets where rule_set_code = 'QA2-RS';
+-- AK-GIT-CHECKPOINT-03 (B-1 zinciri): kota olayi nedeniyle birakilan
+-- fixture yarismasi rule_set'i referanslamaya devam eder -> yalniz
+-- referanssiz rule_set silinir (kalanini final ROLLBACK kaldirir).
+delete from public.scoring_rule_sets s
+ where s.rule_set_code = 'QA2-RS'
+   and not exists (select 1 from public.competitions c
+                    where c.scoring_rule_set_id = s.id);
 
 delete from public.student_question_attempts
  where user_id in ('99999999-9999-9999-9999-999999999901',
@@ -1432,7 +1461,23 @@ delete from public.curriculum_versions
 delete from public.student_profiles
  where nickname like 'QA2-NICK-%';
 
-delete from auth.users where email like '%@test.local';
+-- AK-GIT-CHECKPOINT-03 (BULGU B-1 devami): kota olayi bulunan KULLANICI da
+-- silinemez — events.user_id FK ON DELETE CASCADE, 165 append-only tetigi
+-- cascade silmeyi bloklar (denetim kaydi korunur; urun sozlesmesi). Kota
+-- olayi olmayanlar silinir; kalanlari final ROLLBACK kaldirir. 165 oncesi
+-- zincirlerde tablo yok -> eski semantik aynen surdurulur.
+do $qa2clu$
+begin
+  if to_regclass('public.student_week_subject_quota_events') is null then
+    delete from auth.users where email like '%@test.local';
+  else
+    delete from auth.users u
+     where u.email like '%@test.local'
+       and not exists (select 1
+                         from public.student_week_subject_quota_events e
+                        where e.user_id = u.id);
+  end if;
+end $qa2clu$;
 
 
 -- ============================================================

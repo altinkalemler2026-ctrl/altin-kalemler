@@ -77,6 +77,11 @@ export async function GET(request: NextRequest) {
         },
         {
           onConflict: "id",
+          // 166 sonrasi authenticated'te grade_level UPDATE yetkisi yoktur;
+          // varsayilan merge-duplicates upsert'i cakisma olmasa bile planlama
+          // aninda bu yetkiyi ister ve 42501 verir. Profil varsa dokunma
+          // (ON CONFLICT DO NOTHING) — guard'in semantigiyle ayni, idempotent.
+          ignoreDuplicates: true,
         }
       )
 

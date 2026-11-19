@@ -179,7 +179,13 @@ describe("Auth callback GET", () => {
         nickname: "newuser",
         grade_level: 6,
       }),
-      expect.objectContaining({ onConflict: "id" })
+      // 166 uyum sozlesmesi: ON CONFLICT (id) DO NOTHING. merge-duplicates
+      // (ignoreDuplicates:false varsayilan) grade_level UPDATE yetkisi
+      // istedigi icin 42501 verir — bu bayrak kaldirilamaz.
+      expect.objectContaining({
+        onConflict: "id",
+        ignoreDuplicates: true,
+      })
     )
   })
 

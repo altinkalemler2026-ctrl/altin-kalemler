@@ -126,7 +126,15 @@ values
   ('44444444-4444-4444-4444-444444444405', 'QA-Q5', 12, '430903f3-527e-4e12-b7e8-ac0afdb784aa', 'approved', false),
   ('44444444-4444-4444-4444-444444444406', 'QA-Q6', 12, '430903f3-527e-4e12-b7e8-ac0afdb784aa', 'approved', false),
   ('44444444-4444-4444-4444-444444444407', 'QA-Q7', 12, '430903f3-527e-4e12-b7e8-ac0afdb784aa', 'approved', false),
-  ('44444444-4444-4444-4444-444444444408', 'QA-Q8', 12, '430903f3-527e-4e12-b7e8-ac0afdb784aa', 'approved', false);
+  ('44444444-4444-4444-4444-444444444408', 'QA-Q8', 12, '430903f3-527e-4e12-b7e8-ac0afdb784aa', 'approved', false),
+  -- AK-GIT-CHECKPOINT-03: 151 uq_question_active_single_vault sozlesmesi —
+  -- bir soru ayni anda YALNIZ bir kasada aktif uyeli olabilir. T-15'te
+  -- kullanilmak uzere baska kasada aktif uyeligi OLMAYAN taze sorular.
+  ('44444444-4444-4444-4444-444444444409', 'QA-Q9', 12, '430903f3-527e-4e12-b7e8-ac0afdb784aa', 'approved', false),
+  ('44444444-4444-4444-4444-444444444410', 'QA-Q10', 12, '430903f3-527e-4e12-b7e8-ac0afdb784aa', 'approved', false),
+  ('44444444-4444-4444-4444-444444444411', 'QA-Q11', 12, '430903f3-527e-4e12-b7e8-ac0afdb784aa', 'approved', false),
+  ('44444444-4444-4444-4444-444444444412', 'QA-Q12', 12, '430903f3-527e-4e12-b7e8-ac0afdb784aa', 'approved', false),
+  ('44444444-4444-4444-4444-444444444413', 'QA-Q13', 12, '430903f3-527e-4e12-b7e8-ac0afdb784aa', 'approved', false);
 
 insert into public.question_vaults (id, vault_code, name, vault_type, grade_level, subject_id) values
   ('55555555-5555-5555-5555-555555555501', 'QA-V-COMP', 'QA Yarisma Kasasi', 'competition', 12,
@@ -436,6 +444,12 @@ select public._qa_expect(
       values ('55555555-5555-5555-5555-555555555501',
               '44444444-4444-4444-4444-444444444406', 'active')$sql$);
 
+-- AK-GIT-CHECKPOINT-03: 151 (uq_question_active_single_vault) sonrasi bir soru
+-- baska kasada AKTIF uyeli iken ikinci kasaya aktif eklenemez (23505). Eski
+-- fixture QA-Q1..Q5'i (yarisma kasasi 501'de aktif) academic kasaya eklemeyi
+-- bekliyordu. Test amaci (academic kasada uyelik limiti YOK) 151 ile degismedi:
+-- 151-oncesi sozlesmeye uygun sekilde baska kasada aktif uyeligi olmayan
+-- QA-Q9..Q13 ile dogrulanir. (T-18 icin 502'de 5+ aktif uyeli kalmali: 3+5=8.)
 select public._qa_expect(
   'T-15',
   'academic kasada limit yok (5 aktif uye daha kabul, toplam 8)',
@@ -443,11 +457,11 @@ select public._qa_expect(
   $sql$insert into public.question_vault_memberships
       (vault_id, question_id, membership_status)
       values
-        ('55555555-5555-5555-5555-555555555502', '44444444-4444-4444-4444-444444444401', 'active'),
-        ('55555555-5555-5555-5555-555555555502', '44444444-4444-4444-4444-444444444402', 'active'),
-        ('55555555-5555-5555-5555-555555555502', '44444444-4444-4444-4444-444444444403', 'active'),
-        ('55555555-5555-5555-5555-555555555502', '44444444-4444-4444-4444-444444444404', 'active'),
-        ('55555555-5555-5555-5555-555555555502', '44444444-4444-4444-4444-444444444405', 'active')$sql$);
+        ('55555555-5555-5555-5555-555555555502', '44444444-4444-4444-4444-444444444409', 'active'),
+        ('55555555-5555-5555-5555-555555555502', '44444444-4444-4444-4444-444444444410', 'active'),
+        ('55555555-5555-5555-5555-555555555502', '44444444-4444-4444-4444-444444444411', 'active'),
+        ('55555555-5555-5555-5555-555555555502', '44444444-4444-4444-4444-444444444412', 'active'),
+        ('55555555-5555-5555-5555-555555555502', '44444444-4444-4444-4444-444444444413', 'active')$sql$);
 
 select public._qa_expect(
   'T-16',

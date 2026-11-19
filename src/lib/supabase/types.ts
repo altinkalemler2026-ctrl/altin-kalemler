@@ -12,21 +12,63 @@ export type Database = {
       academic_weeks: {
         Row: {
           academic_year: string
+          activated_at: string | null
+          activated_by: string | null
+          actual_class_days: number | null
           ends_at: string
+          holiday_kind: string | null
+          instruction_week_number: number | null
+          is_instruction_week: boolean | null
+          needs_admin_review: boolean
+          new_topic_admin_approved: boolean
+          new_topic_allowed: boolean | null
+          new_topic_approved_at: string | null
+          new_topic_approved_by: string | null
+          partial_week_policy: string | null
+          requires_admin_activation: boolean
           starts_at: string
           week: number
+          week_kind: string | null
         }
         Insert: {
           academic_year: string
+          activated_at?: string | null
+          activated_by?: string | null
+          actual_class_days?: number | null
           ends_at: string
+          holiday_kind?: string | null
+          instruction_week_number?: number | null
+          is_instruction_week?: boolean | null
+          needs_admin_review?: boolean
+          new_topic_admin_approved?: boolean
+          new_topic_allowed?: boolean | null
+          new_topic_approved_at?: string | null
+          new_topic_approved_by?: string | null
+          partial_week_policy?: string | null
+          requires_admin_activation?: boolean
           starts_at: string
           week: number
+          week_kind?: string | null
         }
         Update: {
           academic_year?: string
+          activated_at?: string | null
+          activated_by?: string | null
+          actual_class_days?: number | null
           ends_at?: string
+          holiday_kind?: string | null
+          instruction_week_number?: number | null
+          is_instruction_week?: boolean | null
+          needs_admin_review?: boolean
+          new_topic_admin_approved?: boolean
+          new_topic_allowed?: boolean | null
+          new_topic_approved_at?: string | null
+          new_topic_approved_by?: string | null
+          partial_week_policy?: string | null
+          requires_admin_activation?: boolean
           starts_at?: string
           week?: number
+          week_kind?: string | null
         }
         Relationships: []
       }
@@ -62,6 +104,148 @@ export type Database = {
           performed_at?: string
         }
         Relationships: []
+      }
+      admin_bulk_gate_runs: {
+        Row: {
+          batch_id: string
+          cost_currency: string | null
+          cost_estimate_minor_units: number | null
+          cost_estimate_status: string
+          created_at: string
+          created_by: string
+          filter_spec: Json
+          gates: string[]
+          id: string
+          model: string
+          planned_candidate_count: number
+          planned_model_call_count: number
+          planned_task_count: number
+          scope: string
+          started_at: string | null
+          status: string
+          stop_requested: boolean
+          stopped_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          batch_id: string
+          cost_currency?: string | null
+          cost_estimate_minor_units?: number | null
+          cost_estimate_status?: string
+          created_at?: string
+          created_by: string
+          filter_spec?: Json
+          gates?: string[]
+          id?: string
+          model: string
+          planned_candidate_count?: number
+          planned_model_call_count?: number
+          planned_task_count?: number
+          scope: string
+          started_at?: string | null
+          status?: string
+          stop_requested?: boolean
+          stopped_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          batch_id?: string
+          cost_currency?: string | null
+          cost_estimate_minor_units?: number | null
+          cost_estimate_status?: string
+          created_at?: string
+          created_by?: string
+          filter_spec?: Json
+          gates?: string[]
+          id?: string
+          model?: string
+          planned_candidate_count?: number
+          planned_model_call_count?: number
+          planned_task_count?: number
+          scope?: string
+          started_at?: string | null
+          status?: string
+          stop_requested?: boolean
+          stopped_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_bulk_gate_runs_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "candidate_question_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_bulk_gate_tasks: {
+        Row: {
+          attempt_count: number
+          bulk_run_id: string
+          candidate_position: number
+          claimed_by: string | null
+          completed_at: string | null
+          content_snapshot: Json
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          gate_key: string
+          gate_role: string
+          gate_run_id: string | null
+          id: string
+          lease_expires_at: string | null
+          staging_question_id: string
+          started_at: string | null
+          status: string
+        }
+        Insert: {
+          attempt_count?: number
+          bulk_run_id: string
+          candidate_position: number
+          claimed_by?: string | null
+          completed_at?: string | null
+          content_snapshot?: Json
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          gate_key: string
+          gate_role: string
+          gate_run_id?: string | null
+          id?: string
+          lease_expires_at?: string | null
+          staging_question_id: string
+          started_at?: string | null
+          status?: string
+        }
+        Update: {
+          attempt_count?: number
+          bulk_run_id?: string
+          candidate_position?: number
+          claimed_by?: string | null
+          completed_at?: string | null
+          content_snapshot?: Json
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          gate_key?: string
+          gate_role?: string
+          gate_run_id?: string | null
+          id?: string
+          lease_expires_at?: string | null
+          staging_question_id?: string
+          started_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_bulk_gate_tasks_bulk_run_id_fkey"
+            columns: ["bulk_run_id"]
+            isOneToOne: false
+            referencedRelation: "admin_bulk_gate_runs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       admin_permissions: {
         Row: {
@@ -884,6 +1068,8 @@ export type Database = {
           error_code: string | null
           error_message: string | null
           estimated_cost: number | null
+          factory_dispatch_id: string | null
+          generation_request_id: string | null
           generation_spec_id: string | null
           heartbeat_at: string | null
           id: string
@@ -894,6 +1080,9 @@ export type Database = {
           max_attempts: number
           output_data: Json | null
           parent_job_id: string | null
+          producer_config: Json
+          producer_type: string | null
+          requested_quantity: number | null
           source_id: string | null
           started_at: string | null
           status: string
@@ -913,6 +1102,8 @@ export type Database = {
           error_code?: string | null
           error_message?: string | null
           estimated_cost?: number | null
+          factory_dispatch_id?: string | null
+          generation_request_id?: string | null
           generation_spec_id?: string | null
           heartbeat_at?: string | null
           id?: string
@@ -923,6 +1114,9 @@ export type Database = {
           max_attempts?: number
           output_data?: Json | null
           parent_job_id?: string | null
+          producer_config?: Json
+          producer_type?: string | null
+          requested_quantity?: number | null
           source_id?: string | null
           started_at?: string | null
           status?: string
@@ -942,6 +1136,8 @@ export type Database = {
           error_code?: string | null
           error_message?: string | null
           estimated_cost?: number | null
+          factory_dispatch_id?: string | null
+          generation_request_id?: string | null
           generation_spec_id?: string | null
           heartbeat_at?: string | null
           id?: string
@@ -952,6 +1148,9 @@ export type Database = {
           max_attempts?: number
           output_data?: Json | null
           parent_job_id?: string | null
+          producer_config?: Json
+          producer_type?: string | null
+          requested_quantity?: number | null
           source_id?: string | null
           started_at?: string | null
           status?: string
@@ -985,6 +1184,13 @@ export type Database = {
             columns: ["competition_generation_request_id"]
             isOneToOne: false
             referencedRelation: "competition_ai_generation_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_jobs_generation_request_id_fkey"
+            columns: ["generation_request_id"]
+            isOneToOne: false
+            referencedRelation: "question_generation_requests"
             referencedColumns: ["id"]
           },
           {
@@ -1386,6 +1592,103 @@ export type Database = {
             columns: ["staging_question_id"]
             isOneToOne: false
             referencedRelation: "ai_question_staging"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_question_generation_dispatches: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          dispatched_at: string | null
+          dispatched_by: string | null
+          dispatched_quantity: number
+          duplicate_quantity: number
+          error_code: string | null
+          error_message: string | null
+          generation_request_id: string
+          id: string
+          input_snapshot: Json
+          inserted_quantity: number
+          invalid_quantity: number
+          job_type: string
+          metadata: Json
+          processed_quantity: number
+          producer_config: Json
+          producer_type: string
+          requested_quantity: number
+          status: string
+          updated_at: string
+          vault_id: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          dispatched_at?: string | null
+          dispatched_by?: string | null
+          dispatched_quantity?: number
+          duplicate_quantity?: number
+          error_code?: string | null
+          error_message?: string | null
+          generation_request_id: string
+          id?: string
+          input_snapshot?: Json
+          inserted_quantity?: number
+          invalid_quantity?: number
+          job_type?: string
+          metadata?: Json
+          processed_quantity?: number
+          producer_config?: Json
+          producer_type?: string
+          requested_quantity?: number
+          status?: string
+          updated_at?: string
+          vault_id?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          dispatched_at?: string | null
+          dispatched_by?: string | null
+          dispatched_quantity?: number
+          duplicate_quantity?: number
+          error_code?: string | null
+          error_message?: string | null
+          generation_request_id?: string
+          id?: string
+          input_snapshot?: Json
+          inserted_quantity?: number
+          invalid_quantity?: number
+          job_type?: string
+          metadata?: Json
+          processed_quantity?: number
+          producer_config?: Json
+          producer_type?: string
+          requested_quantity?: number
+          status?: string
+          updated_at?: string
+          vault_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_question_generation_dispatches_generation_request_id_fkey"
+            columns: ["generation_request_id"]
+            isOneToOne: false
+            referencedRelation: "question_generation_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_question_generation_dispatches_vault_id_fkey"
+            columns: ["vault_id"]
+            isOneToOne: false
+            referencedRelation: "question_vault_inventory_overview"
+            referencedColumns: ["vault_id"]
+          },
+          {
+            foreignKeyName: "ai_question_generation_dispatches_vault_id_fkey"
+            columns: ["vault_id"]
+            isOneToOne: false
+            referencedRelation: "question_vaults"
             referencedColumns: ["id"]
           },
         ]
@@ -3321,6 +3624,7 @@ export type Database = {
           created_at: string
           duplicate_items: number
           error_data: Json
+          generation_request_id: string | null
           id: string
           inserted_items: number
           invalid_items: number
@@ -3328,6 +3632,7 @@ export type Database = {
           origin: string
           producer_id: string
           producer_model: string | null
+          production_source: string | null
           raw_payload: Json
           schema_version: string
           status: string
@@ -3341,6 +3646,7 @@ export type Database = {
           created_at?: string
           duplicate_items?: number
           error_data?: Json
+          generation_request_id?: string | null
           id?: string
           inserted_items?: number
           invalid_items?: number
@@ -3348,6 +3654,7 @@ export type Database = {
           origin: string
           producer_id: string
           producer_model?: string | null
+          production_source?: string | null
           raw_payload: Json
           schema_version?: string
           status?: string
@@ -3361,6 +3668,7 @@ export type Database = {
           created_at?: string
           duplicate_items?: number
           error_data?: Json
+          generation_request_id?: string | null
           id?: string
           inserted_items?: number
           invalid_items?: number
@@ -3368,6 +3676,7 @@ export type Database = {
           origin?: string
           producer_id?: string
           producer_model?: string | null
+          production_source?: string | null
           raw_payload?: Json
           schema_version?: string
           status?: string
@@ -3376,7 +3685,15 @@ export type Database = {
           valid_items?: number
           validation_summary?: Json
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "candidate_question_batches_generation_request_id_fkey"
+            columns: ["generation_request_id"]
+            isOneToOne: false
+            referencedRelation: "question_generation_requests"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       characters: {
         Row: {
@@ -5183,6 +5500,101 @@ export type Database = {
           },
         ]
       }
+      curriculum_subtopic_week_map: {
+        Row: {
+          academic_year: string
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          curriculum_version_id: string
+          evidence_kind: string
+          first_instruction_week: number
+          grade_level: number
+          id: string
+          mapping_confidence: string
+          official_order: number
+          planned_week_band: unknown
+          repeat_from_instruction_week: number
+          source_note: string | null
+          source_url: string | null
+          subject_id: string
+          subtopic_id: string
+          topic_id: string
+          updated_at: string
+        }
+        Insert: {
+          academic_year: string
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          curriculum_version_id: string
+          evidence_kind: string
+          first_instruction_week: number
+          grade_level: number
+          id?: string
+          mapping_confidence: string
+          official_order: number
+          planned_week_band: unknown
+          repeat_from_instruction_week: number
+          source_note?: string | null
+          source_url?: string | null
+          subject_id: string
+          subtopic_id: string
+          topic_id: string
+          updated_at?: string
+        }
+        Update: {
+          academic_year?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          curriculum_version_id?: string
+          evidence_kind?: string
+          first_instruction_week?: number
+          grade_level?: number
+          id?: string
+          mapping_confidence?: string
+          official_order?: number
+          planned_week_band?: unknown
+          repeat_from_instruction_week?: number
+          source_note?: string | null
+          source_url?: string | null
+          subject_id?: string
+          subtopic_id?: string
+          topic_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "curriculum_subtopic_week_map_curriculum_version_id_fkey"
+            columns: ["curriculum_version_id"]
+            isOneToOne: false
+            referencedRelation: "curriculum_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "curriculum_subtopic_week_map_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "curriculum_subtopic_week_map_subtopic_id_fkey"
+            columns: ["subtopic_id"]
+            isOneToOne: false
+            referencedRelation: "subtopics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "curriculum_subtopic_week_map_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       curriculum_teaching_approvals: {
         Row: {
           academic_year: string
@@ -5262,6 +5674,95 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      curriculum_week_map_verification: {
+        Row: {
+          created_at: string
+          document_academic_year: string
+          document_location: string
+          document_sha256: string | null
+          document_title: string
+          document_url: string
+          first_instruction_week: number
+          grade_level: number
+          id: string
+          map_id: string
+          proof_ref_id: string | null
+          source_institution: string
+          subject_id: string
+          subtopic_id: string
+          topic_id: string
+          verified_at: string
+          verified_by: string
+        }
+        Insert: {
+          created_at?: string
+          document_academic_year: string
+          document_location: string
+          document_sha256?: string | null
+          document_title: string
+          document_url: string
+          first_instruction_week: number
+          grade_level: number
+          id?: string
+          map_id: string
+          proof_ref_id?: string | null
+          source_institution: string
+          subject_id: string
+          subtopic_id: string
+          topic_id: string
+          verified_at?: string
+          verified_by: string
+        }
+        Update: {
+          created_at?: string
+          document_academic_year?: string
+          document_location?: string
+          document_sha256?: string | null
+          document_title?: string
+          document_url?: string
+          first_instruction_week?: number
+          grade_level?: number
+          id?: string
+          map_id?: string
+          proof_ref_id?: string | null
+          source_institution?: string
+          subject_id?: string
+          subtopic_id?: string
+          topic_id?: string
+          verified_at?: string
+          verified_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "curriculum_week_map_verification_map_id_fkey"
+            columns: ["map_id"]
+            isOneToOne: false
+            referencedRelation: "curriculum_subtopic_week_map"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "curriculum_week_map_verification_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "curriculum_week_map_verification_subtopic_id_fkey"
+            columns: ["subtopic_id"]
+            isOneToOne: false
+            referencedRelation: "subtopics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "curriculum_week_map_verification_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       excel_question_import_rows: {
         Row: {
@@ -6399,6 +6900,7 @@ export type Database = {
       }
       matchmaking_queue: {
         Row: {
+          competition_level: string | null
           expires_at: string | null
           grade_level: number
           id: string
@@ -6412,6 +6914,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          competition_level?: string | null
           expires_at?: string | null
           grade_level: number
           id?: string
@@ -6425,6 +6928,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          competition_level?: string | null
           expires_at?: string | null
           grade_level?: number
           id?: string
@@ -6453,6 +6957,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      meb_holiday_days: {
+        Row: {
+          academic_year: string
+          class_day_loss: number
+          holiday_date: string
+          holiday_type: string
+          is_public_holiday: boolean
+          label: string
+          source_note: string | null
+        }
+        Insert: {
+          academic_year: string
+          class_day_loss?: number
+          holiday_date: string
+          holiday_type: string
+          is_public_holiday?: boolean
+          label: string
+          source_note?: string | null
+        }
+        Update: {
+          academic_year?: string
+          class_day_loss?: number
+          holiday_date?: string
+          holiday_type?: string
+          is_public_holiday?: boolean
+          label?: string
+          source_note?: string | null
+        }
+        Relationships: []
       }
       question_assets: {
         Row: {
@@ -6676,20 +7210,25 @@ export type Database = {
           created_at: string
           current_question_count: number
           demand_snapshot_id: string | null
+          dispatch_mode: string
           generated_candidate_count: number
           generation_batch_size: number
           generation_completed_at: string | null
           generation_priority: string
           generation_started_at: string | null
           id: string
+          last_status_reason: string | null
           metadata: Json
           placed_question_count: number
+          producer_config: Json
+          producer_type: string | null
           rejected_at: string | null
           rejected_by: string | null
           rejected_question_count: number
           rejection_reason: string | null
           request_reason: Json
           request_status: string
+          requested_by: string | null
           requested_question_count: number
           review_question_count: number
           updated_at: string
@@ -6703,20 +7242,25 @@ export type Database = {
           created_at?: string
           current_question_count?: number
           demand_snapshot_id?: string | null
+          dispatch_mode?: string
           generated_candidate_count?: number
           generation_batch_size?: number
           generation_completed_at?: string | null
           generation_priority?: string
           generation_started_at?: string | null
           id?: string
+          last_status_reason?: string | null
           metadata?: Json
           placed_question_count?: number
+          producer_config?: Json
+          producer_type?: string | null
           rejected_at?: string | null
           rejected_by?: string | null
           rejected_question_count?: number
           rejection_reason?: string | null
           request_reason?: Json
           request_status?: string
+          requested_by?: string | null
           requested_question_count: number
           review_question_count?: number
           updated_at?: string
@@ -6730,20 +7274,25 @@ export type Database = {
           created_at?: string
           current_question_count?: number
           demand_snapshot_id?: string | null
+          dispatch_mode?: string
           generated_candidate_count?: number
           generation_batch_size?: number
           generation_completed_at?: string | null
           generation_priority?: string
           generation_started_at?: string | null
           id?: string
+          last_status_reason?: string | null
           metadata?: Json
           placed_question_count?: number
+          producer_config?: Json
+          producer_type?: string | null
           rejected_at?: string | null
           rejected_by?: string | null
           rejected_question_count?: number
           rejection_reason?: string | null
           request_reason?: Json
           request_status?: string
+          requested_by?: string | null
           requested_question_count?: number
           review_question_count?: number
           updated_at?: string
@@ -8638,7 +9187,9 @@ export type Database = {
           updated_at: string
           updated_by: string | null
           vault_code: string
+          vault_kind: string | null
           vault_type: string
+          week_number: number | null
         }
         Insert: {
           allow_competition?: boolean
@@ -8663,7 +9214,9 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
           vault_code: string
+          vault_kind?: string | null
           vault_type?: string
+          week_number?: number | null
         }
         Update: {
           allow_competition?: boolean
@@ -8688,7 +9241,9 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
           vault_code?: string
+          vault_kind?: string | null
           vault_type?: string
+          week_number?: number | null
         }
         Relationships: [
           {
@@ -10139,6 +10694,311 @@ export type Database = {
         }
         Relationships: []
       }
+      student_week_question_ledger: {
+        Row: {
+          academic_year: string
+          created_at: string
+          question_id: string
+          source_vault_id: string | null
+          user_id: string
+          week: number
+        }
+        Insert: {
+          academic_year: string
+          created_at?: string
+          question_id: string
+          source_vault_id?: string | null
+          user_id: string
+          week: number
+        }
+        Update: {
+          academic_year?: string
+          created_at?: string
+          question_id?: string
+          source_vault_id?: string | null
+          user_id?: string
+          week?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_week_question_ledger_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "question_publication_overview"
+            referencedColumns: ["question_id"]
+          },
+          {
+            foreignKeyName: "student_week_question_ledger_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "question_solve_time_overview"
+            referencedColumns: ["question_id"]
+          },
+          {
+            foreignKeyName: "student_week_question_ledger_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_week_question_ledger_source_vault_id_fkey"
+            columns: ["source_vault_id"]
+            isOneToOne: false
+            referencedRelation: "question_vault_inventory_overview"
+            referencedColumns: ["vault_id"]
+          },
+          {
+            foreignKeyName: "student_week_question_ledger_source_vault_id_fkey"
+            columns: ["source_vault_id"]
+            isOneToOne: false
+            referencedRelation: "question_vaults"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      student_week_quota: {
+        Row: {
+          academic_year: string
+          competitions_reserved: number
+          created_at: string
+          new_questions_reserved: number
+          updated_at: string
+          user_id: string
+          week: number
+        }
+        Insert: {
+          academic_year: string
+          competitions_reserved?: number
+          created_at?: string
+          new_questions_reserved?: number
+          updated_at?: string
+          user_id: string
+          week: number
+        }
+        Update: {
+          academic_year?: string
+          competitions_reserved?: number
+          created_at?: string
+          new_questions_reserved?: number
+          updated_at?: string
+          user_id?: string
+          week?: number
+        }
+        Relationships: []
+      }
+      student_week_quota_events: {
+        Row: {
+          academic_year: string
+          competition_id: string | null
+          created_at: string
+          delta: number
+          detail: Json
+          event: string
+          id: string
+          user_id: string
+          week: number
+        }
+        Insert: {
+          academic_year: string
+          competition_id?: string | null
+          created_at?: string
+          delta?: number
+          detail?: Json
+          event: string
+          id?: string
+          user_id: string
+          week: number
+        }
+        Update: {
+          academic_year?: string
+          competition_id?: string | null
+          created_at?: string
+          delta?: number
+          detail?: Json
+          event?: string
+          id?: string
+          user_id?: string
+          week?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_week_quota_events_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "competitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      student_week_subject_question_ledger: {
+        Row: {
+          academic_year: string
+          created_at: string
+          question_id: string
+          source_vault_id: string | null
+          subject_id: string
+          user_id: string
+          week: number
+        }
+        Insert: {
+          academic_year: string
+          created_at?: string
+          question_id: string
+          source_vault_id?: string | null
+          subject_id: string
+          user_id: string
+          week: number
+        }
+        Update: {
+          academic_year?: string
+          created_at?: string
+          question_id?: string
+          source_vault_id?: string | null
+          subject_id?: string
+          user_id?: string
+          week?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_week_subject_question_ledger_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "question_publication_overview"
+            referencedColumns: ["question_id"]
+          },
+          {
+            foreignKeyName: "student_week_subject_question_ledger_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "question_solve_time_overview"
+            referencedColumns: ["question_id"]
+          },
+          {
+            foreignKeyName: "student_week_subject_question_ledger_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_week_subject_question_ledger_source_vault_id_fkey"
+            columns: ["source_vault_id"]
+            isOneToOne: false
+            referencedRelation: "question_vault_inventory_overview"
+            referencedColumns: ["vault_id"]
+          },
+          {
+            foreignKeyName: "student_week_subject_question_ledger_source_vault_id_fkey"
+            columns: ["source_vault_id"]
+            isOneToOne: false
+            referencedRelation: "question_vaults"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_week_subject_question_ledger_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      student_week_subject_quota: {
+        Row: {
+          academic_year: string
+          competitions_reserved: number
+          created_at: string
+          new_questions_reserved: number
+          subject_id: string
+          updated_at: string
+          user_id: string
+          week: number
+        }
+        Insert: {
+          academic_year: string
+          competitions_reserved?: number
+          created_at?: string
+          new_questions_reserved?: number
+          subject_id: string
+          updated_at?: string
+          user_id: string
+          week: number
+        }
+        Update: {
+          academic_year?: string
+          competitions_reserved?: number
+          created_at?: string
+          new_questions_reserved?: number
+          subject_id?: string
+          updated_at?: string
+          user_id?: string
+          week?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_week_subject_quota_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      student_week_subject_quota_events: {
+        Row: {
+          academic_year: string
+          competition_id: string | null
+          created_at: string
+          delta: number
+          detail: Json
+          event: string
+          id: string
+          subject_id: string
+          user_id: string
+          week: number
+        }
+        Insert: {
+          academic_year: string
+          competition_id?: string | null
+          created_at?: string
+          delta?: number
+          detail?: Json
+          event: string
+          id?: string
+          subject_id: string
+          user_id: string
+          week: number
+        }
+        Update: {
+          academic_year?: string
+          competition_id?: string | null
+          created_at?: string
+          delta?: number
+          detail?: Json
+          event?: string
+          id?: string
+          subject_id?: string
+          user_id?: string
+          week?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_week_subject_quota_events_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "competitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_week_subject_quota_events_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       student_weekly_counters: {
         Row: {
           academic_year: string
@@ -10763,6 +11623,340 @@ export type Database = {
             columns: ["required_level_id"]
             isOneToOne: false
             referencedRelation: "training_levels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vault_plan_changes: {
+        Row: {
+          action: string
+          actor: string | null
+          affected_vaults: string[] | null
+          at: string
+          id: string
+          new_value: Json | null
+          old_value: Json | null
+          subtopic_id: string | null
+          version_id: string
+        }
+        Insert: {
+          action: string
+          actor?: string | null
+          affected_vaults?: string[] | null
+          at?: string
+          id?: string
+          new_value?: Json | null
+          old_value?: Json | null
+          subtopic_id?: string | null
+          version_id: string
+        }
+        Update: {
+          action?: string
+          actor?: string | null
+          affected_vaults?: string[] | null
+          at?: string
+          id?: string
+          new_value?: Json | null
+          old_value?: Json | null
+          subtopic_id?: string | null
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vault_plan_changes_subtopic_id_fkey"
+            columns: ["subtopic_id"]
+            isOneToOne: false
+            referencedRelation: "subtopics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vault_plan_changes_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "vault_plan_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vault_plan_recalc_queue: {
+        Row: {
+          academic_year: string
+          affected_vaults: string[]
+          created_at: string
+          created_by: string | null
+          id: string
+          new_first_i: number
+          old_first_i: number
+          reason: string
+          status: string
+          subtopic_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          academic_year: string
+          affected_vaults?: string[]
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          new_first_i: number
+          old_first_i: number
+          reason: string
+          status?: string
+          subtopic_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          academic_year?: string
+          affected_vaults?: string[]
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          new_first_i?: number
+          old_first_i?: number
+          reason?: string
+          status?: string
+          subtopic_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vault_plan_recalc_queue_subtopic_id_fkey"
+            columns: ["subtopic_id"]
+            isOneToOne: false
+            referencedRelation: "subtopics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vault_plan_versions: {
+        Row: {
+          academic_year: string
+          approved_by: string | null
+          base_version_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          published_at: string | null
+          reason: string
+          status: string
+          vault_id: string
+          version_no: number
+        }
+        Insert: {
+          academic_year: string
+          approved_by?: string | null
+          base_version_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          published_at?: string | null
+          reason: string
+          status?: string
+          vault_id: string
+          version_no: number
+        }
+        Update: {
+          academic_year?: string
+          approved_by?: string | null
+          base_version_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          published_at?: string | null
+          reason?: string
+          status?: string
+          vault_id?: string
+          version_no?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vault_plan_versions_base_version_id_fkey"
+            columns: ["base_version_id"]
+            isOneToOne: false
+            referencedRelation: "vault_plan_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vault_plan_versions_vault_id_fkey"
+            columns: ["vault_id"]
+            isOneToOne: false
+            referencedRelation: "question_vault_inventory_overview"
+            referencedColumns: ["vault_id"]
+          },
+          {
+            foreignKeyName: "vault_plan_versions_vault_id_fkey"
+            columns: ["vault_id"]
+            isOneToOne: false
+            referencedRelation: "question_vaults"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vault_plan_week_overrides: {
+        Row: {
+          advance_evidence: Json | null
+          created_at: string
+          id: string
+          new_first_i: number
+          old_first_i: number
+          reason: string
+          subtopic_id: string
+          version_id: string
+        }
+        Insert: {
+          advance_evidence?: Json | null
+          created_at?: string
+          id?: string
+          new_first_i: number
+          old_first_i: number
+          reason: string
+          subtopic_id: string
+          version_id: string
+        }
+        Update: {
+          advance_evidence?: Json | null
+          created_at?: string
+          id?: string
+          new_first_i?: number
+          old_first_i?: number
+          reason?: string
+          subtopic_id?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vault_plan_week_overrides_subtopic_id_fkey"
+            columns: ["subtopic_id"]
+            isOneToOne: false
+            referencedRelation: "subtopics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vault_plan_week_overrides_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "vault_plan_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vault_subtopic_targets: {
+        Row: {
+          created_at: string
+          id: string
+          note: string | null
+          question_target: number
+          subtopic_id: string
+          version_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          note?: string | null
+          question_target: number
+          subtopic_id: string
+          version_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          note?: string | null
+          question_target?: number
+          subtopic_id?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vault_subtopic_targets_subtopic_id_fkey"
+            columns: ["subtopic_id"]
+            isOneToOne: false
+            referencedRelation: "subtopics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vault_subtopic_targets_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "vault_plan_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      weekly_vault_placements: {
+        Row: {
+          id: string
+          metadata: Json
+          placed_at: string
+          placed_by: string | null
+          placement_source: string
+          placement_status: string
+          question_id: string
+          subtopic_id: string | null
+          vault_id: string
+        }
+        Insert: {
+          id?: string
+          metadata?: Json
+          placed_at?: string
+          placed_by?: string | null
+          placement_source?: string
+          placement_status?: string
+          question_id: string
+          subtopic_id?: string | null
+          vault_id: string
+        }
+        Update: {
+          id?: string
+          metadata?: Json
+          placed_at?: string
+          placed_by?: string | null
+          placement_source?: string
+          placement_status?: string
+          question_id?: string
+          subtopic_id?: string | null
+          vault_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_vault_placements_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "question_publication_overview"
+            referencedColumns: ["question_id"]
+          },
+          {
+            foreignKeyName: "weekly_vault_placements_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "question_solve_time_overview"
+            referencedColumns: ["question_id"]
+          },
+          {
+            foreignKeyName: "weekly_vault_placements_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_vault_placements_subtopic_id_fkey"
+            columns: ["subtopic_id"]
+            isOneToOne: false
+            referencedRelation: "subtopics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_vault_placements_vault_id_fkey"
+            columns: ["vault_id"]
+            isOneToOne: false
+            referencedRelation: "question_vault_inventory_overview"
+            referencedColumns: ["vault_id"]
+          },
+          {
+            foreignKeyName: "weekly_vault_placements_vault_id_fkey"
+            columns: ["vault_id"]
+            isOneToOne: false
+            referencedRelation: "question_vaults"
             referencedColumns: ["id"]
           },
         ]
@@ -11839,6 +13033,94 @@ export type Database = {
         Args: { p_event_time: string; p_user: string }
         Returns: undefined
       }
+      _q163_lock: {
+        Args: { p_user: string; p_week: number; p_year: string }
+        Returns: undefined
+      }
+      _q163_period: {
+        Args: never
+        Returns: {
+          academic_year: string
+          week: number
+        }[]
+      }
+      _q163_reserve_competition: {
+        Args: { p_comp: string; p_user: string }
+        Returns: undefined
+      }
+      _q163_reserve_questions: {
+        Args: { p_comp: string; p_user: string }
+        Returns: undefined
+      }
+      _q165_lock: {
+        Args: {
+          p_subject: string
+          p_user: string
+          p_week: number
+          p_year: string
+        }
+        Returns: undefined
+      }
+      _q165_period: {
+        Args: never
+        Returns: {
+          academic_year: string
+          week: number
+        }[]
+      }
+      _q165_reserve_competition: {
+        Args: { p_comp: string; p_user: string }
+        Returns: undefined
+      }
+      _q165_reserve_questions: {
+        Args: { p_comp: string; p_user: string }
+        Returns: undefined
+      }
+      _q165_subject_of: { Args: { p_comp: string }; Returns: string }
+      _vp_audit: {
+        Args: {
+          p_action: string
+          p_actor: string
+          p_affected?: string[]
+          p_new: Json
+          p_old: Json
+          p_subtopic: string
+          p_version: string
+        }
+        Returns: undefined
+      }
+      _vp_map: {
+        Args: {
+          p_grade: number
+          p_subject: string
+          p_subtopic: string
+          p_year: string
+        }
+        Returns: {
+          first_i: number
+          is_official: boolean
+          is_verified: boolean
+          map_id: string
+        }[]
+      }
+      _vp_publish_core: {
+        Args: { p_actor: string; p_version_id: string }
+        Returns: undefined
+      }
+      _vp_require: { Args: { p_permission: string }; Returns: string }
+      _vp_require_i_slot: {
+        Args: { p_i: number; p_year: string }
+        Returns: number
+      }
+      _vp_vault: {
+        Args: { p_vault_id: string }
+        Returns: {
+          grade_level: number
+          subject_id: string
+          vault_code: string
+          week_number: number
+        }[]
+      }
       academic_calendar_delete_week: {
         Args: { p_week: number; p_year: string }
         Returns: undefined
@@ -11914,10 +13196,21 @@ export type Database = {
         Args: { p_request_id: string }
         Returns: string
       }
-      approve_question_generation_request: {
-        Args: { p_approved_by: string; p_request_id: string }
-        Returns: Json
-      }
+      approve_question_generation_request:
+        | {
+            Args: { p_approved_by: string; p_request_id: string }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_dispatch_mode?: string
+              p_producer_config?: Json
+              p_producer_type?: string
+              p_request_id: string
+              p_requested_quantity?: number
+            }
+            Returns: Json
+          }
       assign_admin_role: {
         Args: { p_role_code: string; p_target_user_id: string }
         Returns: Json
@@ -11933,6 +13226,10 @@ export type Database = {
       build_legacy_question_key: {
         Args: { p_question_number: number; p_test_code: string }
         Returns: string
+      }
+      build_vault_ai_factory_job: {
+        Args: { p_request_id: string }
+        Returns: Json
       }
       calculate_accuracy: {
         Args: { p_answered: number; p_correct: number }
@@ -11956,15 +13253,45 @@ export type Database = {
         }
         Returns: Json
       }
+      cancel_bulk_gate_run: {
+        Args: { p_bulk_run_id: string; p_reason?: string }
+        Returns: Json
+      }
       check_question_activation_readiness: {
         Args: { p_question_id: string }
+        Returns: Json
+      }
+      claim_bulk_gate_tasks: {
+        Args: {
+          p_lease_seconds?: number
+          p_limit?: number
+          p_worker_id: string
+        }
         Returns: Json
       }
       claim_next_ai_generation_job: {
         Args: { p_lease_seconds?: number; p_worker_name: string }
         Returns: Json
       }
+      classify_ai_production_status: {
+        Args: {
+          p_error_code?: string
+          p_has_pending_review?: boolean
+          p_status: string
+        }
+        Returns: string
+      }
       close_league_season: { Args: { p_season_id: string }; Returns: Json }
+      complete_bulk_gate_task: {
+        Args: {
+          p_error_code?: string
+          p_error_message?: string
+          p_status: string
+          p_task_id: string
+          p_worker_id: string
+        }
+        Returns: Json
+      }
       create_missing_competition_timeouts: {
         Args: { p_competition_question_id: string }
         Returns: number
@@ -11976,6 +13303,101 @@ export type Database = {
       current_user_has_admin_permission: {
         Args: { p_permission_code: string }
         Returns: boolean
+      }
+      curriculum_subtopic_week_state: {
+        Args: {
+          p_as_of_date: string
+          p_grade_level: number
+          p_subject_id: string
+        }
+        Returns: {
+          academic_year: string
+          calendar_week: number
+          evidence_kind: string
+          first_instruction_week: number
+          instruction_week: number
+          is_usable: boolean
+          mapping_confidence: string
+          new_topic_allowed: boolean
+          official_order: number
+          repeat_from_instruction_week: number
+          state: string
+          subtopic_id: string
+          topic_id: string
+          week_kind: string
+        }[]
+      }
+      curriculum_week_map_approve: {
+        Args: { p_map_id: string }
+        Returns: {
+          academic_year: string
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          curriculum_version_id: string
+          evidence_kind: string
+          first_instruction_week: number
+          grade_level: number
+          id: string
+          mapping_confidence: string
+          official_order: number
+          planned_week_band: unknown
+          repeat_from_instruction_week: number
+          source_note: string | null
+          source_url: string | null
+          subject_id: string
+          subtopic_id: string
+          topic_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "curriculum_subtopic_week_map"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      curriculum_week_map_verify: {
+        Args: {
+          p_document_academic_year: string
+          p_document_location: string
+          p_document_sha256: string
+          p_document_title: string
+          p_document_url: string
+          p_first_instruction_week: number
+          p_grade_level: number
+          p_map_id: string
+          p_proof_ref_id: string
+          p_source_institution: string
+          p_subject_id: string
+          p_subtopic_id: string
+          p_topic_id: string
+        }
+        Returns: {
+          created_at: string
+          document_academic_year: string
+          document_location: string
+          document_sha256: string | null
+          document_title: string
+          document_url: string
+          first_instruction_week: number
+          grade_level: number
+          id: string
+          map_id: string
+          proof_ref_id: string | null
+          source_institution: string
+          subject_id: string
+          subtopic_id: string
+          topic_id: string
+          verified_at: string
+          verified_by: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "curriculum_week_map_verification"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       deactivate_question_for_students: {
         Args: { p_question_id: string; p_reason: string }
@@ -11989,6 +13411,10 @@ export type Database = {
           p_review_run_id: string
         }
         Returns: Json
+      }
+      enforce_vault_plan_row_draft_only: {
+        Args: { p_version: string }
+        Returns: undefined
       }
       ensure_question_vault_demand_policy: {
         Args: { p_vault_id: string }
@@ -12047,6 +13473,10 @@ export type Database = {
         Returns: Json
       }
       get_attempt_feedback: { Args: { p_question_id: string }; Returns: Json }
+      get_bulk_gate_control_status: {
+        Args: { p_batch_id: string }
+        Returns: Json
+      }
       get_candidate_question_batch_contract: { Args: never; Returns: Json }
       get_candidate_question_batch_detail: {
         Args: { p_batch_id: string }
@@ -12054,6 +13484,15 @@ export type Database = {
       }
       get_candidate_question_batch_operation_status: {
         Args: { p_batch_id: string }
+        Returns: Json
+      }
+      get_canonical_outcome_codes: {
+        Args: {
+          p_curriculum_version_id: string
+          p_max_grade?: number
+          p_min_grade?: number
+          p_subject_id: string
+        }
         Returns: Json
       }
       get_competition_ai_factory_job_status: {
@@ -12234,6 +13673,32 @@ export type Database = {
         Args: { p_academic_year: string; p_subject_id: string }
         Returns: Json
       }
+      list_question_generation_requests: {
+        Args: { p_limit?: number }
+        Returns: {
+          ai_job_attempts: number
+          ai_job_error_code: string
+          ai_job_id: string
+          ai_job_status: string
+          batch_count: number
+          batch_id: string
+          created_at: string
+          dispatch_duplicate: number
+          dispatch_id: string
+          dispatch_inserted: number
+          dispatch_invalid: number
+          dispatch_mode: string
+          dispatch_requested: number
+          dispatch_status: string
+          generated_count: number
+          last_error_message: string
+          producer_type: string
+          request_id: string
+          request_status: string
+          requested_quantity: number
+          updated_at: string
+        }[]
+      }
       list_training_outcomes: { Args: { p_subject_id: string }; Returns: Json }
       list_training_topics: { Args: { p_subject_id: string }; Returns: Json }
       normalize_excel_answer: { Args: { p_value: string }; Returns: string }
@@ -12268,13 +13733,74 @@ export type Database = {
         Args: { p_value: string }
         Returns: string
       }
+      plan_bulk_gate_control: {
+        Args: {
+          p_batch_id: string
+          p_candidate_ids?: string[]
+          p_gates?: string[]
+          p_group_filter?: string
+          p_scope: string
+        }
+        Returns: Json
+      }
       prepare_competition_pack: {
         Args: { p_competition_id: string }
+        Returns: Json
+      }
+      preview_question_generation_demand: {
+        Args: {
+          p_active_student_count?: number
+          p_curriculum_version_id?: string
+          p_difficulty?: string
+          p_grade_level: number
+          p_inventory_scope?: string
+          p_outcome_id?: string
+          p_stock_scope?: string
+          p_subject_id: string
+          p_subtopic_id?: string
+          p_target_override?: number
+          p_topic_id?: string
+          p_week_from?: number
+          p_week_to?: number
+        }
+        Returns: Json
+      }
+      preview_uretim_planlayici_scope_rows: {
+        Args: {
+          p_active_student_count?: number
+          p_curriculum_version_id?: string
+          p_difficulties?: string[]
+          p_grades?: number[]
+          p_inventory_scope?: string
+          p_limit?: number
+          p_outcome_ids?: string[]
+          p_stock_scope?: string
+          p_subject_ids?: string[]
+          p_subtopic_ids?: string[]
+          p_target_override?: number
+          p_topic_ids?: string[]
+          p_vault_id: string
+          p_week_from?: number
+          p_week_to?: number
+        }
         Returns: Json
       }
       recalculate_competition_player_score: {
         Args: { p_competition_id: string; p_user_id: string }
         Returns: undefined
+      }
+      record_vault_generation_batch_progress: {
+        Args: {
+          p_batch_id: string
+          p_duplicate?: number
+          p_generation_request_id: string
+          p_inserted?: number
+          p_invalid?: number
+          p_received?: number
+          p_status?: string
+          p_valid?: number
+        }
+        Returns: Json
       }
       register_ai_worker_output: {
         Args: {
@@ -12308,6 +13834,29 @@ export type Database = {
         }
         Returns: Json
       }
+      requeue_bulk_gate_task: {
+        Args: {
+          p_error_code?: string
+          p_error_message?: string
+          p_task_id: string
+          p_worker_id: string
+        }
+        Returns: Json
+      }
+      resolve_academic_week_at: {
+        Args: { p_date: string }
+        Returns: {
+          academic_year: string
+          actual_class_days: number
+          holiday_kind: string
+          instruction_week_number: number
+          is_instruction_week: boolean
+          new_topic_allowed: boolean
+          requires_admin_activation: boolean
+          week: number
+          week_kind: string
+        }[]
+      }
       resolve_competition_points: {
         Args: {
           p_answer_result: string
@@ -12338,6 +13887,10 @@ export type Database = {
           academic_year: string
           week: number
         }[]
+      }
+      retry_failed_bulk_gate_tasks: {
+        Args: { p_bulk_run_id: string }
+        Returns: Json
       }
       review_and_promote_ai_question: {
         Args: {
@@ -12407,6 +13960,10 @@ export type Database = {
         }
         Returns: Json
       }
+      set_bulk_gate_control_stop: {
+        Args: { p_bulk_run_id: string; p_stop: boolean }
+        Returns: Json
+      }
       set_competition_player_ready: {
         Args: { p_competition_id: string }
         Returns: Json
@@ -12423,6 +13980,17 @@ export type Database = {
       start_answer_verification: {
         Args: { p_minimum_confidence?: number; p_staging_question_id: string }
         Returns: string
+      }
+      start_bulk_gate_control: {
+        Args: {
+          p_batch_id: string
+          p_candidate_ids?: string[]
+          p_gates?: string[]
+          p_group_filter?: string
+          p_model?: string
+          p_scope: string
+        }
+        Returns: Json
       }
       start_curriculum_fit_verification: {
         Args: { p_minimum_confidence?: number; p_staging_question_id: string }
@@ -12625,6 +14193,202 @@ export type Database = {
         Returns: boolean
       }
       unequip_student_character: { Args: never; Returns: Json }
+      uretim_planlayici_list_academic_weeks: {
+        Args: { p_year: string }
+        Returns: {
+          academic_year: string
+          ends_at: string
+          is_started: boolean
+          starts_at: string
+          week: number
+        }[]
+      }
+      uretim_planlayici_list_academic_years: {
+        Args: never
+        Returns: {
+          academic_year: string
+          week_count: number
+        }[]
+      }
+      uretim_planlayici_list_vault_stock: {
+        Args: {
+          p_difficulty?: string
+          p_grade?: number
+          p_include_inactive?: boolean
+          p_limit?: number
+          p_offset?: number
+          p_subject?: string
+          p_vault_type?: string
+          p_week?: number
+        }
+        Returns: {
+          competition_eligible: number
+          difficulty_level: string
+          eksik: number
+          grade_level: number
+          hedef: number
+          hedef_kaynak: string
+          is_active: boolean
+          kullanilabilir: number
+          name: string
+          one_v_one_eligible: number
+          practice_eligible: number
+          subject_id: string
+          subject_name: string
+          total_count: number
+          vault_code: string
+          vault_id: string
+          vault_kind: string
+          vault_type: string
+          week_number: number
+        }[]
+      }
+      uretim_planlayici_list_vaults: {
+        Args: {
+          p_difficulty?: string
+          p_grade?: number
+          p_include_inactive?: boolean
+          p_limit?: number
+          p_offset?: number
+          p_subject?: string
+          p_vault_type?: string
+          p_week?: number
+        }
+        Returns: {
+          activation_windows: Json
+          allow_competition: boolean
+          allow_exam: boolean
+          allow_one_v_one: boolean
+          allow_practice: boolean
+          difficulty_level: string
+          grade_level: number
+          is_active: boolean
+          name: string
+          policy_inventory_scope: string
+          subject_id: string
+          subject_name: string
+          target_basis: string
+          target_question_count: number
+          total_count: number
+          vault_code: string
+          vault_id: string
+          vault_kind: string
+          vault_type: string
+          week_number: number
+        }[]
+      }
+      uretim_planlayici_save_plan: {
+        Args: {
+          p_active_student_count?: number
+          p_inventory_scope?: string
+          p_plan_note?: string
+          p_plan_rows?: Json
+          p_stock_scope?: string
+          p_total_quantity?: number
+          p_vault_id: string
+          p_week_from?: number
+          p_week_to?: number
+        }
+        Returns: Json
+      }
+      vault_plan_effective_first_i: {
+        Args: {
+          p_grade: number
+          p_subject: string
+          p_subtopic: string
+          p_year: string
+        }
+        Returns: number
+      }
+      vault_plan_gaps: {
+        Args: { p_grade: number; p_subject: string }
+        Returns: {
+          deficit: number
+          placed_now: number
+          subtopic_id: string
+          target: number
+          vault_code: string
+          vault_id: string
+          week_number: number
+        }[]
+      }
+      vault_plan_history: {
+        Args: { p_vault_id: string }
+        Returns: {
+          approved_by: string
+          base_version_id: string
+          changes_count: number
+          created_at: string
+          created_by: string
+          published_at: string
+          reason: string
+          status: string
+          version_id: string
+          version_no: number
+        }[]
+      }
+      vault_plan_impact_preview: {
+        Args: { p_version_id: string }
+        Returns: {
+          delta: number
+          impact: string
+          subtopic_id: string
+          vault_code: string
+          vault_id: string
+          week_number: number
+        }[]
+      }
+      vault_plan_publish: { Args: { p_version_id: string }; Returns: undefined }
+      vault_plan_rollback: {
+        Args: { p_to_version_id: string; p_vault_id: string }
+        Returns: string
+      }
+      vault_plan_target_remove: {
+        Args: { p_subtopic_id: string; p_version_id: string }
+        Returns: undefined
+      }
+      vault_plan_target_set: {
+        Args: {
+          p_note?: string
+          p_subtopic_id: string
+          p_target: number
+          p_version_id: string
+        }
+        Returns: undefined
+      }
+      vault_plan_validate: {
+        Args: { p_version_id: string }
+        Returns: undefined
+      }
+      vault_plan_version_create: {
+        Args: {
+          p_base_version_id?: string
+          p_reason?: string
+          p_vault_id: string
+        }
+        Returns: string
+      }
+      vault_plan_week_advance: {
+        Args: {
+          p_evidence: Json
+          p_new_first_i: number
+          p_reason: string
+          p_subtopic_id: string
+          p_version_id: string
+        }
+        Returns: undefined
+      }
+      vault_plan_week_defer: {
+        Args: {
+          p_new_first_i: number
+          p_reason: string
+          p_subtopic_id: string
+          p_version_id: string
+        }
+        Returns: undefined
+      }
+      weekly_quota_status: { Args: never; Returns: Json }
+      weekly_quota_status_per_subject: { Args: never; Returns: Json }
     }
     Enums: {
       [_ in never]: never
