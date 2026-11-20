@@ -21,6 +21,7 @@ import {
   mapAnswerSubmitResult,
   mapOwnCompetitionResult,
   mapOwnMatchmakingStatus,
+  mapWeeklyQuotaStatus,
   CompetitionValidationError,
   syncCompetitionState,
 } from "./service"
@@ -817,5 +818,298 @@ describe("getOwnMatchmakingStatus", () => {
     await expect(
       getOwnMatchmakingStatus(mockClient as never, "not-a-uuid")
     ).rejects.toBeInstanceOf(CompetitionValidationError)
+  })
+})
+
+// ------------------------------------------------------------
+// 163: weekly_quota_status DTO & RPC sozlesmesi
+// ------------------------------------------------------------
+
+describe("mapWeeklyQuotaStatus — 163 kota DTO", () => {
+  it("basarili kota yaniti birebir eslenir (kullanici kendi rakamlarini gorur)", () => {
+    const result = mapWeeklyQuotaStatus({
+      academic_year: "2026-2027",
+      week: 9,
+      competitions_used: 12,
+      competitions_limit: 40,
+      new_questions_used: 47,
+      new_questions_limit: 200,
+    })
+    expect(result).toStrictEqual({
+      academicYear: "2026-2027",
+      week: 9,
+      competitionsUsed: 12,
+      competitionsLimit: 40,
+      newQuestionsUsed: 47,
+      newQuestionsLimit: 200,
+    })
+  })
+
+  it("jsonb ->> string sayilar guvenle sayiya cevrilir", () => {
+    const result = mapWeeklyQuotaStatus({
+      academic_year: "2026-2027",
+      week: "9",
+      competitions_used: "40",
+      competitions_limit: "40",
+      new_questions_used: "200",
+      new_questions_limit: "200",
+    })
+    expect(result.competitionsUsed).toBe(40)
+    expect(result.newQuestionsUsed).toBe(200)
+    expect(result.week).toBe(9)
+  })
+
+  it("gecerli akademik donem yok → sifirlanmis govde (sayi uydurulmaz)", () => {
+    const result = mapWeeklyQuotaStatus({
+      academic_year: null,
+      week: null,
+      competitions_used: 0,
+      competitions_limit: 40,
+      new_questions_used: 0,
+      new_questions_limit: 200,
+      note: "gecerli akademik donem yok",
+    })
+    expect(result.academicYear).toBeNull()
+    expect(result.week).toBeNull()
+    expect(result.competitionsUsed).toBe(0)
+  })
+
+  it("limit yoksa 163 sozlesme sabitleri fallback (40/200)", () => {
+    const result = mapWeeklyQuotaStatus({
+      academic_year: "2026-2027",
+      week: 9,
+      competitions_used: 0,
+      new_questions_used: 0,
+    })
+    expect(result.competitionsLimit).toBe(40)
+    expect(result.newQuestionsLimit).toBe(200)
+  })
+
+  it("null govde teknik hata firlatir (yanlis kalan hak uretilmez)", () => {
+    expect(() => mapWeeklyQuotaStatus(null)).toThrow(/kota/i)
+  })
+
+  it("gecersi/kotu sayi teknik hata firlatir", () => {
+    expect(() =>
+      mapWeeklyQuotaStatus({
+        academic_year: "2026-2027",
+        competitions_used: "abc",
+        new_questions_used: 0,
+      })
+    ).toThrow(/kota/i)
+    expect(() =>
+      mapWeeklyQuotaStatus({
+        academic_year: "2026-2027",
+        competitions_used: -5,
+        new_questions_used: 0,
+      })
+    ).toThrow(/kota/i)
+  })
+})
+
+describe("getWeeklyQuotaStatus — 163 RPC cagrisi", () => {
+  it("weekly_quota_status RPC'sini argsiz cagirir, user_id gondermez", async () => {
+    const { getWeeklyQuotaStatus } = await import("./service")
+    const calls: { fn: string; args: unknown }[] = []
+    const mockClient = {
+      rpc: (fn: string, args?: unknown) => {
+        calls.push({ fn, args: args ?? null })
+        return Promise.resolve({
+          data: {
+            academic_year: "2026-2027",
+            week: 9,
+            competitions_used: 39,
+            competitions_limit: 40,
+            new_questions_used: 198,
+            new_questions_limit: 200,
+          },
+          error: null,
+        })
+      },
+    }
+    const result = await getWeeklyQuotaStatus(mockClient as never)
+    expect(calls).toHaveLength(1)
+    expect(calls[0].fn).toBe("weekly_quota_status")
+    expect(calls[0].args).toStrictEqual({})
+    expect(JSON.stringify(calls[0].args)).not.toContain("user_id")
+    expect(result.competitionsUsed).toBe(39)
+  })
+
+  it("RPC hatasi yukariya atilir (cagiran Turkce mesaja cevirir)", async () => {
+    const { getWeeklyQuotaStatus } = await import("./service")
+    const mockClient = {
+      rpc: () =>
+        Promise.resolve({ data: null, error: new Error("kota hatasi") }),
+    }
+    await expect(getWeeklyQuotaStatus(mockClient as never)).rejects.toThrow(
+      "kota hatasi"
+    )
+  })
+
+  it("YETKI_163 (kimlik) hatasi yukariya atilir, DTO uretilmez", async () => {
+    const { getWeeklyQuotaStatus } = await import("./service")
+    const mockClient = {
+      rpc: () =>
+        Promise.resolve({
+          data: null,
+          error: new Error("YETKI_163: kimlik dogrulamasi gerekli."),
+        }),
+    }
+    await expect(getWeeklyQuotaStatus(mockClient as never)).rejects.toThrow(
+      /kimlik dogrulamasi/i
+    )
+  })
+})
+
+// ------------------------------------------------------------
+// 165: weekly_quota_status_per_subject DTO & RPC sozlesmesi
+// (AK-QUOTA-SUBJECT-01)
+// ------------------------------------------------------------
+
+describe("mapWeeklyQuotaStatusPerSubject — 165 ders bazli kota DTO", () => {
+  const MATEMATIK = "11111111-1111-4111-8111-111111111111"
+  const FIZIK = "22222222-2222-4222-8222-222222222222"
+
+  it("gecerli cok-dersli yanit: her ders ayri DTO", async () => {
+    const { mapWeeklyQuotaStatusPerSubject } = await import("./service")
+    const result = mapWeeklyQuotaStatusPerSubject({
+      model: "subject_weekly_quota_v165",
+      academic_year: "2026-2027",
+      week: 10,
+      subjects: [
+        {
+          subject_id: MATEMATIK,
+          competitions_used: 40,
+          competitions_limit: 40,
+          new_questions_used: 200,
+          new_questions_limit: 200,
+        },
+        {
+          subject_id: FIZIK,
+          competitions_used: 0,
+          competitions_limit: 40,
+          new_questions_used: 0,
+          new_questions_limit: 200,
+        },
+      ],
+    })
+    expect(result.academicYear).toBe("2026-2027")
+    expect(result.week).toBe(10)
+    expect(result.subjects).toHaveLength(2)
+    expect(result.subjects[0]?.subjectId).toBe(MATEMATIK)
+    expect(result.subjects[0]?.competitionsUsed).toBe(40)
+    expect(result.subjects[1]?.competitionsUsed).toBe(0)
+  })
+
+  it("donem yoksa (teknik durum) bos snapshot — sayi uydurulmaz", async () => {
+    const { mapWeeklyQuotaStatusPerSubject } = await import("./service")
+    const result = mapWeeklyQuotaStatusPerSubject({
+      academic_year: null,
+      week: null,
+      subjects: [],
+      note: "gecerli akademik donem yok",
+    })
+    expect(result.academicYear).toBeNull()
+    expect(result.subjects).toEqual([])
+  })
+
+  it("limitler yoksa 165 sozlesme sabitlerine duser (40/200)", async () => {
+    const { mapWeeklyQuotaStatusPerSubject } = await import("./service")
+    const result = mapWeeklyQuotaStatusPerSubject({
+      academic_year: "2026-2027",
+      week: 10,
+      subjects: [
+        { subject_id: MATEMATIK, competitions_used: 3, new_questions_used: 9 },
+      ],
+    })
+    expect(result.subjects[0]?.competitionsLimit).toBe(40)
+    expect(result.subjects[0]?.newQuestionsLimit).toBe(200)
+  })
+
+  it("string gelirse (jsonb ->> mirasi) sayiya cevrilir", async () => {
+    const { mapWeeklyQuotaStatusPerSubject } = await import("./service")
+    const result = mapWeeklyQuotaStatusPerSubject({
+      academic_year: "2026-2027",
+      week: "10",
+      subjects: [
+        {
+          subject_id: MATEMATIK,
+          competitions_used: "12",
+          new_questions_used: "60",
+        },
+      ],
+    })
+    expect(result.subjects[0]?.competitionsUsed).toBe(12)
+    expect(result.subjects[0]?.newQuestionsUsed).toBe(60)
+  })
+
+  it("gecersiz yanitlar throw (fail-closed — uydirma DTO yok)", async () => {
+    const { mapWeeklyQuotaStatusPerSubject } = await import("./service")
+    expect(() => mapWeeklyQuotaStatusPerSubject(null)).toThrow(/kota/i)
+    expect(() =>
+      mapWeeklyQuotaStatusPerSubject({ academic_year: 2026, subjects: [] })
+    ).toThrow(/kota/i)
+    expect(() =>
+      mapWeeklyQuotaStatusPerSubject({ academic_year: "2026-2027" })
+    ).toThrow(/kota/i)
+    // gecersiz UUID / eksik sayi alani → ders kaydi gecersiz (fail-closed;
+    // UUID ihlali assertUuid'den, sayi ihlali DTO mesajindan atar)
+    expect(() =>
+      mapWeeklyQuotaStatusPerSubject({
+        academic_year: "2026-2027",
+        subjects: [{ subject_id: "kotu-id", competitions_used: 1, new_questions_used: 1 }],
+      })
+    ).toThrow(/UUID|ders kota kaydi/i)
+    expect(() =>
+      mapWeeklyQuotaStatusPerSubject({
+        academic_year: "2026-2027",
+        subjects: [{ subject_id: MATEMATIK }],
+      })
+    ).toThrow(/ders kota kaydi/i)
+  })
+
+  it("getWeeklyQuotaStatusPerSubject parametresiz cagririr; kimlik sunucuda", async () => {
+    const { getWeeklyQuotaStatusPerSubject } = await import("./service")
+    const calls: Array<{ fn: string; args: unknown }> = []
+    const mockClient = {
+      rpc: (fn: string, args: unknown) => {
+        calls.push({ fn, args })
+        return Promise.resolve({
+          data: {
+            model: "subject_weekly_quota_v165",
+            academic_year: "2026-2027",
+            week: 10,
+            subjects: [
+              {
+                subject_id: MATEMATIK,
+                competitions_used: 40,
+                competitions_limit: 40,
+                new_questions_used: 200,
+                new_questions_limit: 200,
+              },
+            ],
+          },
+          error: null,
+        })
+      },
+    }
+    const result = await getWeeklyQuotaStatusPerSubject(mockClient as never)
+    expect(calls[0]?.fn).toBe("weekly_quota_status_per_subject")
+    expect(calls[0]?.args).toStrictEqual({})
+    expect(result.subjects[0]?.competitionsUsed).toBe(40)
+  })
+
+  it("165 olmayan ortamda RPC hatasi yukariya atilir (bayrak yakalar, mod kapali kalir)", async () => {
+    const { getWeeklyQuotaStatusPerSubject } = await import("./service")
+    const mockClient = {
+      rpc: () =>
+        Promise.resolve({
+          data: null,
+          error: new Error("function public.weekly_quota_status_per_subject() does not exist"),
+        }),
+    }
+    await expect(
+      getWeeklyQuotaStatusPerSubject(mockClient as never)
+    ).rejects.toThrow(/does not exist/)
   })
 })

@@ -25,12 +25,31 @@ import {
   joinMatchmakingQueueAction,
   leaveMatchmakingQueueAction,
 } from "@/app/(student)/competition/actions"
+import { COMPETITION_ERROR_MESSAGES } from "@/lib/competition/errors"
+import {
+  subjectQuotaCompetitionsRemaining,
+  subjectQuotaNewQuestionsRemaining,
+  type SubjectWeeklyQuotaStatus,
+} from "@/lib/competition/types"
 
 const POLL_INTERVAL_MS = 3_000
 
 interface MatchmakingQueueProps {
   subjectId: string
   subjectName: string
+  /**
+   * 163 haftalik kota sunucu tarafindan bloklanmis (40/40 veya 5 yeni
+   * soruya yetmeyen yeni soru hakki). YALNIZ UX kilididir; guvenlik
+   * siniri 163 sunucu tetikleri/RPC'lerinde kalmalidir.
+   */
+  quotaBlocked?: boolean
+  /**
+   * 165 ders bazli kota (AK-QUOTA-SUBJECT-01): bu DERSIN guncel haftalik
+   * durumu. Bayragi kapali/veri yoksa null → kart sayi GOSTERMEZ ve
+   * kilitlemez (uydurma sayi yok). Yalniz bu karti etkiler; diger ders
+   * kartlari bagimsizdir (urun karari 10).
+   */
+  quota?: SubjectWeeklyQuotaStatus | null
 }
 
 type ComponentState =
@@ -46,11 +65,23 @@ type ComponentState =
 export default function MatchmakingQueue({
   subjectId,
   subjectName,
+  quotaBlocked = false,
+  quota = null,
 }: MatchmakingQueueProps) {
   const router = useRouter()
   const [state, setState] = useState<ComponentState>({ phase: "restoring" })
+  // Eszamanli tuketim: join KOTA_163/KOTA_165 donerse bilesen ici kilit
+  // (sunucu yaniti tek gercek; bu yalniz gelen hatanin UI yansimasi).
+  const [quotaLock, setQuotaLock] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const mountedRef = useRef(true)
+
+  const blocked = quotaBlocked || quotaLock
+  // Ders bazli modda (165) blok mesaji DERSE OZEL metindir; kuresel 163
+  // davranisinda eski mesaj aynen kalir.
+  const blockMessage = quota
+    ? COMPETITION_ERROR_MESSAGES.weeklyQuotaSubject
+    : COMPETITION_ERROR_MESSAGES.weeklyQuota
 
   const clearPoll = useCallback(() => {
     if (pollRef.current) {
@@ -137,6 +168,7 @@ export default function MatchmakingQueue({
 
   const handleJoin = useCallback(async () => {
     if (state.phase === "joining" || state.phase === "queued") return
+    if (blocked) return
 
     setState({ phase: "joining" })
 
@@ -145,6 +177,17 @@ export default function MatchmakingQueue({
     if (!mountedRef.current) return
 
     if (!result.ok) {
+      // Eszamanli tuketim veya kota dolu: sunucu KOTA_163/KOTA_165'i
+      // errors.ts uzerinden tam urun mesajina cevirdi. Bilesen ici
+      // kilitle ve tekrar-dene dongusu olusturma (sunucu haftayi kendisi
+      // acacak).
+      if (
+        result.message === COMPETITION_ERROR_MESSAGES.weeklyQuota ||
+        result.message === COMPETITION_ERROR_MESSAGES.weeklyQuotaSubject ||
+        result.message === COMPETITION_ERROR_MESSAGES.weeklyQuestionQuotaSubject
+      ) {
+        setQuotaLock(true)
+      }
       setState({ phase: "error", message: result.message })
       return
     }
@@ -169,7 +212,7 @@ export default function MatchmakingQueue({
     }
 
     setState({ phase: "idle" })
-  }, [state.phase, subjectId, startStatusPolling])
+  }, [state.phase, subjectId, startStatusPolling, blocked])
 
   const handleLeave = useCallback(async () => {
     clearPoll()
@@ -197,11 +240,23 @@ export default function MatchmakingQueue({
     state.phase === "leaving"
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-      <h3 className="font-semibold text-gray-900">{subjectName}</h3>
+    <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+      <h3 className="font-semibold text-ink">{subjectName}</h3>
+
+      {quota && (
+        <p className="mt-2 text-sm text-ink-muted" aria-live="polite">
+          Bu derste bu hafta: Yarışma {quota.competitionsUsed}/
+          {quota.competitionsLimit} kullanılan —{" "}
+          {subjectQuotaCompetitionsRemaining(quota)} yarışma hakkın kaldı.
+          {" · "}
+          Yeni soru: {quota.newQuestionsUsed}/{quota.newQuestionsLimit} kullanılan
+          {" — "}
+          {subjectQuotaNewQuestionsRemaining(quota)} yeni soru hakkın kaldı.
+        </p>
+      )}
 
       {state.phase === "restoring" && (
-        <p className="mt-3 text-sm text-gray-600" aria-live="polite">
+        <p className="mt-3 text-sm text-ink-muted" aria-live="polite">
           Durum kontrol ediliyor…
         </p>
       )}
@@ -210,7 +265,7 @@ export default function MatchmakingQueue({
         <>
           {state.phase === "expired" && (
             <p
-              className="mt-3 text-sm text-orange-700"
+              className="mt-3 text-sm text-warning-900"
               role="status"
               aria-live="polite"
             >
@@ -221,29 +276,39 @@ export default function MatchmakingQueue({
           <button
             type="button"
             onClick={() => void handleJoin()}
-            disabled={isPending}
-            className="mt-3 inline-flex min-h-11 items-center justify-center rounded-xl bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={isPending || blocked}
+            aria-disabled={blocked || undefined}
+            className="mt-3 inline-flex min-h-11 items-center justify-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-accent-foreground transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Sıraya katıl
           </button>
+          {blocked && (
+            <p
+              className="mt-2 text-sm font-medium text-warning-900"
+              role="status"
+              aria-live="polite"
+            >
+              {blockMessage}
+            </p>
+          )}
         </>
       )}
 
       {state.phase === "joining" && (
-        <p className="mt-3 text-sm text-gray-600" aria-live="polite">
+        <p className="mt-3 text-sm text-ink-muted" aria-live="polite">
           Sıraya ekleniyorsun…
         </p>
       )}
 
       {state.phase === "queued" && (
         <div className="mt-3">
-          <p className="text-sm text-gray-600" aria-live="polite">
+          <p className="text-sm text-ink-muted" aria-live="polite">
             Eşleşme aranıyor. Aynı sınıf düzeyinden bir rakip beklüyor…
           </p>
           <button
             type="button"
             onClick={() => void handleLeave()}
-            className="mt-2 inline-flex min-h-11 items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900"
+            className="mt-2 inline-flex min-h-11 items-center justify-center rounded-xl border border-border-strong bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:bg-surface-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
           >
             Kuyruktan çık
           </button>
@@ -251,7 +316,7 @@ export default function MatchmakingQueue({
       )}
 
       {state.phase === "leaving" && (
-        <p className="mt-3 text-sm text-gray-600" aria-live="polite">
+        <p className="mt-3 text-sm text-ink-muted" aria-live="polite">
           Kuyruktan çıkılıyor…
         </p>
       )}
@@ -259,7 +324,7 @@ export default function MatchmakingQueue({
       {state.phase === "matched" && (
         <div className="mt-3">
           <p
-            className="text-sm font-medium text-green-700"
+            className="text-sm font-medium text-success-700"
             aria-live="polite"
           >
             Eşleşme bulundu! Yarışma kodu: {state.competitionCode}
@@ -267,7 +332,7 @@ export default function MatchmakingQueue({
           <button
             type="button"
             onClick={handleMatchedContinue}
-            className="mt-2 inline-flex min-h-11 items-center justify-center rounded-xl bg-green-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-green-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-700"
+            className="mt-2 inline-flex min-h-11 items-center justify-center rounded-xl bg-success-700 px-4 py-2 text-sm font-medium text-accent-foreground transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-success-700"
           >
             Yarışmaya başla
           </button>
@@ -276,16 +341,29 @@ export default function MatchmakingQueue({
 
       {state.phase === "error" && (
         <div className="mt-3">
-          <p className="text-sm text-red-600" role="alert">
+          <p className="text-sm text-danger-700" role="alert">
             {state.message}
           </p>
-          <button
-            type="button"
-            onClick={() => void handleJoin()}
-            className="mt-2 inline-flex min-h-11 items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900"
-          >
-            Tekrar dene
-          </button>
+          {blocked ? (
+            // Kota tukendi: tekrar-dene dongusu anlamsiz; sunucu haftayi
+            // kendisi acar. Buton pasif, mesaj kota mesajidir.
+            <button
+              type="button"
+              disabled
+              aria-disabled
+              className="mt-2 inline-flex min-h-11 items-center justify-center rounded-xl border border-border-strong bg-surface px-4 py-2 text-sm font-medium text-ink opacity-50"
+            >
+              Sıraya katıl
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void handleJoin()}
+              className="mt-2 inline-flex min-h-11 items-center justify-center rounded-xl border border-border-strong bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:bg-surface-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+            >
+              Tekrar dene
+            </button>
+          )}
         </div>
       )}
     </div>

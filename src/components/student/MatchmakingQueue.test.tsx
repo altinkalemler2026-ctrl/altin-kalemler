@@ -31,6 +31,8 @@ import {
   leaveMatchmakingQueueAction,
   getOwnMatchmakingStatusAction,
 } from "@/app/(student)/competition/actions"
+import { COMPETITION_ERROR_MESSAGES } from "@/lib/competition/errors"
+import type { SubjectWeeklyQuotaStatus } from "@/lib/competition/types"
 
 import MatchmakingQueue from "./MatchmakingQueue"
 
@@ -304,5 +306,205 @@ describe("MatchmakingQueue — error", () => {
     await user.click(await screen.findByRole("button", { name: /tekrar dene/i }))
 
     expect(mockedJoin.mock.calls.length).toBeGreaterThanOrEqual(2)
+  })
+})
+
+// ------------------------------------------------------------
+// 163: Haftalik kota kilidi (UX kilidi + eszamanli KOTA_163)
+// ------------------------------------------------------------
+
+const QUOTA_MESSAGE =
+  "Haftalık yarışma hakkınız tükendi. Yeni haftanın başlamasıyla birlikte tekrar yarışmalara katılabilirsiniz."
+
+describe("MatchmakingQueue — 163 haftalik kota", () => {
+  it("quotaBlocked true: buton pasif + tam urun mesaji; tiklama join gondermez", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(
+      <MatchmakingQueue
+        subjectId={SUBJECT_ID}
+        subjectName="Matematik"
+        quotaBlocked
+      />
+    )
+    const button = await screen.findByRole("button", { name: /sıraya katıl/i })
+
+    expect(button.hasAttribute("disabled")).toBe(true)
+    expect(screen.getByText(QUOTA_MESSAGE)).toBeDefined()
+
+    await user.click(button)
+    expect(mockedJoin).not.toHaveBeenCalled()
+  })
+
+  it("eszamanli tuketim: join KOTA_163 mesaji donerse buton kilitlenir, tekrar-dene yok", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    mockedJoin.mockResolvedValue({ ok: false, message: QUOTA_MESSAGE })
+    render(
+      <MatchmakingQueue subjectId={SUBJECT_ID} subjectName="Matematik" />
+    )
+    await screen.findByRole("button", { name: /sıraya katıl/i })
+
+    await user.click(screen.getByRole("button", { name: /sıraya katıl/i }))
+
+    // Sunucu kota mesaji aynen gosterilir (errors.ts 42-19 sozlesmesi).
+    expect(await screen.findByText(QUOTA_MESSAGE)).toBeDefined()
+    expect(screen.queryByRole("button", { name: /tekrar dene/i })).toBeNull()
+    const button = screen.getByRole("button", { name: /sıraya katıl/i })
+    expect(button.hasAttribute("disabled")).toBe(true)
+
+    // Kilit sonrasi tiklama ikinci join gondermez.
+    await user.click(button)
+    expect(mockedJoin).toHaveBeenCalledTimes(1)
+  })
+
+  it("teknik hata kota mesaji DEGIL: tekrar dene korunur (hata ayrimi)", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    mockedJoin.mockResolvedValue({
+      ok: false,
+      message:
+        "Beklenmeyen bir hata olustu. Lutfen tekrar deneyin; sorun surerse destek ekibine bildirin.",
+    })
+    render(
+      <MatchmakingQueue subjectId={SUBJECT_ID} subjectName="Matematik" />
+    )
+    await screen.findByRole("button", { name: /sıraya katıl/i })
+
+    await user.click(screen.getByRole("button", { name: /sıraya katıl/i }))
+
+    expect(await screen.findByRole("button", { name: /tekrar dene/i })).toBeDefined()
+    expect(
+      screen.queryByText(/haftalık yarışma hakkınız tükendi/i)
+    ).toBeNull()
+  })
+
+  it("quotaBlocked false (varsayilan): mevcut davranis bozulmaz, buton aktif", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    mockedJoin.mockResolvedValue({
+      ok: true,
+      data: {
+        status: "waiting",
+        queueId: "22222222-2222-2222-2222-222222222222",
+        gradeLevel: 10,
+        subjectId: SUBJECT_ID,
+      },
+    })
+    renderQueue()
+    const button = await screen.findByRole("button", { name: /sıraya katıl/i })
+
+    expect(button.hasAttribute("disabled")).toBe(false)
+    await user.click(button)
+    expect(mockedJoin).toHaveBeenCalledWith(SUBJECT_ID)
+  })
+})
+
+// ------------------------------------------------------------
+// 165: Ders bazli kota (AK-QUOTA-SUBJECT-01) — kart basi sayilar,
+// ders-ozel kilit ve KOTA_165 eszamanli kilitleme
+// ------------------------------------------------------------
+
+const SUBJECT_QUOTA_MESSAGE =
+  "Bu ders için haftalık yarışma hakkınız tükendi. Yeni haftanın başlamasıyla birlikte bu derste tekrar yarışabilirsiniz."
+
+function subjectQuota(
+  overrides: Partial<SubjectWeeklyQuotaStatus> = {}
+): SubjectWeeklyQuotaStatus {
+  return {
+    subjectId: SUBJECT_ID,
+    competitionsUsed: 0,
+    competitionsLimit: 40,
+    newQuestionsUsed: 0,
+    newQuestionsLimit: 200,
+    ...overrides,
+  }
+}
+
+describe("MatchmakingQueue — 165 ders bazli kota", () => {
+  it("quota verisi kartta O DERSE ait sayilari gosterir", async () => {
+    render(
+      <MatchmakingQueue
+        subjectId={SUBJECT_ID}
+        subjectName="Matematik"
+        quota={subjectQuota({ competitionsUsed: 7, newQuestionsUsed: 35 })}
+      />
+    )
+    expect(
+      await screen.findByText(/Bu derste bu hafta: Yarışma 7\/40/)
+    ).toBeDefined()
+    expect(screen.getByText(/Yeni soru: 35\/200/)).toBeDefined()
+    expect(screen.getByText(/33 yarışma hakkın kaldı/)).toBeDefined()
+  })
+
+  it("quota null iken kart HICBIR sayi uydurmaz (163 davransi aynen)", async () => {
+    const { container } = render(
+      <MatchmakingQueue subjectId={SUBJECT_ID} subjectName="Matematik" />
+    )
+    await screen.findByRole("button", { name: /sıraya katıl/i })
+    expect(container.textContent).not.toMatch(/Bu derste bu hafta/)
+  })
+
+  it("ders bazli kilit: YALNIZ bu kart kapanir + ders-ozel mesaj gosterilir", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(
+      <MatchmakingQueue
+        subjectId={SUBJECT_ID}
+        subjectName="Matematik"
+        quotaBlocked
+        quota={subjectQuota({ competitionsUsed: 40, newQuestionsUsed: 200 })}
+      />
+    )
+    const button = await screen.findByRole("button", { name: /sıraya katıl/i })
+    expect(button.hasAttribute("disabled")).toBe(true)
+    // Ders-ozel tam urun mesaji (kuresel 163 mesajl karistirilmaz):
+    expect(screen.getByText(SUBJECT_QUOTA_MESSAGE)).toBeDefined()
+    await user.click(button)
+    expect(mockedJoin).not.toHaveBeenCalled()
+  })
+
+  it("eszamanli KOTA_165: join ders mesajı donerse kart kilitlenir, tekrar-dene yok", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    mockedJoin.mockResolvedValue({ ok: false, message: SUBJECT_QUOTA_MESSAGE })
+    render(
+      <MatchmakingQueue
+        subjectId={SUBJECT_ID}
+        subjectName="Matematik"
+        quota={subjectQuota()}
+      />
+    )
+    await screen.findByRole("button", { name: /sıraya katıl/i })
+    await user.click(screen.getByRole("button", { name: /sıraya katıl/i }))
+
+    expect(await screen.findByText(SUBJECT_QUOTA_MESSAGE)).toBeDefined()
+    expect(screen.queryByRole("button", { name: /tekrar dene/i })).toBeNull()
+    expect(
+      screen.getByRole("button", { name: /sıraya katıl/i }).hasAttribute("disabled")
+    ).toBe(true)
+
+    await user.click(screen.getByRole("button", { name: /sıraya katıl/i }))
+    expect(mockedJoin).toHaveBeenCalledTimes(1)
+  })
+
+  it("eszamanli KOTA_165 soru hakki mesaji da karti kilitler", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    mockedJoin.mockResolvedValue({
+      ok: false,
+      message: COMPETITION_ERROR_MESSAGES.weeklyQuestionQuotaSubject,
+    })
+    render(
+      <MatchmakingQueue
+        subjectId={SUBJECT_ID}
+        subjectName="Fizik"
+        quota={subjectQuota({ newQuestionsUsed: 198 })}
+      />
+    )
+    await screen.findByRole("button", { name: /sıraya katıl/i })
+    await user.click(screen.getByRole("button", { name: /sıraya katıl/i }))
+
+    expect(
+      await screen.findByText(
+        COMPETITION_ERROR_MESSAGES.weeklyQuestionQuotaSubject
+      )
+    ).toBeDefined()
+    expect(
+      screen.getByRole("button", { name: /sıraya katıl/i }).hasAttribute("disabled")
+    ).toBe(true)
   })
 })

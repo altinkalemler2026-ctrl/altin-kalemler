@@ -41,6 +41,18 @@ export const COMPETITION_ERROR_MESSAGES = {
   /** Skor tablosu henuz mevcut degil. */
   scoreboardNotAvailable:
     "Skor tablosu yarisma sona erdikten sonra goruntulenebilir.",
+  /** Haftalik kota tukendi (KOTA_163 — 163 kuresel kota sozlesmesi). */
+  weeklyQuota:
+    "Haftalık yarışma hakkınız tükendi. Yeni haftanın başlamasıyla birlikte tekrar yarışmalara katılabilirsiniz.",
+  /**
+   * Ders bazli haftalik kota tukendi (KOTA_165 — 165 ders bazli kota,
+   * AK-QUOTA-SUBJECT-01 urun karari). Yalniz ILGILI ders icin gecerlidir.
+   */
+  weeklyQuotaSubject:
+    "Bu ders için haftalık yarışma hakkınız tükendi. Yeni haftanın başlamasıyla birlikte bu derste tekrar yarışabilirsiniz.",
+  /** Ders bazli haftalik YENI SORU hakki tukendi (KOTA_165, 200 kapisi). */
+  weeklyQuestionQuotaSubject:
+    "Bu ders için haftalık yeni soru hakkınız tükendi. Yeni haftanın başlamasıyla birlikte bu derste tekrar yarışabilirsiniz.",
   /** Genel bilinmeyen hata. */
   generic:
     "Beklenmeyen bir hata olustu. Lutfen tekrar deneyin; sorun surerse destek ekibine bildirin.",
@@ -61,6 +73,20 @@ const ANSWER_ALREADY_SUBMITTED_PATTERN = /cevap zaten gonderildi|already submitt
 const QUESTION_NOT_STARTED_PATTERN = /soru henuz baslamadi/i
 const COMPETITION_COMPLETED_PATTERN = /yarisma sona erdi/i
 const SCOREBOARD_NOT_AVAILABLE_PATTERN = /skor tablosu.*mevcut degil|after the competition ends/i
+// 163 haftalik kota: yalniz IKI kota-tukenmis varyanti eslesir
+// (40 yarisma / 200 yeni soru). "KOTA_163: gecerli akademik donem yok"
+// teknik hatasi ve YETKI_163 bilerek DISARIDA — kota mesaji yanlis
+// senaryoda gosterilmez (urun karari, AK-FLOW-01 §kota).
+const WEEKLY_QUOTA_PATTERN =
+  /KOTA_163: haftalik (yarisma kotasi doldu|yeni soru kotasi asilirdi)/i
+// 165 ders bazli kota (AK-QUOTA-SUBJECT-01): yalniz kota-tukenmis
+// varyantlari eslesir. KOTA_165 teknik hata ve YETKI_165/KOTA_165_DEPRECATED
+// BILEREK disaridadir — stok yetersizligi/teknik hata/rakip
+// bulunamamasi bu mesajlarla KARISTIRILMAZ (urun karari).
+const SUBJECT_QUOTA_COMPETITION_PATTERN =
+  /KOTA_165: bu ders icin haftalik yarisma kotasi doldu/i
+const SUBJECT_QUOTA_QUESTION_PATTERN =
+  /KOTA_165: bu ders icin haftalik yeni soru kotasi asilirdi/i
 
 function errorText(error: unknown): string {
   if (error instanceof Error) return `${error.message}`
@@ -79,6 +105,13 @@ function errorText(error: unknown): string {
 export function mapCompetitionError(error: unknown): string {
   const text = errorText(error)
 
+  if (WEEKLY_QUOTA_PATTERN.test(text)) return COMPETITION_ERROR_MESSAGES.weeklyQuota
+  if (SUBJECT_QUOTA_COMPETITION_PATTERN.test(text)) {
+    return COMPETITION_ERROR_MESSAGES.weeklyQuotaSubject
+  }
+  if (SUBJECT_QUOTA_QUESTION_PATTERN.test(text)) {
+    return COMPETITION_ERROR_MESSAGES.weeklyQuestionQuotaSubject
+  }
   if (AUTH_PATTERN.test(text)) return COMPETITION_ERROR_MESSAGES.authRequired
   if (RATE_LIMIT_PATTERN.test(text)) return COMPETITION_ERROR_MESSAGES.rateLimit
   if (SUBJECT_PATTERN.test(text)) return COMPETITION_ERROR_MESSAGES.subjectNotFound

@@ -28,6 +28,9 @@ import type {
   QueueJoinResult,
   QueueLeaveResult,
   QueueStatus,
+  SubjectWeeklyQuotaSnapshot,
+  SubjectWeeklyQuotaStatus,
+  WeeklyQuotaStatus,
 } from "./types"
 
 export type CompetitionClient = SupabaseClient<Database>
@@ -55,11 +58,15 @@ type MissingRpcName =
   | "join_matchmaking_queue"
   | "leave_matchmaking_queue"
   | "get_own_competition_result"
+  | "weekly_quota_status"
+  | "weekly_quota_status_per_subject"
 
 type MissingRpcArgsMap = {
   join_matchmaking_queue: { p_subject_id: string }
   leave_matchmaking_queue: Record<string, never>
   get_own_competition_result: { p_competition_id: string }
+  weekly_quota_status: Record<string, never>
+  weekly_quota_status_per_subject: Record<string, never>
 }
 
 /**
@@ -633,4 +640,176 @@ export async function getOwnResult(
   )
   if (error) throw error
   return mapOwnCompetitionResult(data)
+}
+
+// ------------------------------------------------------------
+// 163: weekly_quota_status — ogrencinin KENDİ haftalik kota durumu
+// ------------------------------------------------------------
+
+/** 163 sozlesme sabitleri (RPC farkli bir limit dondurmezse fallback). */
+const WEEKLY_COMPETITIONS_LIMIT = 40
+const WEEKLY_NEW_QUESTIONS_LIMIT = 200
+
+/**
+ * Kota sayilari kullanicya dogrudan gosterilir → sozlesmeye uymayan
+ * degerde uydirma sayi URETIMEZ; teknik hata firlatir (fail-closed).
+ * jsonb ->> ile string gelirse sayiya cevrilir (081 ondegilendigi gibi).
+ */
+function parseQuotaCount(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return Math.trunc(value)
+  }
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed) && parsed >= 0) return Math.trunc(parsed)
+  }
+  return null
+}
+
+/**
+ * weekly_quota_status() RPC cevabini guvenli DTO'ya cevirir.
+ *
+ * - academic_year = null → "gecerli akademik donem yok" teknik durumu:
+ *   RPC'nin kendisi sifirlanmis govde dondurur; aynen tasinir
+ *   (UI bu durumda sayi gostermez, hata mesaji UYDURMAZ).
+ * - Gecersiz/eksik sayi alanlari → throw (yanlis kalan hak gosterilmez;
+ *   cagiran taraf mapCompetitionError ile genel mesaja dusurur).
+ */
+export function mapWeeklyQuotaStatus(raw: unknown): WeeklyQuotaStatus {
+  if (typeof raw !== "object" || raw === null) {
+    throw new Error("WQS_TECHNICAL: beklenmeyen kota yaniti")
+  }
+  const record = raw as Record<string, unknown>
+
+  if (record.academic_year === null) {
+    return {
+      academicYear: null,
+      week: null,
+      competitionsUsed: 0,
+      competitionsLimit: WEEKLY_COMPETITIONS_LIMIT,
+      newQuestionsUsed: 0,
+      newQuestionsLimit: WEEKLY_NEW_QUESTIONS_LIMIT,
+    }
+  }
+
+  if (typeof record.academic_year !== "string") {
+    throw new Error("WQS_TECHNICAL: beklenmeyen kota yaniti")
+  }
+
+  const competitionsUsed = parseQuotaCount(record.competitions_used)
+  const newQuestionsUsed = parseQuotaCount(record.new_questions_used)
+  if (competitionsUsed === null || newQuestionsUsed === null) {
+    throw new Error("WQS_TECHNICAL: beklenmeyen kota yaniti")
+  }
+
+  const competitionsLimit = parseQuotaCount(record.competitions_limit)
+  const newQuestionsLimit = parseQuotaCount(record.new_questions_limit)
+
+  return {
+    academicYear: record.academic_year,
+    week: parseQuotaCount(record.week),
+    competitionsUsed,
+    competitionsLimit: competitionsLimit ?? WEEKLY_COMPETITIONS_LIMIT,
+    newQuestionsUsed,
+    newQuestionsLimit: newQuestionsLimit ?? WEEKLY_NEW_QUESTIONS_LIMIT,
+  }
+}
+
+/**
+ * Ogrencinin kendi haftalik kota durumunu sorgular (163).
+ * Kimlik auth.uid() tarafinda sunucudan alinir; parametre YOKTUR.
+ * Katilimcilari: yalniz authenticated rol (canli ACL dogrulamasi 42-21).
+ */
+export async function getWeeklyQuotaStatus(
+  client: CompetitionClient
+): Promise<WeeklyQuotaStatus> {
+  const { data, error } = await callMissingGeneratedRpc(
+    toNarrowClient(client),
+    "weekly_quota_status",
+    {}
+  )
+  if (error) throw error
+  return mapWeeklyQuotaStatus(data)
+}
+
+// ------------------------------------------------------------
+// 165: weekly_quota_status_per_subject — ders bazli kota (AK-QUOTA-SUBJECT-01)
+// ------------------------------------------------------------
+
+/**
+ * weekly_quota_status_per_subject() RPC cevabini guvenli DTO'lara cevirir.
+ *
+ * - academic_year = null → "gecerli akademik donem yok" teknik durumu:
+ *   aynen tasinir (UI sayi gostermez, buton kilitlemez).
+ * - Sozlesmeye uymayan alan/ders → throw (uydurma kalan hak gosterilmez;
+ *   cagiran taraf catch ile banner'i hicbir sayi uydurmadan gizler).
+ * - limits yoksa 165 sozlesme sabitlerine duser (40/200 — RPC fallback'iyle ayni).
+ */
+export function mapWeeklyQuotaStatusPerSubject(
+  raw: unknown
+): SubjectWeeklyQuotaSnapshot {
+  if (typeof raw !== "object" || raw === null) {
+    throw new Error("WQS165_TECHNICAL: beklenmeyen kota yaniti")
+  }
+  const record = raw as Record<string, unknown>
+
+  if (record.academic_year === null) {
+    return { academicYear: null, week: null, subjects: [] }
+  }
+  if (typeof record.academic_year !== "string") {
+    throw new Error("WQS165_TECHNICAL: beklenmeyen kota yaniti")
+  }
+  if (!Array.isArray(record.subjects)) {
+    throw new Error("WQS165_TECHNICAL: beklenmeyen kota yaniti")
+  }
+
+  const subjects: SubjectWeeklyQuotaStatus[] = record.subjects.map((entry) => {
+    if (typeof entry !== "object" || entry === null) {
+      throw new Error("WQS165_TECHNICAL: beklenmeyen ders kota kaydi")
+    }
+    const item = entry as Record<string, unknown>
+    if (typeof item.subject_id !== "string") {
+      throw new Error("WQS165_TECHNICAL: beklenmeyen ders kota kaydi")
+    }
+    assertUuid(item.subject_id, "subject_id")
+    const competitionsUsed = parseQuotaCount(item.competitions_used)
+    const newQuestionsUsed = parseQuotaCount(item.new_questions_used)
+    if (competitionsUsed === null || newQuestionsUsed === null) {
+      throw new Error("WQS165_TECHNICAL: beklenmeyen ders kota kaydi")
+    }
+    const competitionsLimit = parseQuotaCount(item.competitions_limit)
+    const newQuestionsLimit = parseQuotaCount(item.new_questions_limit)
+    return {
+      subjectId: item.subject_id,
+      competitionsUsed,
+      competitionsLimit: competitionsLimit ?? WEEKLY_COMPETITIONS_LIMIT,
+      newQuestionsUsed,
+      newQuestionsLimit: newQuestionsLimit ?? WEEKLY_NEW_QUESTIONS_LIMIT,
+    }
+  })
+
+  return {
+    academicYear: record.academic_year,
+    week: parseQuotaCount(record.week),
+    subjects,
+  }
+}
+
+/**
+ * Ogrencinin kendi DERS BAZLI haftalik kota durumunu sorgular (165).
+ * Kimlik auth.uid() tarafinda sunucudan alinir; parametre YOKTUR.
+ * Katilimcilari: yalniz authenticated rol (FINAL_165 ACL kaniti).
+ * 165 henuz uygulanmamis bir ortamda RPC hatasi firlatir — cagiran
+ * taraf (bayrak) bunu yakalayarak ders bazli arayuzu kapali tutar.
+ */
+export async function getWeeklyQuotaStatusPerSubject(
+  client: CompetitionClient
+): Promise<SubjectWeeklyQuotaSnapshot> {
+  const { data, error } = await callMissingGeneratedRpc(
+    toNarrowClient(client),
+    "weekly_quota_status_per_subject",
+    {}
+  )
+  if (error) throw error
+  return mapWeeklyQuotaStatusPerSubject(data)
 }
